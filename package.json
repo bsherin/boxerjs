@@ -1,0 +1,44 @@
+{
+  "name": "boxerjs",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "webpack --env.mode=development",
+    "build-production": "webpack --env.mode=production"
+  },
+  "dependencies": {
+    "@blueprintjs/core": "^3.22.3",
+    "@blueprintjs/select": "latest",
+    "@blueprintjs/table": "latest",
+    "amqplib": "^0.5.5",
+    "babel-preset-react": "^6.24.1",
+    "css-loader": "^3.4.2",
+    "file-loader": "^5.0.2",
+    "lodash": "^4.17.15",
+    "mini-css-extract-plugin": "^0.9.0",
+    "net": "^1.0.2",
+    "node-sass": "^4.13.1",
+    "object-hash": "^2.0.1",
+    "optimize-css-assets-webpack-plugin": "^5.0.3",
+    "postcss-loader": "^3.0.0",
+    "prop-types": "latest",
+    "react": "^16.12.0",
+    "react-contenteditable": "^3.3.3",
+    "react-dom": "^16.12.0",
+    "react-draggable": "latest",
+    "react-sortable-hoc": "latest",
+    "react-transition-group": "latest",
+    "sass-loader": "^8.0.2",
+    "showdown": "^1.9.1",
+    "socket.io-client": "^2.3.0",
+    "terser-webpack-plugin": "^2.3.4",
+    "tls": "0.0.1",
+    "webpack": "^4.41.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.8.4",
+    "@babel/preset-env": "^7.8.4",
+    "@babel/preset-react": "^7.8.3",
+    "babel-loader": "^8.0.6",
+    "webpack-cli": "^3.3.10"
+  }
+}

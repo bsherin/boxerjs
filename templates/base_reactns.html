@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <base href="/" target="_blank">
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+      <link rel="stylesheet" href="{{url_for('static', filename=css_source)}}">
+      {% if uses_codemirror == "True" %}
+          <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/codemirror.css')}}">
+          <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/pastel-on-dark.css')}}">
+          <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/dialog.css')}}">
+          <link rel="stylesheet" href="{{url_for('static', filename='css/show-hint.css')}}">
+          <link rel="stylesheet" href="{{url_for('static', filename='css/merge.css')}}">
+      {%  endif %}
+      {% block head %}{% endblock %}
+      {% block styles %}{% endblock %}
+      <title>{% block title %}Tactic{% endblock %}</title>
+  </head>
+  <body>
+    <div id="navbar-root">
+
+    </div>
+
+  {% block page_content %}{% endblock %}
+    <script type=text/javascript>
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+    </script>
+
+    <script src="{{url_for('static', filename='js/jquery-3.4.1.min.js')}}"></script>
+    {% if uses_codemirror == "True" %}
+        <script src="{{url_for('static', filename='js/codemirror.js')}}"></script>
+        <script src="{{url_for('static', filename='js/codemirror/search.js')}}"></script>
+        <script src="{{url_for('static', filename='js/codemirror/searchcursor.js')}}"></script>
+        <script src="{{url_for('static', filename='js/codemirror/merge.js')}}"></script>
+        <script src="{{url_for('static', filename='js/codemirror/jump-to-line.js')}}"></script>
+        <script src="{{url_for('static', filename='js/codemirror/dialog.js')}}"></script>
+        <script src="{{url_for('static', filename='js/matchbrackets.js')}}"></script>
+        <script src="{{url_for('static', filename='js/show-hint.js')}}"></script>
+        <script src="{{url_for('static', filename='js/match-highlighter.js')}}"></script>
+        <script src="{{url_for('static', filename='js/closebrackets.js')}}"></script>
+    {% endif %}
+    <script type="text/javascript">
+    //override defaults
+    </script>
+    <script type="text/javascript">
+        var csrftoken = "{{ csrf_token() }}";
+        $.ajaxSetup({
+            beforeSend: function(xhr, settings) {
+                if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                    xhr.setRequestHeader("X-CSRFToken", csrftoken)
+                }
+            }
+        })
+    </script>
+  {% block scripts %}
+  {% endblock %}
+  </body>
+</html>
