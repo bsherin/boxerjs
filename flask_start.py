@@ -22,8 +22,36 @@ def basic():
                            module_source="boxerjs_dev/main_app.bundle.js")
 
 
-dstruct = {"name": "world", "content": [{"name": "mybox", "content": ["some simple text", "__ENDLINE___", "with newline", {"name": "innerbox", "content": ["some inner text\nwith a newline"]}, "more text"]},
-                                         {"name": "mybox2", "content": ["more simple text\nwith another newling"]}]}
+dstruct = {"name": "world",
+           "kind": "databox",
+           "line_list": [{"kind": "line",
+                          "node_list": [{"name": "mybox",
+                                         "kind": "databox",
+                                         "line_list": [{"kind": "line",
+                                                        "node_list": [{"name": "mb2",
+                                                                       "kind": "text",
+                                                                       "the_text": "some simple text"}]},
+                                                       {"kind": "line",
+                                                        "node_list": [{"name": "mb3",
+                                                                       "kind": "text",
+                                                                       "the_text": "with newline"},
+                                                                      {"name": "innerbox",
+                                                                       "kind": "databox",
+                                                                       "line_list": [{"kind": "line",
+                                                                                      "node_list": [{"kind": "text",
+                                                                                                     "the_text": "some inner text with a newline"}]}
+                                                                                     ]},
+                                                                      {"kind": "text",
+                                                                       "the_text": "more text"}]}]},
+                                        {"name": "mybox2",
+                                         "kind": "databox",
+                                         "line_list": [{"kind": "line",
+                                                        "node_list": [{"kind": "text",
+                                                                       "the_text": "more simple text"}]}]}
+                                        ]
+                          }
+                         ]
+           }
 
 
 @app.route("/get_data", methods=['get', 'post'])

@@ -1,5 +1,5 @@
 
-export {doBinding, isString}
+export {doBinding, isString, guid}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -12,4 +12,11 @@ function doBinding(obj, seq = "_") {
 
 function isString (value) {
     return typeof value === 'string' || value instanceof String;
+}
+
+function guid() {
+    function s4() {
+        return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+    }
+    return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
 }
