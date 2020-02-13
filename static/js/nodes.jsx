@@ -2,9 +2,9 @@ import React from "react";
 import ContentEditable from "react-contenteditable";
 import PropTypes from "prop-types";
 
-import { Icon } from "@blueprintjs/core";
+import { Button } from "@blueprintjs/core";
 
-import {doBinding} from "./utilities";
+import {doBinding, getCaretPosition} from "./utilities";
 import {KeyTrap} from "./key_trap.js";
 
 export {DataBox}
@@ -23,15 +23,20 @@ class TextNode extends React.Component {
     }
 
     _displayMessage() {
-        console.log("hello")
+        let idx = getCaretPosition(this.state.iRef);
+        console.log("hello the index is " + String(idx))
     }
 
     _refHandler(the_ref) {
         this.setState({iRef: the_ref});
     }
 
+    _insertDataBox() {
+        this.props.insertDataBox(this.props.unique_id, getCaretPosition(this.state.iRef))
+    }
+
     render() {
-        let key_bindings = [[["ctrl+a"], this._displayMessage], [["ctrl+f"], this._displayMessage]];
+        let key_bindings = [[["ctrl+]"], this._insertDataBox], [["ctrl+f"], this._displayMessage]];
         return (
             <React.Fragment>
                 <ContentEditable className="editable mousetrap"
@@ -53,7 +58,9 @@ class TextNode extends React.Component {
 TextNode.propTypes = {
     the_text: PropTypes.string,
     unique_id: PropTypes.string,
-    handleTextChange: PropTypes.func
+    handleTextChange: PropTypes.func,
+    changeNode: PropTypes.func,
+    insertDataBox: PropTypes.func
 };
 
 class DataBox extends React.Component {
@@ -67,17 +74,40 @@ class DataBox extends React.Component {
         console.log(the_html)
     }
 
+    _closeMe() {
+        this.props.changeNode(this.props.unique_id, "closed", true)
+    }
+
+    _openMe() {
+        this.props.changeNode(this.props.unique_id, "closed", false)
+    }
+
     render() {
+        if (this.props.closed) {
+
+            return (
+                <Button type="button"
+                        className="closed-data-box"
+                        minimal={false}
+                        onMouseDown={(e)=>{e.preventDefault()}}
+                        onClick={this._openMe}
+                        icon="box">
+            </Button>
+            )
+
+        }
         let the_content = this.props.line_list.map((the_line, index) => (
                 <DataboxLine key={the_line.unique_id}
                              unique_id={the_line.unique_id}
+                             changeNode={this.props.changeNode}
                              handleTextChange={this.props.handleTextChange}
+                             insertDataBox={this.props.insertDataBox}
                              node_list={the_line.node_list}/>
             ));
 
         return (
             <div className="data-box" >
-                <Icon icon="small-cross" className="close-button" iconSize={14}/>
+                <CloseButton handleClick={this._closeMe}/>
                 {the_content}
             </div>
         )
@@ -86,9 +116,41 @@ class DataBox extends React.Component {
 
 DataBox.propTypes = {
     name: PropTypes.string,
+    closed: PropTypes.bool,
     unique_id: PropTypes.string,
     line_list: PropTypes.array,
-    handleTextChange: PropTypes.func
+    handleTextChange: PropTypes.func,
+    changeNode: PropTypes.func,
+    insertDataBox: PropTypes.func
+};
+
+DataBox.defaultProps = {
+    closed: false
+};
+
+class CloseButton extends React.Component {
+    constructor (props) {
+        super(props);
+        doBinding(this);
+    }
+    
+    render () {
+        return (
+            <Button type="button"
+                    className="close-button"
+                      minimal={true}
+                      small={true}
+                      intent="danger"
+                      onMouseDown={(e)=>{e.preventDefault()}}
+                      onClick={this.props.handleClick}
+                      icon="small-cross">
+            </Button>
+        )
+    }
+}
+
+CloseButton.propTypes = {
+    handlClick: PropTypes.func
 };
 
 class DataboxLine extends React.Component {
@@ -102,7 +164,9 @@ class DataboxLine extends React.Component {
             if (the_node.kind == "text") {
                 return (
                     <TextNode key={the_node.unique_id}
+                              changeNode={this.props.changeNode}
                               handleTextChange={this.props.handleTextChange}
+                              insertDataBox={this.props.insertDataBox}
                               unique_id={the_node.unique_id}
                               the_text={the_node.the_text}/>
                 )
@@ -110,8 +174,11 @@ class DataboxLine extends React.Component {
             else  {
                 return (
                     <DataBox key={the_node.unique_id}
+                             changeNode={this.props.changeNode}
                              handleTextChange={this.props.handleTextChange}
+                             insertDataBox={this.props.insertDataBox}
                              unique_id={the_node.unique_id}
+                             closed={the_node.closed}
                              line_list={the_node.line_list}/>
                 )
             }
@@ -124,8 +191,10 @@ class DataboxLine extends React.Component {
     }
 }
 
-DataBox.propTypes = {
+DataboxLine.propTypes = {
     unique_id: PropTypes.string,
     node_list: PropTypes.array,
-    handleTextChange: PropTypes.func
+    handleTextChange: PropTypes.func,
+    changeNode: PropTypes.func,
+    insertDataBox: PropTypes.func
 };

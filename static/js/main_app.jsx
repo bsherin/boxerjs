@@ -100,6 +100,36 @@ class MainApp extends React.Component {
         }
     }
 
+    _splitTextAtPosition(text_id, cursor_position, new_base=null, update=true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let mnode = this._getMatchingNode(text_id, new_base);
+        if ((cursor_position == 0) || (cursor_position == mnode.the_text.length)) {
+            return
+        }
+        let text_split = [mnode.the_text.slice(0, cursor_position), mnode.the_text.slice(cursor_position,)];
+        let new_node = this._newTextNode(text_split[1]);
+        mnode.the_text = text_split[0];
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({base_node: new_base})
+        }
+    }
+
+    _insertDataBoxinText(text_id, cursor_position, new_base=null, update=true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newDataBoxNode();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false)
+        if (update) {
+            this.setState({base_node: new_base})
+        }
+    }
+
     _splitLine(line_id, position, new_base=null, update=true) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
@@ -139,6 +169,25 @@ class MainApp extends React.Component {
                         position: 0,
                         node_list: node_list,
                         unique_id: uid};
+        for (let node of node_list) {
+            node.parent = uid
+        }
+        return new_line
+    }
+
+    _newDataBoxNode(line_list=[]) {
+        let node_list = [this._newTextNode(" ")];
+
+        let uid = guid();
+        let lnode = this._newLineNode(node_list);
+        lnode.parent = uid;
+        let new_line = {kind: "databox",
+                        key: uid,
+                        parent: null,
+                        position: 0,
+                        line_list: [lnode],
+                        closed: false,
+                        unique_id: uid};
         return new_line
     }
 
@@ -157,56 +206,21 @@ class MainApp extends React.Component {
                 this._splitText(uid, "<br>", new_base, false);
                 this._splitLine(linid, pos + 1, new_base, false);
                 this.setState({base_node: new_base})
-
-                // let text_split = new_html.split("<br>");
-                // let parent_line = this._getMatchingNode(mnode.parent, new_base);
-                // let parent_databox = this._getMatchingNode(parent_line.parent, new_base);
-                //
-                // // Create the new line
-                // let uid = guid();
-                // let new_line = {kind: "line",
-                //     key: uid,
-                //     parent: parent_databox.unique_id,
-                //     position: parent_line.position + 1,
-                //     node_list: [],
-                //     unique_id: uid};
-                //
-                // // insert the new line
-                // let new_line_list = parent_databox.line_list.slice(0, parent_line.position + 1);
-                // new_line_list.push(new_line);
-                // let remaining_lines = parent_databox.line_list.slice(parent_line.position + 1,);
-                // for (let lin of remaining_lines) {
-                //     lin.position += 1;
-                // }
-                // new_line_list = new_line_list.concat(remaining_lines);
-                // parent_databox.line_list = new_line_list;
-                //
-                // // insert the new node at the start of the new line
-                // uid = guid();
-                // let new_node = {kind: "text",
-                //     key: uid,
-                //     unique_id: uid,
-                //     position: 0,
-                //     the_text: text_split[1],
-                //     parent: new_line.unique_id};
-                // let new_node_list = parent_line.node_list.slice(mnode.position + 1,);
-                // // need to update the parent of each of nodes in the new line
-                // for (let nd of new_node_list) {
-                //     nd.parent = new_line.unique_id
-                // }
-                // new_node_list.unshift(new_node);
-                // new_line.node_list = new_node_list;
-                //
-                // // update the original node and node_list
-                // mnode.the_text = text_split[0];
-                // parent_line.node_list = parent_line.node_list.slice(0, mnode.position + 1);
-                // this.setState({base_node: new_base})
             }
             else {
                 mnode.the_text = new_html;
                 this.setState({base_node: new_base})
             }
         }
+    }
+
+    _changeNode(uid, param_name, new_val) {
+         let new_base = _.cloneDeep(this.state.base_node);
+         let mnode = this._getMatchingNode(uid, new_base);
+         if (mnode) {
+             mnode[param_name] = new_val;
+             this.setState({base_node: new_base})
+         }
     }
 
     _getMatchingNode(uid, node) {
@@ -238,6 +252,9 @@ class MainApp extends React.Component {
         nobj.parent = parent;
         if (nobj.kind == "databox") {
             let lcount = 0;
+            if (!nobj.hasOwnProperty("close")) {
+                nobj.closed = false;
+            }
             for (let lin of nobj.line_list) {
                 if (!lin.hasOwnProperty("unique_id")) {
                     lin.unique_id = guid();
@@ -259,6 +276,9 @@ class MainApp extends React.Component {
         return (
             <DataBox name="world"
                      handleTextChange={this._handleTextChange}
+                     changeNode={this._changeNode}
+                     insertDataBox={this._insertDataBoxinText}
+                     closed={false}
                      unique_id={this.state.base_node.unique_id}
                      line_list={this.state.base_node.line_list}/>
         )

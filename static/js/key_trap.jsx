@@ -54,7 +54,7 @@ class KeyTrap extends React.Component {
 
     render() {
         return (
-            <div/>
+            <span/>
         )
     }
 }
