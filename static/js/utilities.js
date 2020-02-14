@@ -1,5 +1,7 @@
 
-export {doBinding, isString, guid, getCaretPosition}
+import _ from "lodash";
+
+export {doBinding, isString, guid, getCaretPosition, propsAreEqual}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -8,6 +10,27 @@ function doBinding(obj, seq = "_") {
             obj[key] = obj[key].bind(obj);
         }
     }
+}
+
+function propsAreEqual(p1, p2, skipProps = []) {
+
+    if (!_.isEqual(Object.keys(p1), Object.keys(p2))) {
+        return false;
+    }
+
+    for (let option in p1) {
+        if (skipProps.includes(option)) continue;
+        if (typeof p1[option] == "function") {
+            if (!(typeof p2[option] == "function")) {
+                return false;
+            }
+            continue;
+        }
+        if (!_.isEqual(p1[option], p2[option])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function isString (value) {

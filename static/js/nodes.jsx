@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 
 import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition} from "./utilities";
+import {doBinding, getCaretPosition, propsAreEqual} from "./utilities";
 import {KeyTrap} from "./key_trap.js";
 
 export {DataBox}
@@ -17,6 +17,11 @@ class TextNode extends React.Component {
         this.state = {};
         this.state.iRef = null;
     }
+
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     return !propsAreEqual(nextProps, this.props)
+    // }
+
 
     _handleChange(event) {
         this.props.handleTextChange(this.props.unique_id, event.target.value)
@@ -35,6 +40,49 @@ class TextNode extends React.Component {
         this.props.insertDataBox(this.props.unique_id, getCaretPosition(this.state.iRef))
     }
 
+    _handleKeyDown(event) {
+        if ((event.key == "Backspace") && (getCaretPosition(this.state.iRef) == 0)) {
+            event.preventDefault();
+            this.props.deletePrecedingBox(this.props.unique_id)
+        }
+        if ((event.key == "Enter")) {
+            event.preventDefault();
+            this.props.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.state.iRef))
+        }
+        console.log("got keydown")
+    }
+
+    componentDidMount () {
+        this._setFocusIfRequired()
+    }
+
+    componentDidUpdate () {
+        this._setFocusIfRequired()
+    }
+
+    _positionCursor(pos) {
+        let node = this.state.iRef;
+        var textNode = node.firstChild;
+        var range = document.createRange();
+        range.setStart(textNode, pos);
+        range.setEnd(textNode, pos);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    _setFocusIfRequired () {
+        if (this.props.setFocus != null) {
+            if (this.state.iRef) {
+                $(this.state.iRef).focus();
+                if (this.props.setFocus != 0) {
+                    this._positionCursor(this.props.setFocus)
+                }
+                this.props.changeNode(this.props.unique_id, "setFocus", null);
+            }
+        }
+    }
+
     render() {
         let key_bindings = [[["ctrl+]"], this._insertDataBox], [["ctrl+f"], this._displayMessage]];
         return (
@@ -45,6 +93,7 @@ class TextNode extends React.Component {
                                  innerRef={this._refHandler}
                                  disabled={false}
                                  onChange={this._handleChange}
+                                 onKeyDown={this._handleKeyDown}
                                  html={this.props.the_text}
                                  />
                  <KeyTrap global={false} target_ref={this.state.iRef} bindings={key_bindings} />
@@ -57,10 +106,18 @@ class TextNode extends React.Component {
 
 TextNode.propTypes = {
     the_text: PropTypes.string,
+    setFocus: PropTypes.number,
     unique_id: PropTypes.string,
     handleTextChange: PropTypes.func,
     changeNode: PropTypes.func,
-    insertDataBox: PropTypes.func
+    splitLine: PropTypes.func,
+    insertDataBox: PropTypes.func,
+    deletePrecedingBox: PropTypes.func,
+    splitLineAtTextPosition: PropTypes.func
+};
+
+TextNode.defaultProps = {
+    setFocus: null
 };
 
 class DataBox extends React.Component {
@@ -68,6 +125,10 @@ class DataBox extends React.Component {
         super(props);
         doBinding(this);
     }
+
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     return !propsAreEqual(nextProps, this.props)
+    // }
 
     _handleChange(evt) {
         let the_html = evt.target.value;
@@ -94,7 +155,6 @@ class DataBox extends React.Component {
                         icon="box">
             </Button>
             )
-
         }
         let the_content = this.props.line_list.map((the_line, index) => (
                 <DataboxLine key={the_line.unique_id}
@@ -102,6 +162,8 @@ class DataBox extends React.Component {
                              changeNode={this.props.changeNode}
                              handleTextChange={this.props.handleTextChange}
                              insertDataBox={this.props.insertDataBox}
+                             deletePrecedingBox={this.props.deletePrecedingBox}
+                             splitLineAtTextPosition={this.props.splitLineAtTextPosition}
                              node_list={the_line.node_list}/>
             ));
 
@@ -121,7 +183,9 @@ DataBox.propTypes = {
     line_list: PropTypes.array,
     handleTextChange: PropTypes.func,
     changeNode: PropTypes.func,
-    insertDataBox: PropTypes.func
+    insertDataBox: PropTypes.func,
+    deletePrecedingBox: PropTypes.func,
+    splitLineAtTextPosition: PropTypes.func
 };
 
 DataBox.defaultProps = {
@@ -133,7 +197,11 @@ class CloseButton extends React.Component {
         super(props);
         doBinding(this);
     }
-    
+
+    shouldComponentUpdate(nextProps, nextState, nextContext) {
+        return false
+    }
+
     render () {
         return (
             <Button type="button"
@@ -158,6 +226,9 @@ class DataboxLine extends React.Component {
         super(props);
         doBinding(this);
     }
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     return !propsAreEqual(nextProps, this.props)
+    // }
 
     render() {
         let the_content = this.props.node_list.map((the_node, index) => {
@@ -167,7 +238,10 @@ class DataboxLine extends React.Component {
                               changeNode={this.props.changeNode}
                               handleTextChange={this.props.handleTextChange}
                               insertDataBox={this.props.insertDataBox}
+                              deletePrecedingBox={this.props.deletePrecedingBox}
                               unique_id={the_node.unique_id}
+                              setFocus={the_node.setFocus}
+                              splitLineAtTextPosition={this.props.splitLineAtTextPosition}
                               the_text={the_node.the_text}/>
                 )
             }
@@ -177,8 +251,10 @@ class DataboxLine extends React.Component {
                              changeNode={this.props.changeNode}
                              handleTextChange={this.props.handleTextChange}
                              insertDataBox={this.props.insertDataBox}
+                             deletePrecedingBox={this.props.deletePrecedingBox}
                              unique_id={the_node.unique_id}
                              closed={the_node.closed}
+                             splitLineAtTextPosition={this.props.splitLineAtTextPosition}
                              line_list={the_node.line_list}/>
                 )
             }
@@ -196,5 +272,7 @@ DataboxLine.propTypes = {
     node_list: PropTypes.array,
     handleTextChange: PropTypes.func,
     changeNode: PropTypes.func,
-    insertDataBox: PropTypes.func
+    insertDataBox: PropTypes.func,
+    deletePrecedingBox: PropTypes.func,
+    splitTextAtPosition: PropTypes.func
 };
