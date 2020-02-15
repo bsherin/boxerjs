@@ -8,9 +8,10 @@ import { MenuItem, Menu, Popover, PopoverPosition, Button } from "@blueprintjs/c
 import {showModalReact} from "./modal_react.js";
 import {postWithCallback} from "./communication_react.js"
 import {doFlash} from "./toaster.js"
-import {doBinding} from "./utilities_react.js";
+import {doBinding} from "./utilities.js";
+import {getCaretPosition} from "./utilities";
 
-export {ProjectMenu, ColumnMenu, ViewMenu, MenuComponent}
+export {ProjectMenu, BoxMenu, MenuComponent}
 
 class MenuComponent extends React.Component {
     constructor(props) {
@@ -44,12 +45,12 @@ class MenuComponent extends React.Component {
         );
         if (this.props.alt_button) {
             let AltButton = this.props.alt_button;
-            return (<Popover minimal={true} content={the_menu} position={PopoverPosition.BOTTOM_LEFT}>
+            return (<Popover minimal={true} autoFocus={false} content={the_menu} position={PopoverPosition.BOTTOM_LEFT}>
                 <AltButton/>
             </Popover>)
         } else {
             return (
-                <Popover minimal={true} content={the_menu} position={PopoverPosition.BOTTOM_LEFT}>
+                <Popover minimal={true} autoFocus={false} content={the_menu} position={PopoverPosition.BOTTOM_LEFT}>
                     <Button text={this.props.menu_name} small={true} minimal={true}/>
                 </Popover>
             )
@@ -98,11 +99,9 @@ class ProjectMenu extends React.Component {
             const result_dict = {
                 "project_name": new_name,
                 "main_id": window.main_id,
-                "doc_type": "table",
-                "purgetiles": true
             };
 
-            result_dict.interface_state = self.props.interface_state;
+            result_dict.world_state = self.props.world_state;
             if (window.is_notebook) {
                 postWithCallback(window.main_id, "save_new_notebook_project", result_dict, save_as_success);
             }
@@ -116,7 +115,6 @@ class ProjectMenu extends React.Component {
                 if (data_object["success"]) {
                     window.is_project = true;
                     window._project_name = new_name;
-                    window.is_jupyter = false;
                     document.title = new_name;
                     self.props.clearStatusMessage();
                     data_object.alert_type = "alert-success";
@@ -166,83 +164,11 @@ class ProjectMenu extends React.Component {
         }
     }
 
-    _exportAsJupyter() {
-        this.props.startSpinner();
-        let self = this;
-        postWithCallback("host", "get_project_names", {"user_id": user_id}, function (data) {
-            let checkboxes;
-            // noinspection JSUnusedAssignment
-            showModalReact("Export Notebook in Jupyter Format", "New Project Name", ExportJupyter,
-                      "NewJupyter", data["project_names"], checkboxes)
-        });
-        function ExportJupyter(new_name) {
-            var cell_list = [];
-            for (let entry of self.props.console_items) {
-                let new_cell = {};
-                new_cell.source = entry.console_text;
-                new_cell.cell_type = entry.type == "code" ? "code" : "markdown";
-                if (entry.type == "code") {
-                    new_cell.outputs = [];
-                }
-                cell_list.push(new_cell)
-            }
-            const result_dict = {
-                "project_name": new_name,
-                "main_id": window.main_id,
-                "cell_list": cell_list
-            };
-            postWithCallback(window.main_id, "export_to_jupyter_notebook", result_dict, save_as_success);
-
-            function save_as_success(data_object) {
-               self.props.clearStatusMessage();
-                if (data_object.success) {
-                    data_object.alert_type = "alert-success";
-                    data_object.timeout = 2000;
-                }
-                else {
-                    data_object["alert-type"] = "alert-warning";
-                }
-                self.props.stopSpinner();
-                doFlash(data_object)
-            }
-        }
-    }
-
-    _exportDataTable() {
-        showModalReact("Export Data", "New Collection Name", function (new_name) {
-            const result_dict = {
-                "export_name": new_name,
-                "main_id": window.main_id,
-                "user_id": window.user_id
-            };
-            $.ajax({
-                url: $SCRIPT_ROOT + "/export_data",
-                contentType : 'application/json',
-                type : 'POST',
-                async: true,
-                data: JSON.stringify(result_dict),
-                dataType: 'json'
-            });
-        })
-    }
-
-    _consoleToNotebook() {
-        const result_dict = {
-            "main_id": window.main_id,
-            "console_items": this.props.console_items,
-            "user_id": window.user_id,
-        };
-        postWithCallback(window.main_id, "console_to_notebook", result_dict)
-    }
 
     get option_dict () {
         return {
             "Save As...": this._saveProjectAs,
-            "Save": this._saveProject,
-            "Export as Jupyter Notebook": this._exportAsJupyter,
-            "Open Console as Notebook": this._consoleToNotebook,
-            "Export Table as Collection": this._exportDataTable,
-            "Change collection": this.props.changeCollection
+            "Save": this._saveProject
         }
     }
 
@@ -250,10 +176,6 @@ class ProjectMenu extends React.Component {
         return {
             "Save As...": "floppy-disk",
             "Save": "saved",
-            "Export as Jupyter Notebook": "export",
-            "Open Console as Notebook": "console",
-            "Export Table as Collection": "export",
-            "Change collection": "exchange"
         }
     }
 
@@ -271,63 +193,43 @@ class ProjectMenu extends React.Component {
 }
 
 ProjectMenu.propTypes = {
-    console_items: PropTypes.array,
-    interface_state: PropTypes.object,
-    updateLastSave: PropTypes.func,
-    changeCollection: PropTypes.func,
-    disabled_items: PropTypes.array,
+    world_state: PropTypes.object,
     hidden_items: PropTypes.array
 };
 
-class ColumnMenu extends React.Component {
+class BoxMenu extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
     }
 
-    _shift_column_left() {
-        let cnum = this.props.filtered_column_names.indexOf(this.props.selected_column);
-        if (cnum == 0) return;
-        let target_col = this.props.filtered_column_names[cnum - 1];
-        this.props.moveColumn(this.props.selected_column, target_col);
+    _new_box(event) {
+        this.props.insertDataBoxLastFocus();
     }
 
-    _shift_column_right() {
-        let cnum = this.props.table_spec.column_names.indexOf(this.props.selected_column);
-        if (cnum == (this.props.table_spec.column_names.length - 1)) return;
-        let target_col = this.props.table_spec.column_names[cnum + 2];
-        this.props.moveColumn(this.props.selected_column, target_col);
+    _name_box() {
+        console.log(name_box)
     }
 
 
     get option_dict () {
         return {
-            "Shift Left": this._shift_column_left,
-            "Shift Right": this._shift_column_right,
-            "Hide": this.props.hideColumn,
-            "Hide in All Docs": this.props.hideInAll,
-            "Unhide All": this.props.unhideAllColumns,
-            "Add Column": () => this.props.addColumn(false),
-            "Add Column In All Docs": () => this.props.addColumn(true)
+            "Data Box": this._new_box,
+            "Name Box": this._name_box,
         }
     }
 
     get icon_dict () {
         return {
-            "Shift Left": "direction-left",
-            "Shift Right": "direction-right",
-            "Hide": "eye-off",
-            "Hide in All Docs": "eye-off",
-            "Unhide All": "eye-on",
-            "Add Column": "add-column-right",
-            "Add Column In All Docs": "add-column-right"
+            "Data Box": "box",
+            "Name Box": "label",
         }
     }
 
 
     render () {
         return (
-            <MenuComponent menu_name="Column"
+            <MenuComponent menu_name="Box"
                            option_dict={this.option_dict}
                            icon_dict={this.icon_dict}
                            disabled_items={this.props.disabled_items}
@@ -336,69 +238,6 @@ class ColumnMenu extends React.Component {
         )
     }
 }
-ColumnMenu.propTypes = {
-    moveColumn: PropTypes.func,
-    table_spec: PropTypes.object,
-    filtered_column_names: PropTypes.array,
-    selected_column: PropTypes.string,
-    hideColumn: PropTypes.func,
-    hideInAll: PropTypes.func,
-    unhideAllColumns: PropTypes.func,
-    addColumn: PropTypes.func,
-    disabled_items: PropTypes.array,
+BoxMenu.propTypes = {
 };
 
-class ViewMenu extends React.Component {
-    constructor(props) {
-        super(props);
-        doBinding(this)
-    }
-
-    _shift_column_left() {
-        let cnum = this.props.table_spec.column_names.indexOf(this.props.selected_column);
-        if (cnum == 0) return;
-        let target_col = this.props.table_spec.column_names[cnum - 1];
-        this._moveColumn(this.props.selected_column, target_col);
-    }
-
-    _shift_column_right() {
-        let cnum = this.props.table_spec.column_names.indexOf(this.props.selected_column);
-        if (cnum == (this.props.table_spec.column_names.length - 1)) return;
-        let target_col = this.props.table_spec.column_names[cnum + 2];
-        this._moveColumn(this.props.selected_column, target_col);
-    }
-
-
-    get option_dict () {
-        let opt_name = this.props.table_is_shrunk ? "Maximize Table" : "Minimize Table";
-        let result = {};
-        result[opt_name] = this.props.toggleTableShrink;
-        result["Show Error Drawer"] = this.props.openErrorDrawer;
-        return result
-    }
-
-    get icon_dict () {
-        let opt_name = this.props.table_is_shrunk ? "Maximize Table" : "Minimize Table";
-        let result = {};
-        result[opt_name] = this.props.table_is_shrunk ? "maximize" : "minimize";
-        result["Show Error Drawer"] = "panel-stats";
-        return result
-    }
-
-    render () {
-        return (
-            <MenuComponent menu_name="View"
-                           option_dict={this.option_dict}
-                           icon_dict={this.icon_dict}
-                           disabled_items={[]}
-                           disable_all={this.props.disable_all}
-                           hidden_items={[]}
-            />
-        )
-    }
-}
-ViewMenu.propTypes = {
-    table_is_shrunk: PropTypes.bool,
-    toggleTableShrink: PropTypes.func,
-    openErrorDrawer: PropTypes.func
-};

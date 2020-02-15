@@ -1,5 +1,5 @@
 
-import {guid} from "./utilities_react.js";
+import {guid} from "./utilities.js";
 
 export {handleCallback, postAjax, postAjaxPromise, postAjaxUploadPromise, postWithCallback,
     postWithCallbackAsyncFalse, postWithCallbackNoMain, postAjaxUpload, postAsyncFalse, postBeacon}

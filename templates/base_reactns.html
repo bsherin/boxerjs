@@ -24,9 +24,6 @@
     </div>
 
   {% block page_content %}{% endblock %}
-    <script type=text/javascript>
-        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
-    </script>
 
     <script src="{{url_for('static', filename='js/jquery-3.4.1.min.js')}}"></script>
     {% if uses_codemirror == "True" %}
@@ -45,7 +42,9 @@
     //override defaults
     </script>
     <script type="text/javascript">
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
         var csrftoken = "{{ csrf_token() }}";
+        window.boxer_img_url = "{{url_for('static', filename='css/icons/favicon-256.png', v=version_string)}}";
         $.ajaxSetup({
             beforeSend: function(xhr, settings) {
                 if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {

@@ -10,24 +10,18 @@ import "../css/boxer.scss";
 
 import {doBinding, guid} from "./utilities.js";
 import {DataBox} from "./nodes.js";
-
-// update
-function postAjax(target, data, callback) {
-    if (target[0] == "/") {
-        target = target.slice(1)
-    }
-    $.ajax({
-        url: $SCRIPT_ROOT + "/" + target,
-        contentType: 'application/json',
-        type: 'POST',
-        async: true,
-        data: JSON.stringify(data),
-        dataType: 'json',
-        success: callback
-    });
-}
+import {BoxerNavbar} from "./blueprint_navbar.js";
+import {ProjectMenu, BoxMenu} from "./main_menus_react.js";
+import {postAjax} from "./communication_react.js"
 
 let tsocket = null;
+
+// Prevent capturing focus by the button.
+$(document).on('mousedown', "button",
+    function(event) {
+        event.preventDefault();
+    }
+);
 
 function _main_main() {
     console.log("entering start_post_load");
@@ -48,8 +42,10 @@ class MainApp extends React.Component {
         doBinding(this);
         this.state = {};
         let nobj = _.cloneDeep(props.data);
-        this.state.base_node = this._initDataObject(nobj, null, 0)
-        this.state.zoomed_node_id = this.state.base_node.unique_id
+        this.state.base_node = this._initDataObject(nobj, null, 0);
+        this.state.zoomed_node_id = this.state.base_node.unique_id;
+        this.last_focus_id = null;
+        this.last_focus_pos = null
     }
 
     _renumberNodes(node_list) {
@@ -189,6 +185,10 @@ class MainApp extends React.Component {
         if (update) {
             this.setState({base_node: new_base})
         }
+    }
+
+    _insertDataBoxLastFocus() {
+        this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos)
     }
 
     _mergeTextNodes(n1, n2, node_list) {
@@ -458,28 +458,50 @@ class MainApp extends React.Component {
         this.setState({base_node: new_base, zoomed_node_id: mnode.unique_id});
     }
 
+    _storeFocus(uid, position) {
+        this.last_focus_id = uid;
+        this.last_focus_pos = position
+    }
+
     render() {
         let funcs = {
-            handleTextChange: this._handleTextChange,
-            changeNode: this._changeNode,
-            insertDataBox: this._insertDataBoxinText,
-            deletePrecedingBox: this._deletePrecedingBox,
-            splitLineAtTextPosition: this._splitLineAtTextPosition,
-            getParentId: this._getParentId,
-            getNode: this._getNode,
-            zoomBox: this._zoomBox,
-            unzoomBox: this._unzoomBox
-        };
+                handleTextChange: this._handleTextChange,
+                changeNode: this._changeNode,
+                insertDataBox: this._insertDataBoxinText,
+                deletePrecedingBox: this._deletePrecedingBox,
+                splitLineAtTextPosition: this._splitLineAtTextPosition,
+                getParentId: this._getParentId,
+                getNode: this._getNode,
+                zoomBox: this._zoomBox,
+                unzoomBox: this._unzoomBox,
+                storeFocus: this._storeFocus,
+                insertDataBoxLastFocus: this._insertDataBoxLastFocus
+            };
+        let menus = (
+            <React.Fragment>
+                <ProjectMenu {...funcs} world_state={this.props.world_state}
+                />
+                <BoxMenu {...funcs}
+                />
+            </React.Fragment>
+        );
+
         this.state.base_node.am_zoomed = true;
         let zoomed_node = this._getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
         return (
-            <DataBox name={zoomed_node.name}
-                     funcs={funcs}
-                     focusName={false}
-                     am_zoomed={true}
-                     closed={false}
-                     unique_id={this.state.zoomed_node_id}
-                     line_list={zoomed_node.line_list}/>
+            <React.Fragment>
+                <BoxerNavbar is_authenticated={false}
+                              user_name="testname"
+                              menus={menus}
+                />
+                <DataBox name={zoomed_node.name}
+                         funcs={funcs}
+                         focusName={false}
+                         am_zoomed={true}
+                         closed={false}
+                         unique_id={this.state.zoomed_node_id}
+                         line_list={zoomed_node.line_list}/>
+             </React.Fragment>
         )
     }
 }

@@ -7,6 +7,7 @@ import { Button, Tag } from "@blueprintjs/core";
 import {doBinding, getCaretPosition, propsAreEqual} from "./utilities";
 import {KeyTrap} from "./key_trap.js";
 import {getUsableDimensions} from "./sizing_tools.js";
+import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 
 export {DataBox}
 
@@ -34,6 +35,11 @@ class TextNode extends React.Component {
 
     _insertDataBox() {
         this.props.funcs.insertDataBox(this.props.unique_id, getCaretPosition(this.state.iRef))
+    }
+
+    _onBlur() {
+        let pos = getCaretPosition(this.state.iRef);
+        this.props.funcs.storeFocus(this.props.unique_id, pos)
     }
 
     _handleKeyDown(event) {
@@ -144,6 +150,7 @@ class TextNode extends React.Component {
                                  disabled={false}
                                  onChange={this._handleChange}
                                  onKeyDown={this._handleKeyDown}
+                                 onBlur={this._onBlur}
                                  html={this.props.the_text}
                                  />
                  <KeyTrap global={false} target_ref={this.state.iRef} bindings={key_bindings} />
@@ -328,8 +335,11 @@ class DataBox extends React.Component {
         if (this.props.am_zoomed) {
             let usable_dimensions = getUsableDimensions();
             outer_style = {
-                width: "100%",
-                height: usable_dimensions.usable_height
+                width: usable_dimensions.usable_width,
+                height: usable_dimensions.usable_height,
+                position: "absolute",
+                top: USUAL_TOOLBAR_HEIGHT,
+                left: SIDE_MARGIN
             };
             inner_style = {
                 height: "100%"

@@ -11,7 +11,7 @@ const SIDE_MARGIN = 15;
 const BOTTOM_MARGIN = 35;
 const TOP_MARGIN = 25;
 const INITIAL_DECREMENT = 50;
-const USUAL_TOOLBAR_HEIGHT = 50;
+const USUAL_TOOLBAR_HEIGHT = 55;
 
 function getUsableDimensions() {
     return {
