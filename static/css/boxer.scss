@@ -3,15 +3,18 @@
 @import "~@blueprintjs/icons/lib/css/blueprint-icons.css";
 
 .data-box {
-    display: inline-block;
+    display: block;
     position: relative;  // Necessary so that close button is positioned relative to this
     overflow: hidden;
     padding: 5px;
-    margin: 0 3px;
+    margin: 3px 3px;
     border: 1px solid black;
-    vertical-align: top;
-    min-width: 50px;
+    min-width: 75px;
     border-radius: 5px;
+
+    &.data-box-with-name {
+        margin-top: 0
+    }
 
     .close-button {
         opacity: 0;
@@ -25,17 +28,41 @@
         display: block;
         opacity: 100
     }
+
+    .zoom-button {
+        opacity: 0;
+        position: absolute;
+        top: 0;
+        right: -1px;
+        min-width: 0 !important;
+        min-height: 0 !important;
+    }
+    .zoom-button:hover {
+        display: block;
+        opacity: 100
+    }
+}
+
+.data-box-outer {
+    display: inline-block;
+    vertical-align: top;
 }
 
 .closed-data-box {
     margin: 0 5px;
+    display: block;
+    width: 75px
 }
 
-
-
-.close-button:hover {
-    color: red
+.data-box-name {
+    margin-left: 10px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
 }
+
+//.close-button:hover {
+//    color: red
+//}
 
 .data-line {
     display: block;

@@ -49,6 +49,7 @@ class MainApp extends React.Component {
         this.state = {};
         let nobj = _.cloneDeep(props.data);
         this.state.base_node = this._initDataObject(nobj, null, 0)
+        this.state.zoomed_node_id = this.state.base_node.unique_id
     }
 
     _renumberNodes(node_list) {
@@ -56,6 +57,88 @@ class MainApp extends React.Component {
         for (let node of node_list) {
             node["position"] = counter;
             counter += 1
+        }
+    }
+
+
+    _getMatchingNode(uid, node) {
+        if (node.unique_id == uid) {
+            return node
+        }
+        if ((node.kind == "text") || (node.line_list.length == 0)) {
+            return false
+        }
+        for (let lin of node.line_list) {
+            if (lin.unique_id == uid) {
+                return lin
+            }
+            for (let nd of lin.node_list) {
+                let match = this._getMatchingNode(uid, nd);
+                if (match) {
+                    return match
+                }
+            }
+        }
+        return false
+    }
+
+    _splitTextAtPosition(text_id, cursor_position, new_base) {
+
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let parent_line = this._getMatchingNode(mnode.parent, new_base);
+        let new_node;
+        if (cursor_position == 0) {
+            new_node = this._newTextNode("");
+            new_node.unique_id = text_id;
+            mnode.unique_id = guid();
+            parent_line.node_list.splice(mnode.position, 0, new_node)
+
+        }
+        else if (cursor_position == mnode.the_text.length) {
+            new_node = this._newTextNode("");
+            parent_line.node_list.splice(mnode.position + 1, 0, new_node)
+        }
+        else {
+            let text_split = [mnode.the_text.slice(0, cursor_position), mnode.the_text.slice(cursor_position,)];
+            new_node = this._newTextNode(text_split[1]);
+            mnode.the_text = text_split[0];
+            parent_line.node_list.splice(mnode.position + 1, 0, new_node);
+        }
+        new_node.parent = parent_line.unique_id;
+        this._renumberNodes(parent_line.node_list);
+    }
+
+
+    _insertLine(new_line, box_id, position, new_base=null, update=true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let parent_box = this._getMatchingNode(box_id, new_base);
+        new_line.parent= box_id;
+        parent_box.line_list.splice(position, 0, new_line);
+        this._renumberNodes(parent_box.line_list);
+        if (update) {
+            this.setState({base_node: new_base})
+        }
+
+    }
+
+    _splitLine(line_id, position, new_base=null, update=true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let the_line = this._getMatchingNode(line_id, new_base);
+        let new_node_list = the_line.node_list.slice(position,);
+        this._renumberNodes(new_node_list);
+
+        let new_line = this._newLineNode(new_node_list);
+        for (let nd of new_node_list) {
+            nd.parent = new_line.unique_id
+        }
+        the_line.node_list = the_line.node_list.slice(0, position);
+        this._insertLine(new_line, the_line.parent, the_line.position + 1, new_base, false);
+        if (update) {
+            this.setState({base_node: new_base})
         }
     }
 
@@ -75,47 +158,20 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertLine(new_line, box_id, position, new_base=null, update=true) {
+    _splitLineAtTextPosition(text_id, cursor_position, new_base=null, update=true) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
-        let parent_box = this._getMatchingNode(box_id, new_base);
-        new_line.parent= box_id;
-        parent_box.line_list.splice(position, 0, new_line);
-        this._renumberNodes(parent_box.line_list);
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-
-    }
-
-    _splitText(text_id, separator, new_base=null, update=true) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base);
         let mnode = this._getMatchingNode(text_id, new_base);
-        let text_split = mnode.the_text.split(separator);
-        let new_node = this._newTextNode(text_split[1]);
-        new_node.setFocus = 0;
-        mnode.the_text = text_split[0];
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false, false);
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-    }
+        let pos = mnode.position;
+        let linid = mnode.parent;
+        let parent_line = this._getMatchingNode(linid, new_base);
+        let parent_line_pos = parent_line.position;
+        let dbox = this._getMatchingNode(parent_line.parent, new_base);
+        this._splitLine(linid, pos + 1, new_base, false);
+        dbox.line_list[parent_line_pos + 1].node_list[0].setFocus = 0;
 
-    _splitTextAtPosition(text_id, cursor_position, new_base=null, update=true) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        let mnode = this._getMatchingNode(text_id, new_base);
-        if ((cursor_position == 0) || (cursor_position == mnode.the_text.length)) {
-            return
-        }
-        let text_split = [mnode.the_text.slice(0, cursor_position), mnode.the_text.slice(cursor_position,)];
-        let new_node = this._newTextNode(text_split[1]);
-        mnode.the_text = text_split[0];
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false, false);
         if (update) {
             this.setState({base_node: new_base})
         }
@@ -255,52 +311,6 @@ class MainApp extends React.Component {
         }
     }
 
-    _splitLine(line_id, position, new_base=null, update=true) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        let the_line = this._getMatchingNode(line_id, new_base);
-        let new_node_list = the_line.node_list.slice(position,);
-        this._renumberNodes(new_node_list);
-
-        let new_line = this._newLineNode(new_node_list);
-        for (let nd of new_node_list) {
-            nd.parent = new_line.unique_id
-        }
-        the_line.node_list = the_line.node_list.slice(0, position);
-        this._insertLine(new_line, the_line.parent, the_line.position + 1, new_base, false);
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-    }
-
-
-    _splitLineAtTextPosition(text_id, cursor_position, new_base=null, update=true) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let pos = mnode.position;
-        let linid = mnode.parent;
-        let parent_line = this._getMatchingNode(linid, new_base);
-        let parent_line_pos = parent_line.position;
-        let dbox = this._getMatchingNode(parent_line.parent, new_base);
-        if (cursor_position == 0) {
-            this._splitLine(linid, pos, new_base, false);
-            mnode.setFocus = 0;
-        }
-        else {
-            this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-            this._splitLine(linid, pos + 1, new_base, false);
-            let new_node = dbox.line_list[parent_line_pos + 1].node_list[0];
-            new_node.setFocus = 0;
-        }
-
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-    }
-
     _newTextNode(the_text=null) {
         let uid = guid();
         let new_node = {
@@ -333,19 +343,26 @@ class MainApp extends React.Component {
     }
 
     _newDataBoxNode(line_list=[]) {
-        let node_list = [this._newTextNode(" ")];
-
         let uid = guid();
-        let lnode = this._newLineNode(node_list);
-        lnode.parent = uid;
-        let new_line = {kind: "databox",
+        if (line_list.length == 0) {
+            let node_list = [this._newTextNode(" ")];
+            let new_line = this._newLineNode(node_list);
+            line_list = [new_line]
+        }
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_box = {kind: "databox",
                         key: uid,
+                        name: null,
                         parent: null,
+                        focusName: false,
+                        am_zoomed: false,
                         position: 0,
-                        line_list: [lnode],
+                        line_list: line_list,
                         closed: false,
                         unique_id: uid};
-        return new_line
+        return new_box
     }
 
 
@@ -359,35 +376,15 @@ class MainApp extends React.Component {
         }
     }
 
-    _changeNode(uid, param_name, new_val) {
+    _changeNode(uid, param_name, new_val, callback=null) {
          let new_base = _.cloneDeep(this.state.base_node);
          let mnode = this._getMatchingNode(uid, new_base);
          if (mnode) {
              mnode[param_name] = new_val;
-             this.setState({base_node: new_base})
+             this.setState({base_node: new_base}, callback)
          }
     }
 
-    _getMatchingNode(uid, node) {
-        if (node.unique_id == uid) {
-            return node
-        }
-        if ((node.kind == "text") || (node.line_list.length == 0)) {
-            return false
-        }
-        for (let lin of node.line_list) {
-            if (lin.unique_id == uid) {
-                return lin
-            }
-            for (let nd of lin.node_list) {
-                let match = this._getMatchingNode(uid, nd);
-                if (match) {
-                    return match
-                }
-            }
-        }
-        return false
-    }
 
     _initDataObject(nobj, parent, position) {
         if (!nobj.hasOwnProperty("unique_id")) {
@@ -403,6 +400,8 @@ class MainApp extends React.Component {
             if (!nobj.hasOwnProperty("close")) {
                 nobj.closed = false;
             }
+            nobj.am_zoomed = false;
+            nobj.focusName = false;
             for (let lin of nobj.line_list) {
                 if (!lin.hasOwnProperty("unique_id")) {
                     lin.unique_id = guid();
@@ -421,18 +420,66 @@ class MainApp extends React.Component {
         }
         return nobj
     }
+    
+    _getParentId(uid) {
+        return this._getMatchingNode(uid, this.state.base_node).parent
+    }
+
+    _getNode(uid) {
+        return this._getMatchingNode(uid, this.state.base_node)
+    }
+
+    _zoomBox(uid) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        mnode.am_zoomed = true;
+        this.setState({base_node: new_base, zoomed_node_id: mnode.unique_id})
+    }
+    _unzoomBox(uid) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base, new_base);
+        if (mnode.parent == null) {
+            return
+        }
+        mnode.am_zoomed = false;
+
+        let found = false;
+        while (!found) {
+            let parent_id = mnode.parent;
+            if (parent_id == null) {
+                found = true
+            }
+            let parent_line = this._getMatchingNode(parent_id, new_base);
+            mnode = this._getMatchingNode(parent_line.parent, new_base);
+            if (mnode.am_zoomed) {
+                found = true
+            }
+        }
+        this.setState({base_node: new_base, zoomed_node_id: mnode.unique_id});
+    }
 
     render() {
+        let funcs = {
+            handleTextChange: this._handleTextChange,
+            changeNode: this._changeNode,
+            insertDataBox: this._insertDataBoxinText,
+            deletePrecedingBox: this._deletePrecedingBox,
+            splitLineAtTextPosition: this._splitLineAtTextPosition,
+            getParentId: this._getParentId,
+            getNode: this._getNode,
+            zoomBox: this._zoomBox,
+            unzoomBox: this._unzoomBox
+        };
+        this.state.base_node.am_zoomed = true;
+        let zoomed_node = this._getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
         return (
-            <DataBox name="world"
-                     handleTextChange={this._handleTextChange}
-                     changeNode={this._changeNode}
-                     insertDataBox={this._insertDataBoxinText}
-                     deletePrecedingBox={this._deletePrecedingBox}
-                     splitLineAtTextPosition={this._splitLineAtTextPosition}
+            <DataBox name={zoomed_node.name}
+                     funcs={funcs}
+                     focusName={false}
+                     am_zoomed={true}
                      closed={false}
-                     unique_id={this.state.base_node.unique_id}
-                     line_list={this.state.base_node.line_list}/>
+                     unique_id={this.state.zoomed_node_id}
+                     line_list={zoomed_node.line_list}/>
         )
     }
 }
