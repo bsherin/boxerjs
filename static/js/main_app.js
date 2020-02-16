@@ -508,7 +508,7 @@ class MainApp extends React.Component {
         return React.createElement(
             React.Fragment,
             null,
-            React.createElement(BoxerNavbar, { is_authenticated: false,
+            React.createElement(BoxerNavbar, { is_authenticated: window.is_authenticated,
                 user_name: 'testname',
                 menus: menus
             }),

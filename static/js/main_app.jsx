@@ -531,7 +531,7 @@ class MainApp extends React.Component {
         ];
         return (
             <React.Fragment>
-                <BoxerNavbar is_authenticated={false}
+                <BoxerNavbar is_authenticated={window.is_authenticated}
                               user_name="testname"
                               menus={menus}
                 />

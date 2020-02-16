@@ -1,7 +1,7 @@
 
 import _ from "lodash";
 
-export {doBinding, isString, guid, getCaretPosition, propsAreEqual, arraysMatch, remove_duplicates}
+export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, arraysMatch, remove_duplicates}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -55,6 +55,11 @@ function remove_duplicates (arrArg) {
   return arrArg.filter((elem, pos, arr) => {
     return arr.indexOf(elem) == pos;
   });
+}
+
+function doSignOut(page_id) {
+    window.open($SCRIPT_ROOT + "/logout/" + window.page_id, "_self");
+    return false;
 }
 
 function guid() {

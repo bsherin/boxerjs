@@ -81,7 +81,6 @@ def attempt_login():
         user.set_last_login()
         print("about to call load_user_default_tiles")
         result_dict["logged_in"] = True
-        result_dict["tile_loading_errors"] = error_list
     else:
         result_dict["logged_in"] = False
     return jsonify(result_dict)

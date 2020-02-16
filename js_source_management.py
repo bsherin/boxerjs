@@ -7,16 +7,10 @@ if _develop:
                       "library_home_react": 'boxerjs_dev/library_home_react.bundle.js',
                       "repository_home_react": 'boxerjs_dev/repository_home_react.bundle.js',
                       "admin_home_react": "boxerjs_dev/admin_home_react.bundle.js",
-                      "tile_creator_react": 'boxerjs_dev/tile_creator_react.bundle.js',
-                      "code_viewer_react": 'boxerjs_dev/code_viewer_react.bundle.js',
-                      "list_viewer_react": 'boxerjs_dev/list_viewer_react.bundle.js',
-                      "module_viewer_react": 'boxerjs_dev/module_viewer_react.bundle.js',
                       "register_react": './boxerjs_dev/register_react.bundle.js',
                       "duplicate_user_react": './boxerjs_dev/duplicate_user_react.bundle.js',
                       "account_react": './boxerjs_dev/account_react.bundle.js',
                       "auth_react": './boxerjs_dev/auth_react.bundle.js',
-                      "history_viewer_react": './boxerjs_dev/history_viewer_react.bundle.js',
-                      "tile_differ_react": './boxerjs_dev/tile_differ_react.bundle.js'
                       }
 
 else:
@@ -27,6 +21,7 @@ else:
                       "register_react": './boxerjs_dist/register_react.production.bundle.js',
                       "duplicate_user_react": './boxerjs_dist/duplicate_user_react.production.bundle.js',
                       "account_react": './boxerjs_dist/account_react.production.bundle.js',
+                      "auth_react": './boxerjs_dist/auth_react.production.bundle.js',
                       }
 
 

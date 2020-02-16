@@ -7,7 +7,7 @@ import PropTypes from 'prop-types';
 import { Button, Navbar, NavbarDivider, OverflowList, Alignment } from "@blueprintjs/core";
 
 import {MenuComponent} from "./main_menus_react.js";
-import {doBinding} from "./utilities.js";
+import {doBinding, doSignOut} from "./utilities.js";
 
 export {render_navbar, BoxerNavbar}
 
