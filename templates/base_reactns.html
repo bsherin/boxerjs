@@ -44,7 +44,11 @@
     <script type="text/javascript">
         $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
         var csrftoken = "{{ csrf_token() }}";
-        window.is_authenticated = "{{current_user.is_authenticated}}";
+        {% if current_user.is_authenticated %}
+        window.is_authenticated = true;
+        {% else %}
+        window.is_authenticated = false;
+        {% endif %}
         window.boxer_img_url = "{{url_for('static', filename='css/icons/favicon-256.png', v=version_string)}}";
         $.ajaxSetup({
             beforeSend: function(xhr, settings) {

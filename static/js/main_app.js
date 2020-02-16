@@ -17,6 +17,8 @@ import { postAjax } from "./communication_react.js";
 import { BoxerSocket } from "./boxer_socket.js";
 import { KeyTrap } from "./key_trap";
 import { getCaretPosition } from "./utilities";
+import { withStatus } from "./toaster.js";
+import { withErrorDrawer } from "./error_drawer.js";
 
 let tsocket = null;
 
@@ -29,15 +31,19 @@ function _main_main() {
     console.log("entering start_post_load");
     tsocket = new BoxerSocket("boxer", 5000);
 
+    let MainAppPlus = withErrorDrawer(withStatus(MainApp, tsocket), tsocket);
+
     let domContainer = document.querySelector('#main-root');
-    if (window._world_name == "") {
-        ReactDOM.render(React.createElement(MainApp, { data: null }), domContainer);
+    if (window.world_name == "") {
+        ReactDOM.render(React.createElement(MainAppPlus, { data: null }), domContainer);
     } else {
-        postAjax("get_data", {}, got_data);
+        postAjax("get_data", { world_name: window.world_name }, got_data);
     }
     function got_data(result) {
         if (result.success) {
-            ReactDOM.render(React.createElement(MainApp, { data: result.data }), domContainer);
+            let world_state = result.project_dict.world_state;
+
+            ReactDOM.render(React.createElement(MainAppPlus, { world_state: world_state }), domContainer);
         }
     }
 }
@@ -47,15 +53,28 @@ class MainApp extends React.Component {
         super(props);
         doBinding(this);
         this.state = {};
-        if (props.data == null) {
+        if (props.world_state == null) {
             this.state.base_node = this._newDataBoxNode();
             this.state.base_node.name = "world";
         } else {
-            this.state.base_node = _.cloneDeep(props.data);
+            this.state.base_node = _.cloneDeep(props.world_state.base_node);
         }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
         this.last_focus_id = null;
         this.last_focus_pos = null;
+        this.state.innerWidth = window.innerWidth;
+        this.state.innerHeight = window.innerHeight;
+    }
+
+    componentDidMount() {
+        window.addEventListener("resize", this._update_window_dimensions);
+    }
+
+    _update_window_dimensions() {
+        this.setState({
+            "innerWidth": window.innerWidth,
+            "innerHeight": window.innerHeight
+        });
     }
 
     _renumberNodes(node_list) {
@@ -64,6 +83,10 @@ class MainApp extends React.Component {
             node["position"] = counter;
             counter += 1;
         }
+    }
+
+    _getMainState() {
+        return this.state;
     }
 
     _getMatchingNode(uid, node) {
@@ -463,8 +486,15 @@ class MainApp extends React.Component {
         this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement));
     }
 
-    _focusName() {
-        let line_id = this._getParentId(document.activeElement.id);
+    _focusNameLastFocus() {
+        this._focusName(this.last_focus_id);
+    }
+
+    _focusName(uid = null) {
+        if (uid == null) {
+            uid = document.activeElement.id;
+        }
+        let line_id = this._getParentId(uid);
         let box_id = this._getParentId(line_id);
         let currentName = this._getNode(box_id).name;
         let self = this;
@@ -490,14 +520,17 @@ class MainApp extends React.Component {
             getNode: this._getNode,
             zoomBox: this._zoomBox,
             focusName: this._focusName,
+            focusNameLastFocus: this._focusNameLastFocus,
             unzoomBox: this._unzoomBox,
             storeFocus: this._storeFocus,
-            insertDataBoxLastFocus: this._insertDataBoxLastFocus
+            insertDataBoxLastFocus: this._insertDataBoxLastFocus,
+            getMainState: this._getMainState
         };
         let menus = React.createElement(
             React.Fragment,
             null,
-            React.createElement(ProjectMenu, _extends({}, funcs, { world_state: this.props.world_state
+            React.createElement(ProjectMenu, _extends({}, funcs, this.props.statusFuncs, {
+                world_state: this.props.world_state
             })),
             React.createElement(BoxMenu, funcs)
         );
@@ -517,6 +550,8 @@ class MainApp extends React.Component {
                 focusName: false,
                 am_zoomed: true,
                 closed: false,
+                innerHeight: this.state.innerHeight,
+                innerWidth: this.state.innerWidth,
                 unique_id: this.state.zoomed_node_id,
                 line_list: zoomed_node.line_list }),
             React.createElement(KeyTrap, { global: true, bindings: key_bindings })
@@ -525,7 +560,7 @@ class MainApp extends React.Component {
 }
 
 MainApp.propTypes = {
-    data: PropTypes.object
+    world_state: PropTypes.object
 };
 
 _main_main();

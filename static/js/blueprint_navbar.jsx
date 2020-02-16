@@ -159,7 +159,7 @@ class BoxerNavbar extends React.Component {
             <Navbar style={{paddingLeft: 10, position: "absolute", top: 0, left: 0}}>
                 <div className="bp3-navbar-group bp3-align-left" ref={this.lg_ref}>
                     <Navbar.Heading className="d-flex align-items-center">
-                        <img className="mr-2" src={window.boxer_img_url} alt="" width="32 " height="32"/>
+                        <img className="mr-2" src={window.boxer_img_url} alt="" width="44 " height="44"/>
                          Boxer
                     </Navbar.Heading>
                         {this.props.menus != null && (

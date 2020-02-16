@@ -49,7 +49,7 @@ def debinarize_python_object(bdat):
     return pickle.loads(dat)
 
 
-def read_project_dict(fs, mdata, file_id):
+def read_project_dict(fs, file_id):
     binarized_python_object = zlib.decompress(fs.get(file_id).read())
     project_dict = debinarize_python_object(binarized_python_object)
     return project_dict

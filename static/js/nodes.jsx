@@ -7,6 +7,7 @@ import { Button, Tag } from "@blueprintjs/core";
 import {doBinding, getCaretPosition, propsAreEqual} from "./utilities";
 import {getUsableDimensions} from "./sizing_tools.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
+import {BOTTOM_MARGIN} from "./sizing_tools";
 
 export {DataBox}
 
@@ -67,6 +68,43 @@ class TextNode extends React.Component {
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
             }
         }
+        if ((event.key == "ArrowLeft") && (getCaretPosition(this.iRef) == 0)){
+            event.preventDefault();
+            let myNode = this._myNode();
+            if (myNode.position == 0) {
+                return
+            }
+            let myLine = this._myLine();
+            for (let pos = myNode.position - 1; pos >=0; --pos) {
+                let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
+                if (candidate.kind == "text") {
+                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", candidate.the_text.length)
+                    return
+                }
+            }
+
+        }
+        if ((event.key == "ArrowRight") && (getCaretPosition(this.iRef) == this.props.the_text.length)){
+            event.preventDefault();
+            let myNode = this._myNode();
+            let myLine = this._myLine();
+            let nnodes = myLine.node_list.length;
+            if (myNode.position == nnodes - 1) {
+                return
+            }
+            for (let pos = myNode.position + 1; pos < nnodes; ++pos) {
+                let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
+                if (candidate.kind == "text") {
+                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", 0);
+                    return
+                }
+            }
+
+        }
+    }
+
+    _myNode() {
+        return this.props.funcs.getNode(this.props.unique_id)
     }
 
     _myLineId() {
@@ -277,6 +315,16 @@ class DataBox extends React.Component {
         this.props.funcs.unzoomBox(this.props.unique_id)
     }
 
+     getUsableDimensions() {
+        return {
+            usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
+            usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
+            usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
+            body_height: window.innerHeight - BOTTOM_MARGIN
+        };
+    }
+
+
     render() {
 
         if (this.props.closed) {
@@ -315,10 +363,10 @@ class DataBox extends React.Component {
         let outer_style;
         let inner_style;
         if (this.props.am_zoomed) {
-            let usable_dimensions = getUsableDimensions();
+            let usable_dimensions = this.getUsableDimensions();
             outer_style = {
                 width: usable_dimensions.usable_width,
-                height: usable_dimensions.usable_height,
+                height: usable_dimensions.usable_height - 10,
                 position: "absolute",
                 top: USUAL_TOOLBAR_HEIGHT + 10,
                 left: SIDE_MARGIN
@@ -362,7 +410,9 @@ DataBox.propTypes = {
 
 DataBox.defaultProps = {
     closed: false,
-    am_zoomed: false
+    am_zoomed: false,
+    innerWidth: 0,
+    innerHeight: 0
 };
 
 class CloseButton extends React.Component {

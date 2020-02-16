@@ -13,6 +13,7 @@ const TOP_MARGIN = 25;
 const INITIAL_DECREMENT = 50;
 const USUAL_TOOLBAR_HEIGHT = 52;
 
+//
 function getUsableDimensions() {
     return {
         "usable_width": window.innerWidth - 2 * SIDE_MARGIN,

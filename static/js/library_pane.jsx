@@ -370,20 +370,12 @@ class LibraryPane extends React.Component {
     get view_views() {
         if (this.props.is_repository) {
             return {
-                collection: null,
                 project: null,
-                tile: "/repository_view_module/",
-                list: "/repository_view_list/",
-                code: "/repository_view_code/"
             }
         }
         else {
             return {
-                collection: "/main/",
-                project: "/main_project/",
-                tile: "/last_saved_view/",
-                list: "/view_list/",
-                code: "/view_code/"
+                project: "/view_world/",
             }
         }
     }

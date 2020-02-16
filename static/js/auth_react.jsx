@@ -87,8 +87,8 @@ class LoginApp extends React.Component {
                     <div id="status-area"></div>
                     <div className="d-flex flex-row justify-content-around">
                         <img className="mb-4"
-                             src={window.tactic_img_url}
-                             alt="" width="72" height="72"/>
+                             src={window.boxer_img_url}
+                             alt="" width="144" height="144"/>
                      </div>
                      <div className="d-flex flex-row justify-content-around">
                         <h4>Please sign in</h4>
