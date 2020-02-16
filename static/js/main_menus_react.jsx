@@ -115,7 +115,6 @@ class ProjectMenu extends React.Component {
                     data_object.alert_type = "alert-success";
                     data_object.timeout = 2000;
                     // postWithCallback("host", "refresh_project_selector_list", {'user_id': window.user_id});
-                    self.props.updateLastSave();
                     self.props.stopSpinner();
                     doFlash(data_object)
                 }
