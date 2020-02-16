@@ -1,5 +1,5 @@
 
-import "../tactic_css/tactic_select.scss"
+import "../css/tactic_select.scss"
 
 import React from "react";
 import PropTypes from 'prop-types';
@@ -14,7 +14,7 @@ import _ from 'lodash';
 import {ViewerContext} from "./resource_viewer_context.js";
 import {postAjaxPromise} from "./communication_react.js"
 
-import {doBinding, propsAreEqual} from "./utilities_react.js";
+import {doBinding, propsAreEqual} from "./utilities.js";
 
 export {NotesField, CombinedMetadata, BpSelect, BpSelectAdvanced}
 

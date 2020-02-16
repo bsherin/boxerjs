@@ -1,0 +1,140 @@
+
+@import "blueprint_variables.scss";
+@import "bootstrap_reduced.scss";
+@import "~@blueprintjs/core/lib/css/blueprint.css";
+@import "~@blueprintjs/icons/dist/blueprint-icons.css";
+
+/* main navbar */
+
+$search-highlight-color: yellow;
+$sortable-table-header-background: #eee;
+$sortable-table-header-text-color: #666666;
+
+
+.cm-matchhighlight {background-color: lightgreen}
+
+html,body {
+    height:100%;
+}
+
+body {
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    overflow: hidden;
+}
+
+.CodeMirror {
+    font-size: 14px;
+}
+
+table {
+    caption {
+        caption-side: top;
+    }
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: #f9f9f9;
+}
+
+/* General resources */
+
+table.sortable thead {
+    background-color:$sortable-table-header-background;
+    color:$sortable-table-header-text-color;
+    font-weight: bold;
+    cursor: default;
+}
+
+/* navbar */
+
+#menu-area {
+    .dropdown-toggle {
+        padding-right: 6px;
+        padding-left: 6px;
+        color: black;
+        border: none;
+        background-color: transparent;
+    }
+}
+
+.toolbar-button-group {
+    margin-left: 5px;
+    .bp3-button.bp3-large.bp-toolbar-button {
+        padding: 5px 12px
+    }
+}
+
+.bp-toolbar-button {
+    .bp3-icon {
+        margin-right: 0;
+        margin-bottom: 4px;
+        margin-top: 2px
+    }
+    &:focus {
+        outline: none
+    }
+    //background-color: white !important
+}
+
+.bp3-button:focus {
+    outline: none
+}
+
+.container-fluid {
+    padding-left: 0;
+    padding-right:0
+}
+
+.notes-field-markdown-output {
+    padding: 10px;
+    border-radius: 3px;
+    -webkit-box-shadow: inset 0 0 0 1px rgba(16, 22, 26, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(16, 22, 26, 0.2);
+    background: rgba(255, 255, 255, 0.7);
+    color: #5c7080;
+    overflow: auto;
+}
+
+
+#listarea-container {
+    height: 100%
+}
+
+.res-viewer-resizer {
+    display: inline-block;
+    vertical-align: top
+}
+
+.CodeMirror {
+    border: 1px solid #eee;
+    height: auto;
+    width: auto;
+}
+
+.combined-metadata {
+    .notes-field {
+        background-color: #f7f7f7;
+    }
+    .bp3-form-content {
+        width: 100%;
+    }
+    .bp3-form-group.bp3-inline {
+        max-width: 450px
+    }
+}
+
+/* Other*/
+
+.highlight {
+    background: $search-highlight-color;
+}
+
+
+.monospace {
+    font-family: monospace
+}
+
+
+
+
+

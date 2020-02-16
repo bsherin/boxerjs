@@ -5,7 +5,6 @@ import PropTypes from "prop-types";
 import { Button, Tag } from "@blueprintjs/core";
 
 import {doBinding, getCaretPosition, propsAreEqual} from "./utilities";
-import {KeyTrap} from "./key_trap.js";
 import {getUsableDimensions} from "./sizing_tools.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 
@@ -17,7 +16,7 @@ class TextNode extends React.Component {
         super(props);
         doBinding(this);
         this.state = {};
-        this.state.iRef = null;
+        this.iRef = null;
     }
 
     _handleChange(event) {
@@ -25,37 +24,33 @@ class TextNode extends React.Component {
     }
 
     _displayMessage() {
-        let idx = getCaretPosition(this.state.iRef);
+        let idx = getCaretPosition(this.iRef);
         console.log("hello the index is " + String(idx))
     }
 
     _refHandler(the_ref) {
-        this.setState({iRef: the_ref});
-    }
-
-    _insertDataBox() {
-        this.props.funcs.insertDataBox(this.props.unique_id, getCaretPosition(this.state.iRef))
+        this.iRef = the_ref
     }
 
     _onBlur() {
-        let pos = getCaretPosition(this.state.iRef);
+        let pos = getCaretPosition(this.iRef);
         this.props.funcs.storeFocus(this.props.unique_id, pos)
     }
 
     _handleKeyDown(event) {
-        if ((event.key == "Backspace") && (getCaretPosition(this.state.iRef) == 0)) {
+        if ((event.key == "Backspace") && (getCaretPosition(this.iRef) == 0)) {
             event.preventDefault();
             this.props.funcs.deletePrecedingBox(this.props.unique_id)
         }
         if (event.key == "Enter") {
             event.preventDefault();
-            this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.state.iRef))
+            this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef))
         }
         if (event.key == "ArrowUp") {
             event.preventDefault();
             let my_line = this._myLine();
             if (my_line.position == 0) {
-                this._focusName()
+                this.props.funcs.focusName()
             }
             else {
                 let myDataBox = this._myBox();
@@ -95,20 +90,25 @@ class TextNode extends React.Component {
     }
 
     _positionCursor(pos) {
-        let node = this.state.iRef;
-        var textNode = node.firstChild;
-        var range = document.createRange();
-        range.setStart(textNode, pos);
-        range.setEnd(textNode, pos);
-        var sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+        try {
+            let node = this.iRef;
+            var textNode = node.firstChild;
+            var range = document.createRange();
+            range.setStart(textNode, pos);
+            range.setEnd(textNode, pos);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        catch (e) {
+            console.log("Got an error positioning the cursor.")
+        }
     }
 
     _setFocusIfRequired () {
         if (this.props.setFocus != null) {
-            if (this.state.iRef) {
-                $(this.state.iRef).focus();
+            if (this.iRef) {
+                $(this.iRef).focus();
                 if (this.props.setFocus != 0) {
                     this._positionCursor(this.props.setFocus)
                 }
@@ -117,29 +117,7 @@ class TextNode extends React.Component {
         }
     }
 
-    _focusName() {
-        let line_id = this.props.funcs.getParentId(this.props.unique_id);
-        let box_id = this.props.funcs.getParentId(line_id);
-        let currentName = this.props.funcs.getNode(box_id).name;
-        let self = this;
-        if (currentName == null) {
-            this.props.funcs.changeNode(box_id, "name", "", doFocus)
-        }
-        else {
-            doFocus()
-        }
-
-        function doFocus() {
-            self.props.funcs.changeNode(box_id, "focusName", true)
-        }
-    }
-
     render() {
-        let key_bindings = [
-            [["ctrl+]"], this._insertDataBox],
-            [["ctrl+f"], this._displayMessage],
-            [["ctrl+n"], this._focusName]
-        ];
         return (
             <React.Fragment>
                 <ContentEditable className="editable mousetrap"
@@ -153,12 +131,10 @@ class TextNode extends React.Component {
                                  onBlur={this._onBlur}
                                  html={this.props.the_text}
                                  />
-                 <KeyTrap global={false} target_ref={this.state.iRef} bindings={key_bindings} />
              </React.Fragment>
 
         )
     }
-
 }
 
 TextNode.propTypes = {
@@ -192,9 +168,12 @@ class EditableTag extends React.Component {
     }
 
     _onBlur(event) {
-        if (this.props.the_name == "") {
-            this.props.funcs.changeNode(this.props.boxId, "name", null)
-        }
+        this.props.doneEditingName(()=>{
+            if (this.props.the_name == "") {
+                this.props.funcs.changeNode(this.props.boxId, "name", null);
+
+            }
+        })
     }
 
     render() {
@@ -214,6 +193,7 @@ class EditableTag extends React.Component {
         }
         return (
             <span className="bp3-tag data-box-name" style={istyle}>
+                <span> </span>
                 <ContentEditable className="bp3-text-overflow-ellipsis bp3-fill"
                                  tagName="span"
                                  style={{}}
@@ -243,7 +223,7 @@ class DataBox extends React.Component {
         super(props);
         doBinding(this);
         this.state = {};
-        this.state.nameRef = null;
+        this.nameRef = null;
         this.state.focusingName = false;
     }
 
@@ -270,19 +250,21 @@ class DataBox extends React.Component {
     }
 
     _submitNameRef(the_ref) {
-        this.setState({"nameRef": the_ref})
+        this.nameRef = the_ref
     }
 
-    _doneEditingName() {
-        this.setState({focusingName: false})
+    _doneEditingName(callback=null) {
+        this.setState({focusingName: false}, callback)
     }
 
     componentDidUpdate () {
+        let self = this;
         if (this.props.focusName) {
-            if (this.state.nameRef) {
-                $(this.state.nameRef).focus();
-                this.setState({focusingName: true});
-                this.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+            if (this.nameRef) {
+                $(this.nameRef).focus();
+                this.setState({focusingName: true},()=>{
+                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                });
             }
         }
     }
@@ -338,7 +320,7 @@ class DataBox extends React.Component {
                 width: usable_dimensions.usable_width,
                 height: usable_dimensions.usable_height,
                 position: "absolute",
-                top: USUAL_TOOLBAR_HEIGHT,
+                top: USUAL_TOOLBAR_HEIGHT + 10,
                 left: SIDE_MARGIN
             };
             inner_style = {

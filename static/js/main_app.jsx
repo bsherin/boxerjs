@@ -3,7 +3,7 @@
 import React from "react";
 import * as ReactDOM from 'react-dom'
 import PropTypes from 'prop-types';
-import io from 'socket.io-client';
+
 import _ from 'lodash';
 
 import "../css/boxer.scss";
@@ -13,6 +13,10 @@ import {DataBox} from "./nodes.js";
 import {BoxerNavbar} from "./blueprint_navbar.js";
 import {ProjectMenu, BoxMenu} from "./main_menus_react.js";
 import {postAjax} from "./communication_react.js"
+
+import {BoxerSocket} from "./boxer_socket.js"
+import {KeyTrap} from "./key_trap";
+import {getCaretPosition} from "./utilities";
 
 let tsocket = null;
 
@@ -26,8 +30,15 @@ $(document).on('mousedown', "button",
 function _main_main() {
     console.log("entering start_post_load");
     tsocket = new BoxerSocket("boxer", 5000);
-    postAjax("get_data", {}, got_data);
+
     let domContainer = document.querySelector('#main-root');
+    if (window._world_name == "") {
+        ReactDOM.render(<MainApp data={null}/>,
+                domContainer)
+    }
+    else {
+        postAjax("get_data", {}, got_data);
+    }
     function got_data(result) {
         if (result.success) {
             ReactDOM.render(<MainApp data={result.data}/>,
@@ -41,8 +52,13 @@ class MainApp extends React.Component {
         super(props);
         doBinding(this);
         this.state = {};
-        let nobj = _.cloneDeep(props.data);
-        this.state.base_node = this._initDataObject(nobj, null, 0);
+        if (props.data == null) {
+            this.state.base_node = this._newDataBoxNode()
+            this.state.base_node.name = "world"
+        }
+        else {
+            this.state.base_node = _.cloneDeep(props.data);
+        }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
         this.last_focus_id = null;
         this.last_focus_pos = null
@@ -103,7 +119,6 @@ class MainApp extends React.Component {
         new_node.parent = parent_line.unique_id;
         this._renumberNodes(parent_line.node_list);
     }
-
 
     _insertLine(new_line, box_id, position, new_base=null, update=true) {
         if (new_base == null) {
@@ -463,6 +478,27 @@ class MainApp extends React.Component {
         this.last_focus_pos = position
     }
 
+    _insertDataBoxFromKey() {
+        this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
+    }
+
+    _focusName() {
+        let line_id = this._getParentId(document.activeElement.id);
+        let box_id = this._getParentId(line_id);
+        let currentName = this._getNode(box_id).name;
+        let self = this;
+        if (currentName == null) {
+            this._changeNode(box_id, "name", "", doFocus)
+        }
+        else {
+            doFocus()
+        }
+
+        function doFocus() {
+            self._changeNode(box_id, "focusName", true)
+        }
+    }
+
     render() {
         let funcs = {
                 handleTextChange: this._handleTextChange,
@@ -473,6 +509,7 @@ class MainApp extends React.Component {
                 getParentId: this._getParentId,
                 getNode: this._getNode,
                 zoomBox: this._zoomBox,
+                focusName: this._focusName,
                 unzoomBox: this._unzoomBox,
                 storeFocus: this._storeFocus,
                 insertDataBoxLastFocus: this._insertDataBoxLastFocus
@@ -488,6 +525,10 @@ class MainApp extends React.Component {
 
         this.state.base_node.am_zoomed = true;
         let zoomed_node = this._getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
+        let key_bindings = [
+            [["ctrl+]"], this._insertDataBoxFromKey],
+            [["ctrl+n"], this._focusName]
+        ];
         return (
             <React.Fragment>
                 <BoxerNavbar is_authenticated={false}
@@ -501,6 +542,7 @@ class MainApp extends React.Component {
                          closed={false}
                          unique_id={this.state.zoomed_node_id}
                          line_list={zoomed_node.line_list}/>
+                 <KeyTrap global={true}  bindings={key_bindings} />
              </React.Fragment>
         )
     }
@@ -510,50 +552,6 @@ MainApp.propTypes = {
     data: PropTypes.object
 };
 
-
-class BoxerSocket {
-
-    constructor (name_space, retry_interval) {
-
-        this.name_space = name_space;
-        this.recInterval = null;
-        this.retry_interval = retry_interval;
-        this.connectme();
-        this.initialize_socket_stuff();
-        this.watchForDisconnect();
-    }
-
-    connectme() {
-        var protocol = window.location.protocol;
-        this.socket = io.connect(`${protocol}//${document.domain}:${location.port}/${this.name_space}`);
-    }
-
-    initialize_socket_stuff() {
-        this.socket.emit('join', {"room": "boxer_world"});
-    }
-
-    watchForDisconnect() {
-        let self = this;
-        this.socket.on("disconnect", function () {
-            doFlash({"message": "lost server connection"});
-            self.socket.close();
-            self.recInterval = setInterval(function () {
-                self.attemptReconnect();
-            }, self.retry_interval)
-        });
-    }
-    attemptReconnect() {
-        if (this.socket.connected) {
-            clearInterval(this.recInterval);
-            this.initialize_socket_stuff();
-            this.watchForDisconnect();
-            doFlash({"message": "reconnected to server"})
-        }
-        else {
-            this.connectme()
-        }
-    }
-}
 
 _main_main();
 

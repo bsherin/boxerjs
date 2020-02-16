@@ -20,6 +20,13 @@ module.exports = env => {
     let result = {
         entry: {
             main_app: './static/js/main_app.js',
+            library_home_react: './static/js/library_home_react.js',
+            repository_home_react: './static/js/repository_home_react.js',
+            admin_home_react: "./static/js/admin_home_react.js",
+            register_react: './static/js/register_react.js',
+            duplicate_user_react: './static/js/duplicate_user_react.js',
+            account_react: './static/js/account_react.js',
+            auth_react: './static/js/auth_react.js'
         },
         plugins: [
             new MiniCssExtractPlugin({

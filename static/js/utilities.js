@@ -1,7 +1,7 @@
 
 import _ from "lodash";
 
-export {doBinding, isString, guid, getCaretPosition, propsAreEqual}
+export {doBinding, isString, guid, getCaretPosition, propsAreEqual, arraysMatch, remove_duplicates}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -35,6 +35,26 @@ function propsAreEqual(p1, p2, skipProps = []) {
 
 function isString (value) {
     return typeof value === 'string' || value instanceof String;
+}
+
+function arraysMatch (arr1, arr2) {
+	// Check if the arrays are the same length
+	if (arr1.length !== arr2.length) return false;
+
+	// Check if all items exist and are in the same order
+	for (var i = 0; i < arr1.length; i++) {
+		if (arr1[i] !== arr2[i]) return false;
+	}
+
+	// Otherwise, return true
+	return true;
+
+}
+
+function remove_duplicates (arrArg) {
+  return arrArg.filter((elem, pos, arr) => {
+    return arr.indexOf(elem) == pos;
+  });
 }
 
 function guid() {
