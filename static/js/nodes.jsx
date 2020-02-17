@@ -229,6 +229,9 @@ class EditableTag extends React.Component {
         else {
             istyle = {};
         }
+        if (this.props.boxWidth != null) {
+            istyle.maxWidth = this.props.boxWidth - 20;
+        }
         return (
             <span className="bp3-tag data-box-name" style={istyle}>
                 <span> </span>
@@ -253,7 +256,8 @@ EditableTag.propTypes = {
     boxId: PropTypes.string,
     submitRef: PropTypes.func,
     doneEditingName: PropTypes.func,
-    focusingMe: PropTypes.bool
+    focusingMe: PropTypes.bool,
+    boxWidth: PropTypes.number
 };
 
 class DataBox extends React.Component {
@@ -262,7 +266,9 @@ class DataBox extends React.Component {
         doBinding(this);
         this.state = {};
         this.nameRef = null;
+        this.boxRef = React.createRef();
         this.state.focusingName = false;
+        this.state.boxWidth = null;
     }
 
     // shouldComponentUpdate(nextProps, nextState) {
@@ -295,6 +301,14 @@ class DataBox extends React.Component {
         this.setState({focusingName: false}, callback)
     }
 
+    componentDidMount() {
+        if (this.boxRef) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
+            }
+        }
+    }
+
     componentDidUpdate () {
         let self = this;
         if (this.props.focusName) {
@@ -303,6 +317,11 @@ class DataBox extends React.Component {
                 this.setState({focusingName: true},()=>{
                     self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
                 });
+            }
+        }
+        if (!this.props.closed && this.boxRef) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
         }
     }
@@ -333,6 +352,7 @@ class DataBox extends React.Component {
                     {(this.props.name || this.state.focusingName) &&
                         <EditableTag the_name={this.props.name}
                                      funcs={this.props.funcs}
+                                     boxWidth={75}
                                      submitRef={this._submitNameRef}
                                      doneEditingName={this._doneEditingName}
                                      boxId={this.props.unique_id}/>
@@ -340,6 +360,7 @@ class DataBox extends React.Component {
                     <Button type="button"
                             className="closed-data-box"
                             minimal={false}
+                            ref={this.boxRef}
                             onMouseDown={(e)=>{e.preventDefault()}}
                             onClick={this._openMe}
                             icon={null}>
@@ -384,11 +405,12 @@ class DataBox extends React.Component {
                 <div className="data-box-outer" style={outer_style}>
                     <EditableTag the_name={this.props.name}
                                  focusingMe={this.state.focusingName}
+                                 boxWidth={this.state.boxWidth}
                                  funcs={this.props.funcs}
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                    <div className={dbclass} style={inner_style} >
+                    <div ref={this.boxRef} className={dbclass} style={inner_style} >
                         <CloseButton handleClick={this._closeMe}/>
                         {the_content}
                         <ZoomButton handleClick={this._zoomMe}/>
