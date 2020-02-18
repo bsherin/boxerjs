@@ -19,8 +19,17 @@ class TextNode extends React.Component {
         this.iRef = null;
     }
 
+    trimSpaces(string) {
+      return string
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+    }
+
     _handleChange(event) {
-        this.props.funcs.handleTextChange(this.props.unique_id, event.target.value)
+        let txt = this.trimSpaces(event.target.value);  // Otherwise we end up with junk
+        this.props.funcs.handleTextChange(this.props.unique_id, txt)
     }
 
     _displayMessage() {
