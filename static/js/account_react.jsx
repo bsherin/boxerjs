@@ -64,7 +64,7 @@ class AccountApp extends React.Component {
      _submit_account_info() {
         let pwd = this.state.fields.new_password;
         let pwd2 = this.state.fields.confirm_new_password;
-        const data = {};
+
         if ((pwd == "") || (pwd == "" )) {
             let new_helper_text = Object.assign({}, this.state.helper_text);
             new_helper_text.confirm_new_password = "Passwords cannot be empty";
@@ -77,8 +77,16 @@ class AccountApp extends React.Component {
             this.setState({helper_text: new_helper_text});
             return
         }
+        let data = {};
+        for (let field in this.state.fields) {
+            if ((field != "new_password") && (field != "confirm_new_password")) {
+                data[field] = this.state.fields[field]
+            }
+        }
+
         data.password = pwd;
-        postAjax("update_account_info", this.state.fields, function (result) {
+
+        postAjax("update_account_info", data, function (result) {
             if (result.success) {
                 doFlash({"message": "Account successfully updated", "alert_type": "alert-success"});
             }

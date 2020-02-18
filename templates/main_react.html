@@ -22,6 +22,7 @@
     <script type="module" src="{{url_for('static', filename=module_source, v=version_string)}}"></script>
     <script>
         window.world_name = "{{world_name}}";
+        window.username = "{{current_user.username}}";
         window.user_id = "{{current_user.get_id()}}";
 
     </script>

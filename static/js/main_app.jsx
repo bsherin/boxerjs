@@ -348,6 +348,13 @@ class MainApp extends React.Component {
         }
     }
 
+    _positionAfterBox(databox_id) {
+        let mnode = this._getMatchingNode(databox_id, this.state.base_node);
+        let parent_node = this._getMatchingNode(mnode.parent, this.state.base_node);
+        let target_id = parent_node.node_list[mnode.position + 1].unique_id;
+        this._changeNode(target_id, "setFocus", 0)
+    }
+
     _newTextNode(the_text=null) {
         let uid = guid();
         let new_node = {
@@ -531,21 +538,22 @@ class MainApp extends React.Component {
 
     render() {
         let funcs = {
-                handleTextChange: this._handleTextChange,
-                changeNode: this._changeNode,
-                insertDataBox: this._insertDataBoxinText,
-                deletePrecedingBox: this._deletePrecedingBox,
-                splitLineAtTextPosition: this._splitLineAtTextPosition,
-                getParentId: this._getParentId,
-                getNode: this._getNode,
-                zoomBox: this._zoomBox,
-                focusName: this._focusName,
-                focusNameLastFocus: this._focusNameLastFocus,
-                unzoomBox: this._unzoomBox,
-                storeFocus: this._storeFocus,
-                insertDataBoxLastFocus: this._insertDataBoxLastFocus,
-                getMainState: this._getMainState
-            };
+            handleTextChange: this._handleTextChange,
+            changeNode: this._changeNode,
+            insertDataBox: this._insertDataBoxinText,
+            deletePrecedingBox: this._deletePrecedingBox,
+            splitLineAtTextPosition: this._splitLineAtTextPosition,
+            getParentId: this._getParentId,
+            getNode: this._getNode,
+            zoomBox: this._zoomBox,
+            focusName: this._focusName,
+            focusNameLastFocus: this._focusNameLastFocus,
+            unzoomBox: this._unzoomBox,
+            storeFocus: this._storeFocus,
+            insertDataBoxLastFocus: this._insertDataBoxLastFocus,
+            getMainState: this._getMainState,
+            positionAfterBox: this._positionAfterBox
+        };
         let menus = (
             <React.Fragment>
                 <ProjectMenu {...funcs}
@@ -566,7 +574,7 @@ class MainApp extends React.Component {
         return (
             <React.Fragment>
                 <BoxerNavbar is_authenticated={window.is_authenticated}
-                              user_name="testname"
+                              user_name={window.username}
                               menus={menus}
                 />
                 <DataBox name={zoomed_node.name}

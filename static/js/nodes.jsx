@@ -2,10 +2,9 @@ import React from "react";
 import ContentEditable from "react-contenteditable";
 import PropTypes from "prop-types";
 
-import { Button, Tag } from "@blueprintjs/core";
+import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition, propsAreEqual} from "./utilities";
-import {getUsableDimensions} from "./sizing_tools.js";
+import {doBinding, getCaretPosition} from "./utilities";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
 
@@ -42,10 +41,17 @@ class TextNode extends React.Component {
         if ((event.key == "Backspace") && (getCaretPosition(this.iRef) == 0)) {
             event.preventDefault();
             this.props.funcs.deletePrecedingBox(this.props.unique_id)
+            return
         }
         if (event.key == "Enter") {
             event.preventDefault();
             this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef))
+            return
+        }
+        if (event.key =="]") {
+            event.preventDefault();
+            this.props.funcs.positionAfterBox(this._myLine().parent)
+            return
         }
         if (event.key == "ArrowUp") {
             event.preventDefault();
@@ -58,6 +64,7 @@ class TextNode extends React.Component {
                 let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
             }
+            return
         }
         if (event.key == "ArrowDown") {
             event.preventDefault();
@@ -67,6 +74,7 @@ class TextNode extends React.Component {
                 let firstTextNodeId = myDataBox.line_list[my_line.position + 1].node_list[0].unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
             }
+            return
         }
         if ((event.key == "ArrowLeft") && (getCaretPosition(this.iRef) == 0)){
             event.preventDefault();
@@ -78,11 +86,11 @@ class TextNode extends React.Component {
             for (let pos = myNode.position - 1; pos >=0; --pos) {
                 let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
                 if (candidate.kind == "text") {
-                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", candidate.the_text.length)
+                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", candidate.the_text.length);
                     return
                 }
             }
-
+            return
         }
         if ((event.key == "ArrowRight") && (getCaretPosition(this.iRef) == this.props.the_text.length)){
             event.preventDefault();
@@ -99,7 +107,6 @@ class TextNode extends React.Component {
                     return
                 }
             }
-
         }
     }
 
@@ -200,7 +207,7 @@ class EditableTag extends React.Component {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
             event.preventDefault();
             let myDataBox = this.props.funcs.getNode(this.props.boxId);
-            let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id
+            let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
             this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
         }
     }
@@ -285,7 +292,12 @@ class DataBox extends React.Component {
             this._unzoomeMe()
         }
         else {
-            this.props.funcs.changeNode(this.props.unique_id, "closed", true)
+            let have_focus = this.boxRef.current.contains(document.activeElement);
+            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
+                if (have_focus) {
+                    this.props.funcs.positionAfterBox(this.props.unique_id)
+                }
+            })
         }
     }
 
@@ -345,8 +357,14 @@ class DataBox extends React.Component {
 
 
     render() {
-
+        let dbclass;
         if (this.props.closed) {
+            if ((this.props.name != null) || this.state.focusingName) {
+                dbclass = "closed-data-box data-box-with-name"
+            }
+            else {
+                dbclass = "closed-data-box"
+            }
             return (
                 <div className="data-box-outer">
                     {(this.props.name || this.state.focusingName) &&
@@ -358,7 +376,7 @@ class DataBox extends React.Component {
                                      boxId={this.props.unique_id}/>
                     }
                     <Button type="button"
-                            className="closed-data-box"
+                            className={dbclass}
                             minimal={false}
                             ref={this.boxRef}
                             onMouseDown={(e)=>{e.preventDefault()}}
@@ -374,7 +392,7 @@ class DataBox extends React.Component {
                              funcs={this.props.funcs}
                              node_list={the_line.node_list}/>
             ));
-        let dbclass;
+
         if ((this.props.name != null) || this.state.focusingName) {
             dbclass = "data-box data-box-with-name"
         }
@@ -410,11 +428,11 @@ class DataBox extends React.Component {
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                    <div ref={this.boxRef} className={dbclass} style={inner_style} >
-                        <CloseButton handleClick={this._closeMe}/>
-                        {the_content}
-                        <ZoomButton handleClick={this._zoomMe}/>
-                    </div>
+                        <div ref={this.boxRef} className={dbclass} style={inner_style} >
+                            <CloseButton handleClick={this._closeMe}/>
+                            {the_content}
+                            <ZoomButton handleClick={this._zoomMe}/>
+                        </div>
                 </div>
             </React.Fragment>
         )
@@ -531,6 +549,7 @@ class DataboxLine extends React.Component {
         return (
             <div className="data-line">
                 {the_content}
+
             </div>
         )
     }

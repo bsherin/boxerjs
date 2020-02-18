@@ -56,10 +56,9 @@ class LibraryBoxerSocket extends BoxerSocket {
     }
 }
 
-var res_types = ["container", "user"];
+var res_types = ["user"];
 
 var col_names = {
-    container: ["Id", "Other_name", "Name", "Image", "Owner", "Status", "Created"],
     user: ["_id", "username", "full_name", "last_login", "email"]
 };
 
@@ -75,7 +74,7 @@ class AdministerHomeApp extends React.Component {
         let aheight = getUsableDimensions().usable_height_no_bottom;
         let awidth = getUsableDimensions().usable_width - 170;
         this.state = {
-            selected_tab_id: "containers-pane",
+            selected_tab_id: "users-pane",
             usable_width: awidth,
             usable_height: aheight,
             pane_states: {}
@@ -103,7 +102,6 @@ class AdministerHomeApp extends React.Component {
                 selectedRegions: [Regions.row(0)]
             }
         }
-        this.state.pane_states.container.selected_resource =
         this.top_ref = React.createRef();
         doBinding(this);
     }
@@ -143,22 +141,6 @@ class AdministerHomeApp extends React.Component {
     }
 
     render () {
-        let container_pane = (
-            <AdminPane {...this.props}
-                       res_type="container"
-                       allow_search_inside={false}
-                       allow_search_metadata={false}
-                       ToolbarClass={ContainerToolbar}
-                       updatePaneState={this._updatePaneState}
-                       {...this.state.pane_states["container"]}
-                       {...this.props.errorDrawerFuncs}
-                       errorDrawerFuncs={this.props.errorDrawerFuncs}
-                       tsocket={tsocket}
-                       colnames={col_names.container}
-                       id_field="Id"
-
-            />
-        );
         let user_pane = (
             <AdminPane {...this.props}
                        res_type="user"
@@ -177,20 +159,18 @@ class AdministerHomeApp extends React.Component {
         );
         let outer_style = {width: this.state.usable_width,
             height: this.state.usable_height,
+            position: "absolute",
+            top: USUAL_TOOLBAR_HEIGHT,
+            left:0,
             paddingLeft: 0
         };
         return (
             <ViewerContext.Provider value={{readOnly: false}}>
                 <div className="pane-holder" ref={this.top_ref} style={outer_style}>
-                    <Tabs id="the_container" style={{marginTop: 100}}
+                    <Tabs id="the_container" style={{marginTop: 100, "height": "100%"}}
                              selectedTabId={this.state.selected_tab_id}
                              renderActiveTabPanelOnly={true}
                              vertical={true} large={true} onChange={this._handleTabChange}>
-                        <Tab id="containers-pane" panel={container_pane}>
-                            <Tooltip content="Containers" position={Position.RIGHT}>
-                                <Icon icon="box" iconSize={20} tabIndex={-1} color={this.getIconColor("collections-pane")}/>
-                            </Tooltip>
-                        </Tab>
                         <Tab id="users-pane" panel={user_pane}>
                             <Tooltip content="users" position={Position.RIGHT}>
                                 <Icon icon="user" iconSize={20} tabIndex={-1} color={this.getIconColor("collections-pane")}/>
@@ -252,81 +232,6 @@ AdminToolbar.propTypes = {
     sendRef: PropTypes.func
 };
 
-
-class ContainerToolbar extends React.Component {
-
-    constructor(props) {
-        super(props);
-        doBinding(this);
-    }
-    
-    _doFlashStopSpinner(data) {
-        this.props.stopSpinner();
-        doFlash(data)
-    }
-
-
-    _container_logs () {
-        let cont_id = this.props.selected_resource.Id;
-        let self = this;
-        $.getJSON($SCRIPT_ROOT + '/container_logs/' + cont_id, function (data) {
-            self.props.setConsoleText(data.log_text)
-        });
-    }
-
-    _clear_user_func (event) {
-        this.props.startSpinner();
-        $.getJSON($SCRIPT_ROOT + '/clear_user_containers/' + window.library_id, this._doFlashStopSpinner);
-    }
-
-    _reset_server_func (event) {
-        this.props.startSpinner();
-        $.getJSON($SCRIPT_ROOT + '/reset_server/' + library_id, this._doFlashStopSpinner);
-    }
-
-    _destroy_container () {
-        this.props.startSpinner();
-        let cont_id = this.props.selected_resource.Id;
-        let self = this;
-        $.getJSON($SCRIPT_ROOT + '/kill_container/' + cont_id, (data) => {
-                self._doFlashStopSpinner(data);
-                if (data.success) {
-                    self.props.delete_row(cont_id);
-                }
-            }
-        );
-        this.props.stopSpinner();
-
-    }
-
-    get button_groups() {
-        return [
-            [["reset", this._reset_server_func, "reset", false, "Reset host container"],
-                ["killall", this._clear_user_func, "clean", false, "Clear user containers"],
-                ["killone", this._destroy_container, "delete", false, "Destroy one container"]
-            ],
-            [["log", this._container_logs, "console", false, "Container logs"],
-            ["refresh", this.props.refresh_func, "refresh", false, "Refresh"]]
-
-        ];
-     }
-
-     render () {
-        return <AdminToolbar button_groups={this.button_groups}
-                             left_position={this.props.left_position}
-                             sendRef={this.props.sendRef}
-        />
-     }
-}
-
-ContainerToolbar.propTypes = {
-    selected_resource: PropTypes.object,
-    list_of_selected: PropTypes.array,
-    setConsoleText: PropTypes.func,
-    delete_row: PropTypes.func,
-    refresh_func: PropTypes.func
-
-};
 
 class UserToolbar extends React.Component {
 

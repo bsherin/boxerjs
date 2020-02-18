@@ -334,6 +334,13 @@ class MainApp extends React.Component {
         }
     }
 
+    _positionAfterBox(databox_id) {
+        let mnode = this._getMatchingNode(databox_id, this.state.base_node);
+        let parent_node = this._getMatchingNode(mnode.parent, this.state.base_node);
+        let target_id = parent_node.node_list[mnode.position + 1].unique_id;
+        this._changeNode(target_id, "setFocus", 0);
+    }
+
     _newTextNode(the_text = null) {
         let uid = guid();
         let new_node = {
@@ -524,7 +531,8 @@ class MainApp extends React.Component {
             unzoomBox: this._unzoomBox,
             storeFocus: this._storeFocus,
             insertDataBoxLastFocus: this._insertDataBoxLastFocus,
-            getMainState: this._getMainState
+            getMainState: this._getMainState,
+            positionAfterBox: this._positionAfterBox
         };
         let menus = React.createElement(
             React.Fragment,
@@ -542,7 +550,7 @@ class MainApp extends React.Component {
             React.Fragment,
             null,
             React.createElement(BoxerNavbar, { is_authenticated: window.is_authenticated,
-                user_name: 'testname',
+                user_name: window.username,
                 menus: menus
             }),
             React.createElement(DataBox, { name: zoomed_node.name,

@@ -50,9 +50,20 @@
 }
 
 .closed-data-box {
-    margin: 0 5px;
+    margin: 3px 3px;
     display: block;
-    width: 75px
+    width: 75px;
+    height: 36px;
+    border: 1px solid black;
+    background-color: lightgray!important;
+    box-shadow: none!important;
+    background-image: none!important;
+    border-radius: 5px;
+
+    &.data-box-with-name {
+        margin-top: 0
+    }
+
 }
 
 .data-box-name {

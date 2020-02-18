@@ -351,7 +351,7 @@ class AdminPane extends React.Component {
                 <div className="d-flex flex-row" style={{"maxHeight": "100%"}}>
                     <div ref={this.table_ref}
                          className="d-flex flex-column"
-                         style={{width: table_width, padding: 15, marginTop: 10, backgroundColor: "white"}}>
+                         style={{width: table_width, padding: 5, marginTop: 0, backgroundColor: "white"}}>
                         <SearchForm allow_search_inside={false}
                                     allow_search_metadata={false}
                                     update_search_state={this._update_search_state}
