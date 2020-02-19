@@ -218,8 +218,8 @@ class BoxMenu extends React.Component {
 
     get label_dict() {
         return {
-            "Insert Data Box": "ctrl+]",
-            "Name Box": "ctrl+n",
+            "Insert Data Box": "{",
+            "Name Box": "|",
         }
 
     }

@@ -568,8 +568,14 @@ class MainApp extends React.Component {
         this.state.base_node.am_zoomed = true;
         let zoomed_node = this._getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
         let key_bindings = [
-            [["ctrl+]"], this._insertDataBoxFromKey],
-            [["ctrl+n"], this._focusName]
+            [["{"], (e)=> {
+                e.preventDefault();
+                this._insertDataBoxFromKey();
+            }],
+            [["|"], (e)=>{
+                e.preventDefault();
+                this._focusName()
+            }]
         ];
         return (
             <React.Fragment>
