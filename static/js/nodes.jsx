@@ -27,6 +27,11 @@ class TextNode extends React.Component {
         .replace(/&lt;/g, '<')
     }
 
+    unTrimSpaces(string) {
+      return string
+        .replace(/\s/g, '\u00A0')
+    }
+
     _handleChange(event) {
         let txt = this.trimSpaces(event.target.value);  // Otherwise we end up with junk
         this.props.funcs.handleTextChange(this.props.unique_id, txt)
@@ -183,7 +188,7 @@ class TextNode extends React.Component {
                                  onChange={this._handleChange}
                                  onKeyDown={this._handleKeyDown}
                                  onBlur={this._onBlur}
-                                 html={this.props.the_text}
+                                 html={this.unTrimSpaces(this.props.the_text)}
                                  />
              </React.Fragment>
 
