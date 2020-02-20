@@ -11,7 +11,7 @@ import "../css/boxer.scss";
 import { doBinding, guid } from "./utilities.js";
 import { DataBox } from "./nodes.js";
 import { BoxerNavbar } from "./blueprint_navbar.js";
-import { ProjectMenu, BoxMenu } from "./main_menus_react.js";
+import { ProjectMenu, BoxMenu, EditMenu } from "./main_menus_react.js";
 import { postAjax } from "./communication_react.js";
 
 import { BoxerSocket } from "./boxer_socket.js";
@@ -64,6 +64,7 @@ class MainApp extends React.Component {
         this.last_focus_pos = null;
         this.state.innerWidth = window.innerWidth;
         this.state.innerHeight = window.innerHeight;
+        this.clipboard = [];
     }
 
     componentDidMount() {
@@ -181,6 +182,24 @@ class MainApp extends React.Component {
         }
     }
 
+    _insertNodes(new_nodes, line_id, position, new_base = null, update = true, heal_line = true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let parent_line = this._getMatchingNode(line_id, new_base);
+        for (let node of new_nodes) {
+            node.parent = line_id;
+        }
+        parent_line.node_list.splice(position, 0, ...new_nodes);
+        if (heal_line) {
+            this._healLine(parent_line);
+        }
+
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
+
     _splitLineAtTextPosition(text_id, cursor_position, new_base = null, update = true) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
@@ -287,7 +306,7 @@ class MainApp extends React.Component {
         }
     }
 
-    _deletePrecedingBox(text_id) {
+    _deletePrecedingBox(text_id, clearClipboard = true) {
         let mnode = this._getMatchingNode(text_id, this.state.base_node);
         let parent_line = this._getMatchingNode(mnode.parent, this.state.base_node);
         let focus_node;
@@ -307,6 +326,7 @@ class MainApp extends React.Component {
                     focus_pos = 0;
                 }
                 this._mergeWithPrecedingLine(parent_line, null, true, positionCursor);
+                this._startNewClipboardLine(clearClipboard);
             }
         } else {
             let preceding_node = parent_line.node_list[mnode.position - 1];
@@ -325,6 +345,7 @@ class MainApp extends React.Component {
             }
 
             if (preceding_node.kind == "databox") {
+                this._addToClipboardStart(preceding_node, clearClipboard);
                 this._removeNode(preceding_node.unique_id, null, true, positionCursor);
             }
         }
@@ -346,6 +367,7 @@ class MainApp extends React.Component {
         let new_node = {
             kind: "text",
             key: uid,
+            selected: false,
             unique_id: uid,
             position: 0,
             the_text: the_text,
@@ -389,6 +411,7 @@ class MainApp extends React.Component {
             focusName: false,
             am_zoomed: false,
             position: 0,
+            selected: false,
             line_list: line_list,
             closed: false,
             unique_id: uid };
@@ -516,6 +539,204 @@ class MainApp extends React.Component {
         }
     }
 
+    _clearSelected(node = null, new_base = null, callback = null) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        if (node == null) {
+            node = new_base;
+        }
+
+        if (node.line_list.length == 0) {
+            return;
+        }
+        for (let lin of node.line_list) {
+            lin.selected = false;
+            for (let nd of lin.node_list) {
+                nd.selected = false;
+                if (nd.kind == "databox") {
+                    this._clearSelected(nd, new_base);
+                }
+            }
+        }
+        if (new_base) {
+            this.setState({ base_node: new_base }, callback);
+        }
+        return false;
+    }
+
+    _setSelected(id_list) {
+        this._clearSelected(null, null, () => {
+            let new_base = _.cloneDeep(this.state.base_node);
+            for (let uid of id_list) {
+                let mnode = this._getMatchingNode(uid, new_base);
+                mnode.selected = true;
+            }
+            this.setState({ base_node: new_base });
+        });
+    }
+
+    _clearClipboard() {
+        this.clipboard = [];
+    }
+
+    _addToClipboardStart(raw_new_node, clear = false) {
+        let new_node = _.cloneDeep(raw_new_node);
+        if (clear) {
+            let new_line = this._newLineNode([new_node]);
+            this.clipboard = [new_line];
+        } else {
+            let first_line = this.clipboard[0];
+            first_line.node_list.unshift(new_node);
+            new_node.parent = first_line.unique_id;
+            if (first_line.node_list.length > 1) {
+                if (first_line.node_list[0].kind == "text" && first_line.node_list[1].kind == "text") {
+                    this._mergeTextNodes(0, 1, first_line.node_list);
+                }
+            }
+        }
+    }
+
+    _startNewClipboardLine(clear = false) {
+        let new_line1 = this._newLineNode();
+        if (clear) {
+            let new_line2 = this._newLineNode();
+            this.clipboard = [new_line1, new_line2];
+        } else {
+            this.clipboard.unshift(new_line1);
+        }
+    }
+
+    _updateIds(line_list) {
+        for (let lin of line_list) {
+            lin.unique_id = guid();
+            for (let node of lin.node_list) {
+                node.unique_id = guid();
+                node.parent = lin.unique_id;
+                if (node.kind == "databox") {
+                    for (let lin2 of node.line_list) {
+                        lin2.parent = node.unique_id;
+                    }
+                    this._updateIds(node.line_list);
+                }
+            }
+        }
+    }
+
+    _insertLines(new_lines, boxId, position = 0, new_base = null, update = true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let dbox = this._getMatchingNode(boxId, new_base);
+        for (let lin of new_lines) {
+            lin.parent = boxId;
+        }
+        dbox.line_list.splice(position, 0, new_lines);
+
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
+
+    _insertClipboard(text_id, cursor_position, new_base = null, update = true) {
+        if (!this.clipboard || this.clipboard.length == 0) {
+            return;
+        }
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let nodeA = this._getMatchingNode(text_id, new_base);
+        let targetLine = this._getMatchingNode(nodeA.parent, new_base);
+        let nodeB = targetLine.node_list[nodeA.position + 1];
+        let targetBox = this._getMatchingNode(targetLine.parent, new_base);
+
+        let updated_lines = _.cloneDeep(this.clipboard);
+        this._updateIds(updated_lines);
+        let focus_type;
+        let focus_text_pos;
+        let focus_node_id;
+        if (updated_lines.length == 1) {
+            if (updated_lines[0].node_list.length == 1) {
+                let inserted_node = updated_lines[0].node_list[0];
+                if (inserted_node.kind == "text") {
+                    focus_type = "text";
+                    if (nodeA.kind == "text") {
+                        focus_node_id = nodeA.unique_id;
+                        focus_text_pos = nodeA.the_text.length + inserted_node.the_text.length;
+                    } else {
+                        focus_node_id = inserted_node.unique_id;
+                        focus_text_pos = inserted_node.the_text.length;
+                    }
+                } else {
+                    focus_type = "box";
+                    focus_node_id = inserted_node.unique_id;
+                }
+            } else {
+                let last_inserted_node = _.last(updated_lines[0].node_list);
+                if (last_inserted_node.kind == "text") {
+                    focus_type = "text";
+                    focus_node_id = last_inserted_node.unique_id;
+                    focus_text_pos = last_inserted_node.the_text.length;
+                } else {
+                    focus_type = "box";
+                    focus_node_id = last_inserted_node.unique_id;
+                }
+            }
+            this._insertNodes(updated_lines[0].node_list, targetLine.unique_id, nodeA.position + 1, new_base, false, true);
+        } else {
+            this._splitLine(targetLine.unique_id, nodeB.position, new_base, false);
+            let targetLine2 = targetBox.line_list[targetLine.position + 1];
+            this._insertNodes(updated_lines[0].node_list, targetLine.unique_id, targetLine.node_list.length, new_base, false, true);
+            let last_inserted_node = _.last(_.last(updated_lines).node_list);
+            if (last_inserted_node.kind == "text") {
+                focus_type = "text";
+                focus_node_id = last_inserted_node.unique_id;
+                focus_text_pos = last_inserted_node.the_text.length;
+            } else {
+                focus_type = "box";
+                focus_node_id = last_inserted_node.unique_id;
+            }
+            this._insertNodes(_.last(updated_lines).node_list, targetLine2.unique_id, 0, new_base, false, true);
+            if (updated_lines.length > 2) {
+                this._insertLines(updated_lines.slice(1, updated_lines.length - 1), targetBox.unique_id, targetLine.position + 1, new_base, false);
+            }
+        }
+        let self = this;
+        if (update) {
+            this.setState({ base_node: new_base }, positionCursor);
+        } else {
+            positionCursor();
+        }
+
+        function positionCursor() {
+            if (focus_type == "text") {
+                self._changeNode(focus_node_id, "setFocus", focus_text_pos);
+            } else {
+                self._positionAfterBox(focus_node_id);
+            }
+        }
+    }
+
+    _insertClipboardFromKey() {
+        this._insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement));
+    }
+
+    _insertClipboardLastFocus() {
+        this._insertClipboard(this.last_focus_id, this.last_focus_pos);
+    }
+
+    _copyTextToClipboard() {
+        let the_text = window.getSelection().toString();
+        if (!the_text) {
+            return;
+        }
+        this._clearClipboard();
+        let newTextNode = this._newTextNode(the_text);
+        this.clipboard = [this._newLineNode([newTextNode])];
+    }
+
     render() {
         let funcs = {
             handleTextChange: this._handleTextChange,
@@ -532,7 +753,12 @@ class MainApp extends React.Component {
             storeFocus: this._storeFocus,
             insertDataBoxLastFocus: this._insertDataBoxLastFocus,
             getMainState: this._getMainState,
-            positionAfterBox: this._positionAfterBox
+            positionAfterBox: this._positionAfterBox,
+            clearSelected: this._clearSelected,
+            setSelected: this._setSelected,
+            newTextNode: this._newTextNode,
+            addToClipboardStart: this._addToClipboardStart,
+            insertClipboardLastFocus: this._insertClipboardLastFocus
         };
         let menus = React.createElement(
             React.Fragment,
@@ -540,7 +766,8 @@ class MainApp extends React.Component {
             React.createElement(ProjectMenu, _extends({}, funcs, this.props.statusFuncs, {
                 world_state: this.props.world_state
             })),
-            React.createElement(BoxMenu, funcs)
+            React.createElement(BoxMenu, funcs),
+            React.createElement(EditMenu, EditMenu)
         );
 
         this.state.base_node.am_zoomed = true;
@@ -551,6 +778,12 @@ class MainApp extends React.Component {
         }], [["|"], e => {
             e.preventDefault();
             this._focusName();
+        }], [["esc"], e => {
+            this._clearSelected();
+        }], [["ctrl+v", "command+v"], e => {
+            this._insertClipboardFromKey();
+        }], [["ctrl+c", "command+c"], e => {
+            this._copyTextToClipboard();
         }]];
         return React.createElement(
             React.Fragment,

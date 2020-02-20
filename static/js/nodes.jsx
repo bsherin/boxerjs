@@ -10,6 +10,8 @@ import {BOTTOM_MARGIN} from "./sizing_tools";
 
 export {DataBox}
 
+let currentlyDeleting = false;
+
 
 class TextNode extends React.Component {
     constructor (props) {
@@ -47,24 +49,35 @@ class TextNode extends React.Component {
     }
 
     _onBlur() {
+        currentlyDeleting = false;
         let pos = getCaretPosition(this.iRef);
         this.props.funcs.storeFocus(this.props.unique_id, pos)
     }
 
     _handleKeyDown(event) {
-        if ((event.key == "Backspace") && (getCaretPosition(this.iRef) == 0)) {
-            event.preventDefault();
-            this.props.funcs.deletePrecedingBox(this.props.unique_id)
+        if (event.key == "Backspace") {
+            let caret_pos = getCaretPosition(this.iRef);
+            if (caret_pos == 0){
+                event.preventDefault();
+                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting);
+
+            }
+            else {
+                let new_node = this.props.funcs.newTextNode(this.props.the_text.charAt(caret_pos - 1));
+                this.props.funcs.addToClipboardStart(new_node, !currentlyDeleting);
+            }
+            currentlyDeleting = true;
             return
         }
+        currentlyDeleting = false;
         if (event.key == "Enter") {
             event.preventDefault();
-            this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef))
+            this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
             return
         }
         if (event.key =="]") {
             event.preventDefault();
-            this.props.funcs.positionAfterBox(this._myLine().parent)
+            this.props.funcs.positionAfterBox(this._myLine().parent);
             return
         }
         if (event.key == "ArrowUp") {
@@ -177,9 +190,16 @@ class TextNode extends React.Component {
     }
 
     render() {
+        let cname;
+        if (this.props.selected) {
+            cname = "editable mousetrap selected"
+        }
+        else {
+            cname = "editable mousetrap"
+        }
         return (
             <React.Fragment>
-                <ContentEditable className="editable mousetrap"
+                <ContentEditable className={cname}
                                  tagName="div"
                                  style={{}}
                                  id={this.props.unique_id}
@@ -200,6 +220,7 @@ TextNode.propTypes = {
     the_text: PropTypes.string,
     setFocus: PropTypes.number,
     unique_id: PropTypes.string,
+    selected: PropTypes.bool,
     funcs: PropTypes.object,
 };
 
@@ -278,6 +299,7 @@ EditableTag.propTypes = {
     submitRef: PropTypes.func,
     doneEditingName: PropTypes.func,
     focusingMe: PropTypes.bool,
+    selected: PropTypes.bool,
     boxWidth: PropTypes.number
 };
 
@@ -379,6 +401,9 @@ class DataBox extends React.Component {
             else {
                 dbclass = "closed-data-box"
             }
+            if (this.props.selected) {
+                dbclass = dbclass + " selected"
+            }
             return (
                 <div className="data-box-outer">
                     {(this.props.name || this.state.focusingName) &&
@@ -412,6 +437,9 @@ class DataBox extends React.Component {
         }
         else {
             dbclass = "data-box"
+        }
+        if (this.props.selected) {
+            dbclass = dbclass + " selected"
         }
         let outer_style;
         let inner_style;
@@ -459,6 +487,7 @@ DataBox.propTypes = {
     unique_id: PropTypes.string,
     line_list: PropTypes.array,
     funcs: PropTypes.object,
+    selected: PropTypes.bool,
     am_zoomed: PropTypes.bool
 };
 
@@ -536,11 +565,17 @@ class DataboxLine extends React.Component {
     //     return !propsAreEqual(nextProps, this.props)
     // }
 
+    _handleSelection(selectedKeys) {
+        this.props.funcs.setSelected(selectedKeys);
+    }
+
     render() {
         let the_content = this.props.node_list.map((the_node, index) => {
             if (the_node.kind == "text") {
                 return (
                     <TextNode key={the_node.unique_id}
+                               selected={the_node.selected}
+                               className="editable"
                               funcs={this.props.funcs}
                               unique_id={the_node.unique_id}
                               setFocus={the_node.setFocus}
@@ -550,6 +585,8 @@ class DataboxLine extends React.Component {
             else  {
                 return (
                     <DataBox key={the_node.unique_id}
+                              selected={the_node.selected}
+                              className="data-box-outer"
                              name={the_node.name}
                              funcs={this.props.funcs}
                              unique_id={the_node.unique_id}
@@ -562,8 +599,7 @@ class DataboxLine extends React.Component {
         });
         return (
             <div className="data-line">
-                {the_content}
-
+                    {the_content}
             </div>
         )
     }
@@ -572,5 +608,5 @@ class DataboxLine extends React.Component {
 DataboxLine.propTypes = {
     unique_id: PropTypes.string,
     node_list: PropTypes.array,
-    funcs: PropTypes.object
+    funcs: PropTypes.object,
 };

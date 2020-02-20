@@ -44,6 +44,17 @@
     }
 }
 
+
+.selected .data-box, .data-box.selected {
+    background-color: #a2c3ff;
+    border-color: #3c86ff
+}
+
+
+div[id^='selectableItem'] {
+    display: inline-block;
+}
+
 .data-box-outer {
     display: inline-block;
     vertical-align: top;
@@ -88,6 +99,10 @@
     &:focus {
         outline: none
     }
+}
+
+.selected .editable, .editable.selected {
+    background-color: #a2c3ff;
 }
 
 pre {

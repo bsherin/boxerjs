@@ -6,12 +6,11 @@ import PropTypes from 'prop-types';
 import { MenuItem, Menu, Popover, PopoverPosition, Button } from "@blueprintjs/core";
 
 import {showModalReact} from "./modal_react.js";
-import {postWithCallback} from "./communication_react.js"
 import {doFlash} from "./toaster.js"
 import {doBinding} from "./utilities.js";
 import {postAjax} from "./communication_react";
 
-export {ProjectMenu, BoxMenu, MenuComponent}
+export {ProjectMenu, BoxMenu, EditMenu, MenuComponent}
 
 class MenuComponent extends React.Component {
     constructor(props) {
@@ -238,5 +237,51 @@ class BoxMenu extends React.Component {
     }
 }
 BoxMenu.propTypes = {
+};
+
+class EditMenu extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this)
+    }
+
+    _past(event) {
+        this.props.insertClipboardLastFocus();
+    }
+
+
+    get option_dict () {
+        return {
+            "Paste": this._paste,
+        }
+    }
+
+    get icon_dict () {
+        return {
+            "Paste": "box",
+        }
+    }
+
+    get label_dict() {
+        return {
+            "Paste": "ctrl+v",
+        }
+
+    }
+
+
+    render () {
+        return (
+            <MenuComponent menu_name="Edit"
+                           option_dict={this.option_dict}
+                           icon_dict={this.icon_dict}
+                           label_dict={this.label_dict}
+                           disabled_items={this.props.disabled_items}
+                           hidden_items={[]}
+            />
+        )
+    }
+}
+EditMenu.propTypes = {
 };
 
