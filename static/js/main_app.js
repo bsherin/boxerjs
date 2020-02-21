@@ -27,6 +27,8 @@ $(document).on('mousedown', "button", function (event) {
     event.preventDefault();
 });
 
+const MAX_UNDO_SAVES = 20;
+
 function _main_main() {
     console.log("entering start_post_load");
     tsocket = new BoxerSocket("boxer", 5000);
@@ -65,10 +67,37 @@ class MainApp extends React.Component {
         this.state.innerWidth = window.innerWidth;
         this.state.innerHeight = window.innerHeight;
         this.clipboard = [];
+        this.history = [];
+        this.present = this.state.base_node;
+        this.undoing = false;
     }
 
     componentDidMount() {
         window.addEventListener("resize", this._update_window_dimensions);
+        this.state.history = [_.cloneDeep(this.state.base_node)];
+    }
+
+    componentDidUpdate(preProps, preState, snapShot) {
+        if (this.undoing) {
+            this.undoing = false;
+            this.present = _.cloneDeep(this.state.base_node);
+        } else {
+            if (!this._eqTest(this.state.base_node, this.present)) {
+                this.history.unshift(this.present);
+                if (this.history.length > MAX_UNDO_SAVES) {
+                    this.history = this.history.slice(0, MAX_UNDO_SAVES);
+                }
+                this.present = this.state.base_node;
+            }
+        }
+    }
+
+    _undo() {
+
+        if (this.history.length > 0) {
+            this.undoing = true;
+            this.setState({ "base_node": this.history.shift() });
+        }
     }
 
     _update_window_dimensions() {
@@ -303,6 +332,54 @@ class MainApp extends React.Component {
         this._renumberNodes(dbox.line_list);
         if (update) {
             this.setState({ base_node: new_base }, callback);
+        }
+    }
+
+    _compareDataboxes(db1, db2) {
+        let fields = ["name", "am_zoomed", "closed"];
+        for (let field of fields) {
+            if (db1[field] != db2[field]) {
+                return false;
+            }
+        }
+        if (db1.line_list.length != db2.line_list.length) {
+            return false;
+        }
+        for (let i = 0; i < db1.line_list.length; ++i) {
+            if (!this._compareLines(db1.line_list[i], db2.line_list[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    _compareLines(l1, l2) {
+        if (l1.node_list.length != l2.node_list.length) {
+            return false;
+        }
+        for (let i = 0; i < l1.node_list.length; ++i) {
+            if (!this._eqTest(l1.node_list[i], l2.node_list[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    _compareTexts(t1, t2) {
+        return t1.the_text == t2.the_text;
+    }
+
+    _eqTest(obj1, obj2) {
+        if (obj1.kind != obj2.kind) {
+            return false;
+        }
+        if (obj1.kind == "databox") {
+            return this._compareDataboxes(obj1, obj2);
+        }
+        if (obj2.kind == "text") {
+            return this._compareTexts(obj1, obj2);
+        } else {
+            return this._compareLines(obj1, obj2);
         }
     }
 
@@ -784,6 +861,8 @@ class MainApp extends React.Component {
             this._insertClipboardFromKey();
         }], [["ctrl+c", "command+c"], e => {
             this._copyTextToClipboard();
+        }], [["ctrl+z", "command+z"], e => {
+            this._undo();
         }]];
         return React.createElement(
             React.Fragment,
