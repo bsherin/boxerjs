@@ -13,6 +13,11 @@
     min-width: 75px;
     border-radius: 5px;
 
+    &.js-box {
+        border-radius: 0;
+        border: 1.5px solid black
+    }
+
     &.data-box-with-name {
         margin-top: 0
     }
@@ -22,6 +27,7 @@
         position: absolute;
         top: 0;
         left: 0;
+        z-index: 99;
         min-width: 0 !important;
         min-height: 0 !important;
     }

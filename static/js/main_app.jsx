@@ -67,7 +67,11 @@ class MainApp extends React.Component {
             this.state.base_node.name = "world"
         }
         else {
-            this.state.base_node = _.cloneDeep(props.world_state.base_node);
+            let base_node = _.cloneDeep(props.world_state.base_node);
+            for (let lin of base_node.line_list) {
+                this._healLine(lin, true)
+            }
+            this.state.base_node = base_node;
         }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
         this.last_focus_id = null;
@@ -81,6 +85,10 @@ class MainApp extends React.Component {
     }
 
     componentDidMount() {
+        window.changeNode = this._changeNode;
+        window.newLineNode = this._newLineNode;
+        window.newTextNode = this._newTextNode;
+
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];
     }
@@ -132,7 +140,7 @@ class MainApp extends React.Component {
         if (node.unique_id == uid) {
             return node
         }
-        if ((node.kind == "text") || (node.line_list.length == 0)) {
+        if ((node.kind == "text") || (node.kind == "jsbox") || (node.line_list.length == 0)) {
             return false
         }
         for (let lin of node.line_list) {
@@ -261,7 +269,20 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertDataBoxinText(text_id, cursor_position, new_base=null, update=true) {
+    _insertJsBoxinText(text_id, cursor_position, new_base=null, update=true) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newJsBoxNode();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({base_node: new_base})
+        }
+    }
+
+    _insertDataBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -279,13 +300,19 @@ class MainApp extends React.Component {
         this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos)
     }
 
+    _insertJsBoxLastFocus() {
+        this._insertJsBoxinText(this.last_focus_id, this.last_focus_pos)
+    }
+
     _mergeTextNodes(n1, n2, node_list) {
         node_list[n1].the_text = node_list[n1].the_text + node_list[n2].the_text;
         node_list.splice(n2, 1)
     }
 
-    _healLine(line_pointer) {
+    _healLine(line_pointer, recursive=false) {
         let done = false;
+
+        // Merge adjacent text nodes
         while (!done) {
             this._renumberNodes(line_pointer.node_list);
             done = true;
@@ -297,24 +324,50 @@ class MainApp extends React.Component {
                 }
             }
         }
-        if (line_pointer.node_list[0].kind == "databox") {
-            line_pointer.node_list.splice(0, 0, this._newTextNode(""));
+        // Insert text node at start if necessary
+        if (line_pointer.node_list[0].kind != "text") {
+            let new_node = this._newTextNode("");
+            line_pointer.node_list.splice(0, 0, new_node);
+            new_node.parent = line_pointer.unique_id;
             this._renumberNodes(line_pointer.node_list);
         }
-        if (_.last(line_pointer.node_list).kind == "databox") {
-            line_pointer.node_list.push(this._newTextNode(""));
+        // Insert text node at end if necessary
+        if (_.last(line_pointer.node_list).kind != "text") {
+            let new_node = this._newTextNode("");
+            line_pointer.node_list.push(new_node);
+            new_node.parent = line_pointer.unique_id;
             this._renumberNodes(line_pointer.node_list);
         }
         done = false;
+
+        // Insert text nodes between adjacent boxes
         while (!done) {
             this._renumberNodes(line_pointer.node_list);
             done = true;
             for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
-                if ((line_pointer.node_list[i].kind == "databox") && (line_pointer.node_list[i + 1].kind == "databox")) {
-                    line_pointer.node_list.splice(i + 1, 0, this._newTextNode(""));
+                if ((line_pointer.node_list[i].kind != "text") && (line_pointer.node_list[i + 1].kind != "text")) {
+                    let new_node = this._newTextNode("");
+                    line_pointer.node_list.splice(i + 1, 0, new_node);
+                    new_node.parent = line_pointer.unique_id;
                     done = false;
                     break
                 }
+            }
+        }
+
+        // Make sure all child notes point to the parent
+        for (let node of line_pointer.node_list) {
+            node.parent = line_pointer.unique_id;
+        }
+        if (recursive) {
+            for (let node of line_pointer.node_list) {
+                if (node.kind == "databox") {
+                    for (let lin of node.line_list) {
+                        lin.parent = node.unique_id;
+                        this._healLine(lin)
+                    }
+                }
+
             }
         }
     }
@@ -349,7 +402,7 @@ class MainApp extends React.Component {
     }
 
     _compareDataboxes(db1, db2) {
-        let fields = ["name", "am_zoomed", "closed"]
+        let fields = ["name", "am_zoomed", "closed"];
         for (let field of fields ) {
             if (db1[field] != db2[field]) {
                 return false
@@ -382,6 +435,10 @@ class MainApp extends React.Component {
         return t1.the_text == t2.the_text
     }
 
+    _compareJsBoxes(js1, js2) {
+        return js1.the_code == js2.the_code
+    }
+
     _eqTest(obj1, obj2) {
         if (obj1.kind != obj2.kind) {
             return false
@@ -391,6 +448,9 @@ class MainApp extends React.Component {
         }
         if (obj2.kind == "text") {
             return this._compareTexts(obj1, obj2)
+        }
+        if (obj2.kind == "jsbox") {
+            return this._compareJsBoxes(obj1, obj2)
         }
         else {
             return this._compareLines(obj1, obj2)
@@ -439,7 +499,7 @@ class MainApp extends React.Component {
                 }
             }
 
-            if (preceding_node.kind == "databox") {
+            if (preceding_node.kind != "text") {
                 this._addToClipboardStart(preceding_node, clearClipboard);
                 this._removeNode(preceding_node.unique_id, null, true, positionCursor)
             }
@@ -513,6 +573,27 @@ class MainApp extends React.Component {
         return new_box
     }
 
+    _newJsBoxNode(the_code=null){
+        let uid = guid();
+        if (the_code == null) {
+            the_code = ""
+        }
+        let new_node = {
+            kind: "jsbox",
+            name: null,
+            key: uid,
+            selected: false,
+            unique_id: uid,
+            position: 0,
+            the_code: the_code,
+            parent: null,
+            focusName: false,
+            closed: false,
+            setFocus: null,
+        };
+        return new_node
+    }
+
 
     _handleTextChange(uid, new_html) {
         let re = /(.*)?<br>(.*)/;
@@ -520,6 +601,15 @@ class MainApp extends React.Component {
         let mnode = this._getMatchingNode(uid, new_base);
         if (mnode) {
                 mnode.the_text = new_html;
+                this.setState({base_node: new_base})
+        }
+    }
+
+    _handleCodeChange(uid, new_code) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        if (mnode) {
+                mnode.the_code = new_code;
                 this.setState({base_node: new_base})
         }
     }
@@ -541,6 +631,9 @@ class MainApp extends React.Component {
         }
         nobj.parent = parent;
         if (nobj.kind == "text") {
+            nobj.setFocus = null
+        }
+        else if (nobj.kind == "jsbox") {
             nobj.setFocus = null
         }
         else if (nobj.kind == "databox") {
@@ -614,6 +707,9 @@ class MainApp extends React.Component {
     _insertDataBoxFromKey() {
         this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
     }
+    _insertJsBoxFromKey() {
+        this._insertJsBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
+    }
 
     _focusNameLastFocus() {
         this._focusName(this.last_focus_id)
@@ -624,8 +720,16 @@ class MainApp extends React.Component {
         if (uid == null) {
             uid = document.activeElement.id
         }
-        let line_id = this._getParentId(uid);
-        let box_id = this._getParentId(line_id);
+        let mnode = this._getMatchingNode(uid, this.state.base_node);
+        let box_id;
+        if (mnode.kind == "jsbox") {
+            box_id = mnode.unique_id
+        }
+        else {
+            let line_id = mnode.parent;
+            box_id = this._getParentId(line_id);
+        }
+
         let currentName = this._getNode(box_id).name;
         let self = this;
         if (currentName == null) {
@@ -854,7 +958,11 @@ class MainApp extends React.Component {
         this.clipboard = [this._newLineNode([newTextNode])]
     }
 
-    render() {
+    _getBaseNode() {
+        return this.state.base_node
+    }
+
+    get funcs () {
         let funcs = {
             handleTextChange: this._handleTextChange,
             changeNode: this._changeNode,
@@ -874,16 +982,27 @@ class MainApp extends React.Component {
             clearSelected: this._clearSelected,
             setSelected: this._setSelected,
             newTextNode: this._newTextNode,
+            newDataBox: this._newDataBoxNode,
+            newLineNode: this._newLineNode,
             addToClipboardStart: this._addToClipboardStart,
-            insertClipboardLastFocus: this._insertClipboardLastFocus
+            insertClipboardLastFocus: this._insertClipboardLastFocus,
+            handleCodeChange: this._handleCodeChange,
+            insertJsBoxLastFocus: this._insertJsBoxLastFocus,
+            getBaseNode: this._getBaseNode,
+            insertNode: this._insertNode
         };
+        return funcs
+    }
+
+    render() {
+
         let menus = (
             <React.Fragment>
-                <ProjectMenu {...funcs}
+                <ProjectMenu {...this.funcs}
                              {...this.props.statusFuncs}
                              world_state={this.props.world_state}
                 />
-                <BoxMenu {...funcs}
+                <BoxMenu {...this.funcs}
                 />
                 <EditMenu {...EditMenu}
                 />
@@ -896,6 +1015,10 @@ class MainApp extends React.Component {
             [["{"], (e)=> {
                 e.preventDefault();
                 this._insertDataBoxFromKey();
+            }],
+            [["["], (e)=> {
+                e.preventDefault();
+                this._insertJsBoxFromKey();
             }],
             [["|"], (e)=>{
                 e.preventDefault();
@@ -921,7 +1044,7 @@ class MainApp extends React.Component {
                               menus={menus}
                 />
                 <DataBox name={zoomed_node.name}
-                         funcs={funcs}
+                         funcs={this.funcs}
                          focusName={false}
                          am_zoomed={true}
                          closed={false}

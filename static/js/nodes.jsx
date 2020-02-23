@@ -7,6 +7,9 @@ import { Button } from "@blueprintjs/core";
 import {doBinding, getCaretPosition} from "./utilities";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
+import {ReactCodemirror} from "./react-codemirror.js";
+
+import {doExecution} from "./eval_space.js";
 
 export {DataBox}
 
@@ -54,6 +57,24 @@ class TextNode extends React.Component {
         this.props.funcs.storeFocus(this.props.unique_id, pos)
     }
 
+    async _runMe() {
+        let parent_line = this._myLine();
+
+        let result = await doExecution(this.props.the_text, parent_line.parent, this.props.funcs.getBaseNode());
+        if (!result) {
+            return
+        }
+        if (typeof(result) != "object") {
+            let new_node = this.props.funcs.newTextNode(String(result));
+            let new_line = this.props.funcs.newLineNode([new_node]);
+            let new_databox = this.props.funcs.newDataBox([new_line]);
+            this.props.funcs.insertNode(new_databox, parent_line.unique_id, this._myNode().position + 1)
+        }
+        else {
+            this.props.funcs.insertNode(result, parent_line.unique_id, this._myNode().position + 1)
+        }
+    }
+
     _handleKeyDown(event) {
         if (event.key == "Backspace") {
             let caret_pos = getCaretPosition(this.iRef);
@@ -72,7 +93,13 @@ class TextNode extends React.Component {
         currentlyDeleting = false;
         if (event.key == "Enter") {
             event.preventDefault();
-            this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
+            if (event.ctrlKey || event.metaKey) {
+                this._runMe();
+            }
+            else {
+                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
+            }
+
             return
         }
         if (event.key =="]") {
@@ -152,13 +179,32 @@ class TextNode extends React.Component {
     _myBox() {
         return this.props.funcs.getNode(this._myLine().parent)
     }
+    _listen_for_clicks () {
+        let self = this;
+        $(this.iRef).off("dblclick");
+        $(this.iRef).dblclick(function(e) {
+             e.preventDefault();
+             self._runMe();
+            return false
+         });
+        $(this.iRef).off("mousedown");
+
+        // This mousedown listener is necessary to prevent selection of text on doubleclick
+        $(this.iRef).mousedown(function(e) {
+            if (e.detail > 1) {
+                e.preventDefault();
+            }
+        })
+    }
 
     componentDidMount () {
-        this._setFocusIfRequired()
+        this._setFocusIfRequired();
+        this._listen_for_clicks();
     }
 
     componentDidUpdate () {
-        this._setFocusIfRequired()
+        this._setFocusIfRequired();
+        this._listen_for_clicks();
     }
 
     _positionCursor(pos) {
@@ -187,6 +233,10 @@ class TextNode extends React.Component {
                 this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
             }
         }
+    }
+
+    _handleDoubleClick() {
+        console.log("got double click")
     }
 
     render() {
@@ -242,8 +292,14 @@ class EditableTag extends React.Component {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
             event.preventDefault();
             let myDataBox = this.props.funcs.getNode(this.props.boxId);
-            let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
-            this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            if (myDataBox.kind == "jsbox") {
+                this.props.funcs.changeNode(this.props.boxId, "setFocus", 0);
+            }
+            else {
+                let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            }
+
         }
     }
 
@@ -498,6 +554,225 @@ DataBox.defaultProps = {
     innerHeight: 0
 };
 
+class JsBox extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.state = {};
+        this.nameRef = null;
+        this.boxRef = React.createRef();
+        this.state.focusingName = false;
+        this.state.boxWidth = null;
+        this.cmobject = null;
+    }
+
+    _handleCodeChange(new_code) {
+        this.props.funcs.handleCodeChange(this.props.unique_id, new_code)
+    }
+
+    _handleBlur() {
+        this.props.funcs.storeFocus(this.props.unique_id, 0);
+    }
+
+    _runMe() {
+        doExecution(this.props.the_code, this.props.unique_id, this.props.funcs.getBaseNode(), this.props.funcs)
+    }
+
+    _closeMe() {
+        let have_focus = this.boxRef.current.contains(document.activeElement);
+        this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
+            if (have_focus) {
+                this.props.funcs.positionAfterBox(this.props.unique_id)
+            }
+        })
+    }
+
+    _openMe() {
+        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
+    }
+
+    _submitNameRef(the_ref) {
+        this.nameRef = the_ref
+    }
+
+    _doneEditingName(callback=null) {
+        this.setState({focusingName: false}, callback)
+    }
+
+    _setCMObject(cmobject) {
+        this.cmobject = cmobject
+    }
+
+    componentDidMount() {
+        if (this.boxRef) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
+            }
+        }
+        this._setFocusIfRequired()
+    }
+
+    componentDidUpdate () {
+        let self = this;
+        if (this.props.focusName) {
+            if (this.nameRef) {
+                $(this.nameRef).focus();
+                this.setState({focusingName: true},()=>{
+                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                });
+            }
+        }
+        if (!this.props.closed && this.boxRef) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
+            }
+        }
+        this._setFocusIfRequired()
+    }
+
+    _setFocusIfRequired () {
+        if (this.props.setFocus != null) {
+            if (this.cmobject) {
+                this.cmobject.focus();
+                this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
+            }
+        }
+    }
+
+    _nameMe() {
+        this.props.funcs.focusName(this.props.unique_id)
+    }
+
+    _upArrow() {
+        let head = this.cmobject.getCursor();
+        if (head.line == 0) {
+            this._nameMe()
+        }
+        else {
+            this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        }
+    }
+
+    _extraKeys() {
+        let self = this;
+        return {
+                'Ctrl-Enter': ()=>self._runMe(),
+                'Cmd-Enter': ()=>self._runMe(),
+                'Ctrl-N': ()=>self._nameMe(),
+                'ArrowUp': ()=>self._upArrow(),
+                'Up': ()=>self._upArrow()
+            }
+    }
+
+    render() {
+        let dbclass;
+        if (this.props.closed) {
+            if ((this.props.name != null) || this.state.focusingName) {
+                dbclass = "closed-data-box data-box-with-name"
+            }
+            else {
+                dbclass = "closed-data-box"
+            }
+            if (this.props.selected) {
+                dbclass = dbclass + " selected"
+            }
+            return (
+                <div className="data-box-outer">
+                    {(this.props.name || this.state.focusingName) &&
+                        <EditableTag the_name={this.props.name}
+                                     funcs={this.props.funcs}
+                                     boxWidth={75}
+                                     submitRef={this._submitNameRef}
+                                     doneEditingName={this._doneEditingName}
+                                     boxId={this.props.unique_id}/>
+                    }
+                    <Button type="button"
+                            className={dbclass}
+                            minimal={false}
+                            ref={this.boxRef}
+                            onMouseDown={(e)=>{e.preventDefault()}}
+                            onClick={this._openMe}
+                            icon={null}>
+                    </Button>
+                </div>
+            )
+        }
+
+        if ((this.props.name != null) || this.state.focusingName) {
+            dbclass = "data-box js-box data-box-with-name"
+        }
+        else {
+            dbclass = "data-box js-box"
+        }
+        if (this.props.selected) {
+            dbclass = dbclass + " selected"
+        }
+        let outer_style;
+        let inner_style;
+        if (this.props.am_zoomed) {
+            let usable_dimensions = this.getUsableDimensions();
+            outer_style = {
+                width: usable_dimensions.usable_width,
+                height: usable_dimensions.usable_height - 10,
+                position: "absolute",
+                top: USUAL_TOOLBAR_HEIGHT + 10,
+                left: SIDE_MARGIN
+            };
+            inner_style = {
+                height: "100%"
+            }
+        }
+        else {
+            inner_style = {};
+            outer_style = {}
+        }
+
+
+        return (
+            <React.Fragment>
+                <div className="data-box-outer" style={outer_style}>
+                    <EditableTag the_name={this.props.name}
+                                 focusingMe={this.state.focusingName}
+                                 boxWidth={this.state.boxWidth}
+                                 funcs={this.props.funcs}
+                                 doneEditingName={this._doneEditingName}
+                                 submitRef={this._submitNameRef}
+                                 boxId={this.props.unique_id}/>
+                        <div ref={this.boxRef} className={dbclass} style={inner_style} >
+                            <CloseButton handleClick={this._closeMe}/>
+                            <ReactCodemirror code_content={this.props.the_code}
+                                             mode="javascript"
+                                             handleChange={this._handleCodeChange}
+                                             handleBlur={this._handleBlur}
+                                             saveMe={null}
+                                             setCMObject={this._setCMObject}
+                                             readOnly={false}
+                                             extraKeys={this._extraKeys()}
+                                             first_line_number={null}
+                            />
+                        </div>
+                </div>
+            </React.Fragment>
+        )
+    }
+}
+
+JsBox.propTypes = {
+    name: PropTypes.string,
+    the_code: PropTypes.string,
+    closed: PropTypes.bool,
+    unique_id: PropTypes.string,
+    funcs: PropTypes.object,
+    selected: PropTypes.bool,
+};
+
+JsBox.defaultProps = {
+    closed: false,
+    am_zoomed: false,
+    innerWidth: 0,
+    innerHeight: 0
+};
+
 class CloseButton extends React.Component {
     constructor (props) {
         super(props);
@@ -582,6 +857,21 @@ class DataboxLine extends React.Component {
                               the_text={the_node.the_text}/>
                 )
             }
+            else if (the_node.kind == "jsbox") {
+                return (
+                    <JsBox key={the_node.unique_id}
+                           selected={the_node.selected}
+                           name={the_node.name}
+                           className="data-box-outer"
+                           funcs={this.props.funcs}
+                           unique_id={the_node.unique_id}
+                           setFocus={the_node.setFocus}
+                           closed={the_node.closed}
+                           focusName={the_node.focusName}
+                           the_code={the_node.the_code}/>
+                )
+            }
+
             else  {
                 return (
                     <DataBox key={the_node.unique_id}

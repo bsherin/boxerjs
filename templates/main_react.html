@@ -6,6 +6,9 @@
 {% endblock %}
 
 {% block styles %}
+  <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/codemirror.css')}}">
+  <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/dialog.css')}}">
+  <link rel="stylesheet" href="{{url_for('static', filename='css/codemirrorthemes/show-hint.css')}}">
 {% endblock %}
 
 {% block page_content %}
@@ -17,6 +20,16 @@
     <canvas id="measure-canvas" style="display:none"></canvas>
 {% endblock %}
 {% block scripts %}
+    <script src="{{url_for('static', filename='js/codemirror/codemirror.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/search.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/searchcursor.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/jump-to-line.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/dialog.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/matchbrackets.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/show-hint.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/match-highlighter.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/closebrackets.js')}}"></script>
+    <script src="{{url_for('static', filename='js/codemirror/javascript.js')}}"></script>
     <script src="{{url_for('static', filename='js/mousetrap.min.js')}}"></script>
 
     <script type="module" src="{{url_for('static', filename=module_source, v=version_string)}}"></script>
