@@ -1044,12 +1044,15 @@ class MainApp extends React.Component {
                 this._clearSelected()
             }],
             [["ctrl+v", "command+v"], (e)=>{
+                e.preventDefault();
                 this._insertClipboardFromKey()
             }],
             [["ctrl+c", "command+c"], (e)=>{
+                e.preventDefault();
                 this._copyTextToClipboard()
             }],
             [["ctrl+z", "command+z"], (e)=>{
+                e.preventDefault();
                 this._undo()
             }]
         ];
