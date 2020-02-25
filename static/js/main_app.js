@@ -11,7 +11,7 @@ import "../css/boxer.scss";
 import { doBinding, guid } from "./utilities.js";
 import { DataBox } from "./nodes.js";
 import { BoxerNavbar } from "./blueprint_navbar.js";
-import { ProjectMenu, BoxMenu, EditMenu } from "./main_menus_react.js";
+import { ProjectMenu, BoxMenu, EditMenu, ViewMenu } from "./main_menus_react.js";
 import { postAjax } from "./communication_react.js";
 
 import { BoxerSocket } from "./boxer_socket.js";
@@ -28,6 +28,8 @@ $(document).on('mousedown', "button", function (event) {
 });
 
 const MAX_UNDO_SAVES = 20;
+
+window.turtle_box_refs = {};
 
 function _main_main() {
     console.log("entering start_post_load");
@@ -80,6 +82,9 @@ class MainApp extends React.Component {
         window.changeNode = this._changeNode;
         window.newLineNode = this._newLineNode;
         window.newTextNode = this._newTextNode;
+        window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
+        window.openErrorDrawer = this.props.openErrorDrawer;
+        window.updateIds = this._updateIds;
 
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];
@@ -131,7 +136,7 @@ class MainApp extends React.Component {
         if (node.unique_id == uid) {
             return node;
         }
-        if (node.kind == "text" || node.kind == "jsbox" || node.line_list.length == 0) {
+        if (node.kind == "text" || node.kind == "jsbox" || node.kind == "turtlebox" || node.line_list.length == 0) {
             return false;
         }
         for (let lin of node.line_list) {
@@ -283,6 +288,23 @@ class MainApp extends React.Component {
         }
     }
 
+    _insertTurtleBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newTurtleBox();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
+
+    _insertTurtleBoxLastFocus() {
+        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos);
+    }
+
     _insertDataBoxLastFocus() {
         this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos);
     }
@@ -425,6 +447,10 @@ class MainApp extends React.Component {
         return js1.the_code == js2.the_code;
     }
 
+    _compareTurtleBoxes(tb1, tb2) {
+        return tb1.width == tb2.width && tb1.height == tb2.height;
+    }
+
     _eqTest(obj1, obj2) {
         if (obj1.kind != obj2.kind) {
             return false;
@@ -437,6 +463,9 @@ class MainApp extends React.Component {
         }
         if (obj2.kind == "jsbox") {
             return this._compareJsBoxes(obj1, obj2);
+        }
+        if (obj2.kind == "turtlebox") {
+            return this._compareTurtleBoxes(obj1, obj2);
         } else {
             return this._compareLines(obj1, obj2);
         }
@@ -554,6 +583,21 @@ class MainApp extends React.Component {
         return new_box;
     }
 
+    _newTurtleBox() {
+        let uid = guid();
+        let new_node = {
+            kind: "turtlebox",
+            key: uid,
+            selected: false,
+            unique_id: uid,
+            position: 0,
+            parent: null,
+            width: 50,
+            height: 50
+        };
+        return new_node;
+    }
+
     _newJsBoxNode(the_code = null) {
         let uid = guid();
         if (the_code == null) {
@@ -601,41 +645,6 @@ class MainApp extends React.Component {
             mnode[param_name] = new_val;
             this.setState({ base_node: new_base }, callback);
         }
-    }
-
-    _initDataObject(nobj, parent, position) {
-        if (!nobj.hasOwnProperty("unique_id")) {
-            nobj.unique_id = guid();
-            nobj.position = position;
-        }
-        nobj.parent = parent;
-        if (nobj.kind == "text") {
-            nobj.setFocus = null;
-        } else if (nobj.kind == "jsbox") {
-            nobj.setFocus = null;
-        } else if (nobj.kind == "databox") {
-            let lcount = 0;
-            if (!nobj.hasOwnProperty("close")) {
-                nobj.closed = false;
-            }
-            nobj.am_zoomed = false;
-            nobj.focusName = false;
-            for (let lin of nobj.line_list) {
-                if (!lin.hasOwnProperty("unique_id")) {
-                    lin.unique_id = guid();
-                    lin.position = lcount;
-                }
-                lin.parent = nobj.unique_id;
-                let ncount = 0;
-                this._healLine(lin);
-                for (let node of lin.node_list) {
-                    this._initDataObject(node, lin.unique_id, position = ncount);
-                    ncount += 1;
-                }
-                lcount += 1;
-            }
-        }
-        return nobj;
     }
 
     _getParentId(uid) {
@@ -919,6 +928,10 @@ class MainApp extends React.Component {
         return this.state.base_node;
     }
 
+    _setTurtleRef(uid, ref) {
+        window.turtle_box_refs[uid] = ref;
+    }
+
     get funcs() {
         let funcs = {
             handleTextChange: this._handleTextChange,
@@ -945,8 +958,13 @@ class MainApp extends React.Component {
             insertClipboardLastFocus: this._insertClipboardLastFocus,
             handleCodeChange: this._handleCodeChange,
             insertJsBoxLastFocus: this._insertJsBoxLastFocus,
+            insertTurtleBoxLastFocus: this._insertTurtleBoxLastFocus,
             getBaseNode: this._getBaseNode,
-            insertNode: this._insertNode
+            insertNode: this._insertNode,
+            registerTurtleBox: this._registerTurtleBox,
+            setTurtleRef: this._setTurtleRef,
+            openErrorDrawer: this.props.openErrorDrawer,
+            updateIds: this._updateIds
         };
         return funcs;
     }
@@ -960,7 +978,8 @@ class MainApp extends React.Component {
                 world_state: this.props.world_state
             })),
             React.createElement(BoxMenu, this.funcs),
-            React.createElement(EditMenu, EditMenu)
+            React.createElement(EditMenu, EditMenu),
+            React.createElement(ViewMenu, this.funcs)
         );
 
         this.state.base_node.am_zoomed = true;

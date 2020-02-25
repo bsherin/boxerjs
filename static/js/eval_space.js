@@ -7,6 +7,9 @@ var _base_node;
 
 let delay_amount = 30;
 
+let current_turtle_id = null;
+let current_turtle_ref = null;
+
 function changeNodePromise(uid, param_name, new_val) {
     return new Promise(function(resolve, reject) {
         window.changeNode(uid, param_name, new_val, (data)=>{
@@ -32,25 +35,40 @@ async function doExecution(the_code, box_id, base_node) {
         }
         _context_string += "\n" + _nstring
     }
-    let _full_code = `function _tempFunc() {\n${_context_string}\n return ${the_code} \n ${cfunc}} \n _tempFunc()`;
-    let _result = await eval(_full_code);
-    return _result;
+    let _full_code = `
+        function _tempFunc() {
+            ${_context_string}
+            return ${the_code} 
+            ${cfunc}
+        } 
+        _tempFunc()
+    `;
+
+    try {
+        let _result = await eval(_full_code);
+        return _result;
+    }
+    catch(error){
+        window.addErrorDrawerEntry({title: error.message, content: `<pre>${error.stack}</pre>`})
+    }
 }
 
 let cfunc = `async function change(boxname, newval) {
     let mnode = _getMatchingNode(_name_index[boxname], _base_node);
     let estring;
     if (typeof(newval) == "object") {
-        _newval =_.cloneDeep(newval);
-        for (let lin of newval.line_list) {
-            lin.parent = mnode.unique_id
+        let _newval =_.cloneDeep(newval);
+        if (_newval.kind == "databox") {
+            window.updateIds(_newval.line_list);
+            for (let lin of _newval.line_list) {
+                lin.parent = mnode.unique_id
+            }
         }
         let dbstring = JSON.stringify(_newval);
         estring = boxname + " = " + dbstring;
         eval(estring);
-        // window.changeNode(mnode.unique_id, "line_list", new_val.line_list)
         return new Promise(function(resolve, reject) {
-            window.changeNode(mnode.unique_id, "line_list", new_val.line_list, async (data)=>{
+            window.changeNode(mnode.unique_id, "line_list", _newval.line_list, async (data)=>{
                 await delay(300);
                 resolve(data)
             })
@@ -78,23 +96,100 @@ let cfunc = `async function change(boxname, newval) {
         })
     }
 }
-`
+`;
 
 function delay(msecs) {
     return new Promise(resolve => setTimeout(resolve, msecs));
 }
 
-
 async function redisplay() {
     await delay(300)
 }
 
+async function forward(steps) {
+    for (let i=0; i<steps; ++i) {
+        current_turtle_ref.current.forward(1);
+        //await delay(1)
+    }
+}
+
+function clear() {
+    current_turtle_ref.current.clear()
+}
+
+function reset() {
+    current_turtle_ref.current.reset()
+}
+
+function wrap() {
+    current_turtle_ref.current.wrap()
+}
+
+function showTurtle() {
+    current_turtle_ref.current.showTurtle()
+}
+
+function hideTurtle() {
+    current_turtle_ref.current.hideTurtle()
+}
+
+function redrawOnMove(bool) {
+    current_turtle_ref.current.redrawOnMove(bool)
+}
+
+function penup() {
+    current_turtle_ref.current.penup();
+}
+
+function pendown() {
+    current_turtle_ref.current.pendown();
+}
+
+function right(degrees) {
+    current_turtle_ref.current.right(degrees)
+}
+
+function left(degrees) {
+    current_turtle_ref.current.left(degrees)
+}
+
+function setxy(x, y) {
+    current_turtle_ref.current.goto(x, y)
+}
+
+function setheading(degrees) {
+    current_turtle_ref.current.angle(degrees)
+}
+
+function setlinewidth(w) {
+    current_turtle_ref.current.width(w)
+}
+
+function write(text) {
+    current_turtle_ref.current.write(text)
+}
+
+function setcolor(r, g, b, a) {
+    current_turtle_ref.current.color(r, g, b, a)
+}
+
+function random(low, hi){
+    current_turtle_ref.current.random(low, hight)
+}
+
+function animate(action, ms) {
+    current_turtle_ref.current.animate(action, ms)
+}
+
+function setfont(font) {
+    current_turtle_ref.current.setfont(font)
+}
 
 function _getMatchingNode(uid, node) {
     if (node.unique_id == uid) {
             return node
     }
-    if ((node.kind == "text") || (node.kind == "jsbox") || (node.line_list.length == 0)) {
+    if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind == "turtlebox") || (node.line_list.length == 0)) {
         return false
     }
     for (let lin of node.line_list) {
@@ -111,7 +206,7 @@ function _getMatchingNode(uid, node) {
     return false
 }
 
-function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null) {
+function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtleboxfound=false) {
     let named_nodes = [];
     if (!name_list) {
         name_list = []
@@ -126,6 +221,11 @@ function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null) {
                     }
 
                 }
+                if (!turtleboxfound && node.kind == "turtlebox") {
+                    current_turtle_id = node.unique_id;
+                    current_turtle_ref = window.turtle_box_refs[current_turtle_id];
+                    turtleboxfound = true
+                }
             }
         }
     }
@@ -138,7 +238,7 @@ function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null) {
         return named_nodes
     }
     let parentBox = _getMatchingNode(parentLine.parent, baseNode);
-    named_nodes = named_nodes.concat(findNamedBoxesInScope(parentBox, baseNode, name_list));
+    named_nodes = named_nodes.concat(findNamedBoxesInScope(parentBox, baseNode, name_list, turtleboxfound));
     return named_nodes
 }
 
@@ -157,6 +257,10 @@ function dataBoxToString(dbox) {
                 return `var ${dbox.name} = ${the_text}`
             }
         }
+        else {
+            let dbstring = JSON.stringify(dbox);
+            return `var ${dbox.name} = ${dbstring}`
+        }
     }
     else {
         let dbstring = JSON.stringify(dbox);
@@ -165,31 +269,8 @@ function dataBoxToString(dbox) {
 }
 
 function jsBoxToString(jsbox) {
-    return `async function ${jsbox.name} {${jsbox.the_code}}`
+    return `
+    async function ${jsbox.name} {${jsbox.the_code}}
+    `
 }
 
-
-async function old_change(boxname, newval) {
-    let mnode = _getMatchingNode(_name_index[boxname], _base_node);
-    if (typeof(newval) == "object") {
-        _newval =_.cloneDeep(newval);
-        for (let lin of newval.line_list) {
-            lin.parent = mnode.unique_id
-        }
-        window.changeNode(mnode.unique_id, "line_list", new_val.line_list);
-        //await changeNodePromise(mnode.unique_id, "line_list", new_val.line_list);
-        await delay(300);
-        let x = 5;
-        return x
-    }
-    else {
-        let newtext = window.newTextNode(String(newval));
-        let newline = window.newLineNode([newtext]);
-        newline.parent = mnode.unique_id;
-        window.changeNode(mnode.unique_id, "line_list", [newline]);
-        // await changeNodePromise(mnode.unique_id, "line_list", [newline]);
-        await delay(300);
-        let x = 5;
-        return x
-    }
-}

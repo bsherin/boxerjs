@@ -4,12 +4,13 @@ import PropTypes from "prop-types";
 
 import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition} from "./utilities";
+import {doBinding, getCaretPosition, guid} from "./utilities.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution} from "./eval_space.js";
+import {TurtleBox} from "./turtle.js";
 
 export {DataBox}
 
@@ -71,7 +72,14 @@ class TextNode extends React.Component {
             this.props.funcs.insertNode(new_databox, parent_line.unique_id, this._myNode().position + 1)
         }
         else {
-            this.props.funcs.insertNode(result, parent_line.unique_id, this._myNode().position + 1)
+
+            let updated_result = _.cloneDeep(result);
+            updated_result.unique_id = guid();
+            if (updated_result.kind == "databox") {
+                this.props.funcs.updateIds(updated_result.line_list);
+            }
+
+            this.props.funcs.insertNode(updated_result, parent_line.unique_id, this._myNode().position + 1)
         }
     }
 
@@ -327,13 +335,21 @@ class EditableTag extends React.Component {
         else {
             istyle = {};
         }
-        if (this.props.boxWidth != null) {
+        if (this.props.boxWidth != null && !this.props.focusingMe) {
             istyle.maxWidth = this.props.boxWidth - 20;
         }
+        let ceclass;
+        if (this.props.focusingMe) {
+            ceclass = "bp3-fill"
+        }
+        else {
+            ceclass="bp3-text-overflow-ellipsis bp3-fill"
+        }
+
         return (
             <span className="bp3-tag data-box-name" style={istyle}>
                 <span> </span>
-                <ContentEditable className="bp3-text-overflow-ellipsis bp3-fill"
+                <ContentEditable className={ceclass}
                                  tagName="span"
                                  style={{}}
                                  onBlur={this._onBlur}
@@ -869,6 +885,19 @@ class DataboxLine extends React.Component {
                            closed={the_node.closed}
                            focusName={the_node.focusName}
                            the_code={the_node.the_code}/>
+                )
+            }
+
+            else if (the_node.kind == "turtlebox") {
+                this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
+                return (
+                    <TurtleBox key={the_node.unique_id}
+                               selected={the_node.selected}
+                               ref={window.turtle_box_refs[the_node.unique_id]}
+                               //name={the_node.name}
+                               funcs={this.props.funcs}
+                               unique_id={the_node.unique_id}
+                               closed={the_node.closed}/>
                 )
             }
 

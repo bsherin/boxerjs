@@ -10,7 +10,7 @@ import {doFlash} from "./toaster.js"
 import {doBinding} from "./utilities.js";
 import {postAjax} from "./communication_react";
 
-export {ProjectMenu, BoxMenu, EditMenu, MenuComponent}
+export {ProjectMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
 
 class MenuComponent extends React.Component {
     constructor(props) {
@@ -200,6 +200,10 @@ class BoxMenu extends React.Component {
         this.props.insertJsBoxLastFocus();
     }
 
+    _new_turtlebox(event) {
+        this.props.insertTurtleBoxLastFocus();
+    }
+
     _name_box() {
         this.props.focusNameLastFocus()
     }
@@ -209,6 +213,7 @@ class BoxMenu extends React.Component {
         return {
             "Insert Data Box": this._new_box,
             "Insert JS Box": this._new_jsbox,
+            "Insert Turtle Box": this._new_turtlebox,
             "Name Box": this._name_box,
         }
     }
@@ -217,6 +222,7 @@ class BoxMenu extends React.Component {
         return {
             "Insert Data Box": "box",
             "Insert JS Box": "box",
+            "Insert Turtle Box": "box",
             "Name Box": "label",
         }
     }
@@ -292,3 +298,43 @@ class EditMenu extends React.Component {
 EditMenu.propTypes = {
 };
 
+class ViewMenu extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this)
+    }
+
+
+    get option_dict () {
+        return {
+            "Show error drawer": this.props.openErrorDrawer,
+        }
+    }
+
+    get icon_dict () {
+        return {
+            "Show error drawer": "panel-stats",
+        }
+    }
+
+    get label_dict() {
+        return {
+        }
+
+    }
+
+
+    render () {
+        return (
+            <MenuComponent menu_name="View"
+                           option_dict={this.option_dict}
+                           icon_dict={this.icon_dict}
+                           label_dict={this.label_dict}
+                           disabled_items={this.props.disabled_items}
+                           hidden_items={[]}
+            />
+        )
+    }
+}
+EditMenu.propTypes = {
+};
