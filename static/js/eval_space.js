@@ -8,7 +8,6 @@ var _base_node;
 let delay_amount = 30;
 
 let current_turtle_id = null;
-let current_turtle_ref = null;
 
 function changeNodePromise(uid, param_name, new_val) {
     return new Promise(function(resolve, reject) {
@@ -108,81 +107,83 @@ async function redisplay() {
 
 async function forward(steps) {
     for (let i=0; i<steps; ++i) {
-        current_turtle_ref.current.forward(1);
+        // window.current_turtle_ref.current.forward(1);
+        window.turtle_box_refs[current_turtle_id].current.forward(1);;
         //await delay(1)
     }
 }
 
 function clear() {
-    current_turtle_ref.current.clear()
+    window.turtle_box_refs[current_turtle_id].current.clear()
 }
 
 function reset() {
-    current_turtle_ref.current.reset()
+    window.turtle_box_refs[current_turtle_id].current.reset()
 }
 
 function wrap() {
-    current_turtle_ref.current.wrap()
+    window.turtle_box_refs[current_turtle_id].current.wrap()
 }
 
 function showTurtle() {
-    current_turtle_ref.current.showTurtle()
+    window.turtle_box_refs[current_turtle_id].current.showTurtle()
 }
 
 function hideTurtle() {
-    current_turtle_ref.current.hideTurtle()
+    window.turtle_box_refs[current_turtle_id].current.hideTurtle()
 }
 
 function redrawOnMove(bool) {
-    current_turtle_ref.current.redrawOnMove(bool)
+    window.turtle_box_refs[current_turtle_id].current.redrawOnMove(bool)
 }
 
 function penup() {
-    current_turtle_ref.current.penup();
+    window.turtle_box_refs[current_turtle_id].current.penup();
 }
 
 function pendown() {
-    current_turtle_ref.current.pendown();
+    window.turtle_box_refs[current_turtle_id].current.pendown();
 }
 
 function right(degrees) {
-    current_turtle_ref.current.right(degrees)
+    // current_turtle_ref.current.right(degrees)
+    window.turtle_box_refs[current_turtle_id].current.right(degrees)
 }
 
 function left(degrees) {
-    current_turtle_ref.current.left(degrees)
+    window.turtle_box_refs[current_turtle_id].current.left(degrees)
 }
 
 function setxy(x, y) {
-    current_turtle_ref.current.goto(x, y)
+    window.turtle_box_refs[current_turtle_id].current.goto(x, y)
 }
 
 function setheading(degrees) {
-    current_turtle_ref.current.angle(degrees)
+    window.turtle_box_refs[current_turtle_id].current.angle(degrees)
 }
 
 function setlinewidth(w) {
-    current_turtle_ref.current.width(w)
+    window.turtle_box_refs[current_turtle_id].current.width(w)
 }
 
 function write(text) {
-    current_turtle_ref.current.write(text)
+    window.turtle_box_refs[current_turtle_id].current.write(text)
 }
 
 function setcolor(r, g, b, a) {
-    current_turtle_ref.current.color(r, g, b, a)
+    window.turtle_box_refs[current_turtle_id].current.color(r, g, b, a)
 }
 
 function random(low, hi){
-    current_turtle_ref.current.random(low, hight)
+    window.turtle_box_refs[current_turtle_id].current.random(low, hight)
 }
 
 function animate(action, ms) {
-    current_turtle_ref.current.animate(action, ms)
+    window.turtle_box_refs[current_turtle_id].current.animate(action, ms)
 }
 
 function setfont(font) {
-    current_turtle_ref.current.setfont(font)
+    window.turtle_box_refs[current_turtle_id].current.setfont(font)
 }
 
 function _getMatchingNode(uid, node) {
@@ -223,7 +224,6 @@ function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtlebox
                 }
                 if (!turtleboxfound && node.kind == "turtlebox") {
                     current_turtle_id = node.unique_id;
-                    current_turtle_ref = window.turtle_box_refs[current_turtle_id];
                     turtleboxfound = true
                 }
             }
