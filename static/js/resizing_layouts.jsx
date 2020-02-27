@@ -128,6 +128,7 @@ class DragHandle extends React.Component {
                 scale={1}>
                 <Icon icon={this.icon_dict[this.props.direction]}
                          iconSize={this.props.iconSize}
+                        className="dragger"
                          style={style}
                     />
             </DraggableCore>

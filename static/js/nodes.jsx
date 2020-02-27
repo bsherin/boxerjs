@@ -11,6 +11,7 @@ import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution} from "./eval_space.js";
 import {TurtleBox} from "./turtle.js";
+import {DragHandle} from "./resizing_layouts.js"
 
 export {DataBox}
 
@@ -382,8 +383,16 @@ class DataBox extends React.Component {
         this.state = {};
         this.nameRef = null;
         this.boxRef = React.createRef();
-        this.state.focusingName = false;
-        this.state.boxWidth = null;
+        this.outerRef = React.createRef();
+        this.state = {
+            focusingName: false,
+            boxWidth: null,
+            resizing: false,
+            dwidth: 0,
+            dheight: 0,
+            startingWidth: null,
+            startingHeight: null
+        };
     }
 
     // shouldComponentUpdate(nextProps, nextState) {
@@ -463,6 +472,28 @@ class DataBox extends React.Component {
         };
     }
 
+    _startResize(e, ui, startX, startY) {
+        let bounding_rect = this.boxRef.current.getBoundingClientRect();
+
+        let start_width = bounding_rect.width;
+        let start_height = bounding_rect.height;
+        this.setState({resizing: true, dwidth: 0, dheight: 0,
+            startingWidth: start_width, startingHeight: start_height})
+    }
+
+    _onResize(e, ui, x, y, dx, dy) {
+        this.setState({dwidth: dx, dheight: dy})
+    }
+
+    _setSize(new_width, new_height) {
+        this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+    }
+
+    _stopResize(e, ui, x, y, dx, dy) {
+        let self = this;
+        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
+            self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)})
+    }
 
     render() {
         let dbclass;
@@ -528,13 +559,31 @@ class DataBox extends React.Component {
                 height: "100%"
             }
         }
+        else if (this.state.resizing) {
+            outer_style = {
+            };
+            inner_style = {
+                width: this.state.startingWidth + this.state.dwidth,
+                height: this.state.startingHeight + this.state.dheight,
+                position: "relative"
+            }
+        }
+        else if (this.props.fixed_size) {
+            outer_style = {};
+            inner_style = {
+                width: this.props.fixed_width, height:
+                this.props.fixed_height,
+                position: "relative"
+            }
+        }
         else {
             inner_style = {};
-            outer_style = {}
+            outer_style = {position: "relative"}
         }
+        let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
         return (
             <React.Fragment>
-                <div className="data-box-outer" style={outer_style}>
+                <div className="data-box-outer" style={outer_style} ref={this.outerRef}>
                     <EditableTag the_name={this.props.name}
                                  focusingMe={this.state.focusingName}
                                  boxWidth={this.state.boxWidth}
@@ -542,11 +591,17 @@ class DataBox extends React.Component {
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                        <div ref={this.boxRef} className={dbclass} style={inner_style} >
-                            <CloseButton handleClick={this._closeMe}/>
-                            {the_content}
-                            <ZoomButton handleClick={this._zoomMe}/>
-                        </div>
+                    <div ref={this.boxRef} className={dbclass} style={inner_style} >
+                        <CloseButton handleClick={this._closeMe}/>
+                        {the_content}
+                        <ZoomButton handleClick={this._zoomMe}/>
+                        <DragHandle position_dict={draghandle_position_dict}
+                            dragStart={this._startResize}
+                            onDrag={this._onResize}
+                            dragEnd={this._stopResize}
+                            direction="both"
+                            iconSize={15}/>
+                    </div>
                 </div>
             </React.Fragment>
         )
@@ -560,7 +615,10 @@ DataBox.propTypes = {
     line_list: PropTypes.array,
     funcs: PropTypes.object,
     selected: PropTypes.bool,
-    am_zoomed: PropTypes.bool
+    am_zoomed: PropTypes.bool,
+    fixed_size: PropTypes.bool,
+    fixed_width: PropTypes.number,
+    fixed_height: PropTypes.number
 };
 
 DataBox.defaultProps = {
@@ -743,7 +801,6 @@ class JsBox extends React.Component {
             outer_style = {}
         }
 
-
         return (
             <React.Fragment>
                 <div className="data-box-outer" style={outer_style}>
@@ -895,6 +952,8 @@ class DataboxLine extends React.Component {
                                selected={the_node.selected}
                                ref={window.turtle_box_refs[the_node.unique_id]}
                                //name={the_node.name}
+                               fixed_width={the_node.fixed_width ? the_node.fixed_width : 300}
+                               fixed_height={the_node.fixed_height ? the_node.fixed_height : 300}
                                funcs={this.props.funcs}
                                unique_id={the_node.unique_id}
                                closed={the_node.closed}/>
@@ -906,6 +965,9 @@ class DataboxLine extends React.Component {
                     <DataBox key={the_node.unique_id}
                               selected={the_node.selected}
                               className="data-box-outer"
+                             fixed_size={the_node.fixed_size}
+                             fixed_width={the_node.fixed_width}
+                             fixed_height={the_node.fixed_height}
                              name={the_node.name}
                              funcs={this.props.funcs}
                              unique_id={the_node.unique_id}

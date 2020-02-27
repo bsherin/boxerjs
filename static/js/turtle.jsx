@@ -2,6 +2,7 @@
 import React from "react";
 import PropTypes from 'prop-types';
 import {doBinding} from "./utilities.js";
+import {DragHandle} from "./resizing_layouts";
 
 export {TurtleBox}
 
@@ -52,6 +53,13 @@ class TurtleBox extends React.Component {
         this.repeat = this.repeat.bind(this);
         this.animate = this.animate.bind(this);
         this.setFont = this.setFont.bind(this);
+        this.state = {
+            resizing: false,
+            dwidth: 0,
+            dheight: 0,
+            startingWidth: null,
+            startingHeight: null
+        };
 
 
     }
@@ -62,6 +70,7 @@ class TurtleBox extends React.Component {
         this.turtleContext = this.turtleRef.current.getContext('2d');
         this.turtleContext.globalCompositeOperation = 'destination-over';
         this.initialize();
+        this.reset();
     }
 
     initialize() {
@@ -280,6 +289,7 @@ class TurtleBox extends React.Component {
     // set the angle of the turtle in degrees
     setheading(angle) {
         this.turtle.angle = this._degToRad(angle);
+        this._drawIf();
     }
 
     // convert degrees to radians
@@ -340,17 +350,49 @@ class TurtleBox extends React.Component {
         this.imageContext.font = font;
     }
 
+    _startResize(e, ui, startX, startY) {
+        let start_width = this.props.fixed_width;
+        let start_height = this.props.fixed_height;
+        this.setState({resizing: true, dwidth: 0, dheight: 0,
+            startingWidth: start_width, startingHeight: start_height})
+    }
+
+    _onResize(e, ui, x, y, dx, dy) {
+        this.setState({dwidth: dx, dheight: dy})
+    }
+
+    _setSize(new_width, new_height) {
+        this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+    }
+
+    _stopResize(e, ui, x, y, dx, dy) {
+        let self = this;
+        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
+            self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)})
+    }
+
     render() {
+        let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
         return (
             <div className="data-box-outer">
                 <div className="data-box turtle-box">
                     <canvas id="this.props.turtleId"
                             ref={this.turtleRef}
-                            width="300" height="300">
+                            width={this.state.resizing ? this.props.fixed_width + this.state.dwidth : this.props.fixed_width}
+                            height={this.props.fixed_height ? this.props.fixed_height + this.state.dheight : this.props.fixed_height}>
                     </canvas>
                     <canvas id="this.props.imageId"
                             ref={this.imageRef}
-                            width="300" height="300" style={{display: "none"}}></canvas>
+                            width={this.props.fixed_width ?  this.props.fixed_width + this.state.dwidth : this.props.fixed_width}
+                            height={this.props.fixed_height ? this.props.fixed_height + this.state.dheight : this.props.fixed_height}
+                            style={{display: "none"}}>
+                    </canvas>
+                    <DragHandle position_dict={draghandle_position_dict}
+                            dragStart={this._startResize}
+                            onDrag={this._onResize}
+                            dragEnd={this._stopResize}
+                            direction="both"
+                            iconSize={15}/>
                 </div>
             </div>
         )
@@ -359,14 +401,14 @@ class TurtleBox extends React.Component {
 
 TurtleBox.propTypes = {
     unique_id: PropTypes.string,
-    width: PropTypes.number,
-    height: PropTypes.number,
+    fixed_width: PropTypes.number,
+    fixed_height: PropTypes.number,
     funcs: PropTypes.object
 };
 
 TurtleBox.defaultProps = {
-    width: 50,
-    height: 50
+    fixed_width: 300,
+    fixed_height: 300
 };
 
 

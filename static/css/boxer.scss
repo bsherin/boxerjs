@@ -3,6 +3,8 @@
 @import "~@blueprintjs/core/lib/css/blueprint.css";
 @import "~@blueprintjs/icons/lib/css/blueprint-icons.css";
 
+$search-highlight-color: yellow;
+
 .data-box {
     display: block;
     position: relative;  // Necessary so that close button is positioned relative to this
@@ -84,7 +86,6 @@ div[id^='selectableItem'] {
     &.data-box-with-name {
         margin-top: 0
     }
-
 }
 
 .data-box-name {
@@ -92,6 +93,14 @@ div[id^='selectableItem'] {
     padding-left: 2px!important;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+}
+
+.dragger {
+    opacity: 0;
+
+    &:hover {
+        opacity: 100
+    }
 }
 
 //.close-button:hover {
@@ -129,4 +138,8 @@ pre {
 
 .bp3-button:focus {
     outline: none
+}
+
+.highlight {
+    background: $search-highlight-color;
 }

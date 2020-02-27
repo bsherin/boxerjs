@@ -281,6 +281,7 @@ class MainApp extends React.Component {
         this._splitTextAtPosition(text_id, cursor_position, new_base, false);
         let mnode = this._getMatchingNode(text_id, new_base);
         let new_node = this._newJsBoxNode();
+        new_node.setFocus = 0;
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         if (update) {
             this.setState({base_node: new_base})
@@ -592,6 +593,9 @@ class MainApp extends React.Component {
                         key: uid,
                         name: null,
                         parent: null,
+                        fixed_size: false,
+                        fixed_width: null,
+                        fixed_height: null,
                         focusName: false,
                         am_zoomed: false,
                         position: 0,
@@ -612,6 +616,8 @@ class MainApp extends React.Component {
             position: 0,
             parent: null,
             width: 50,
+            fixed_width: 300,
+            fixed_height: 300,
             height: 50
         };
         return new_node
@@ -664,6 +670,17 @@ class MainApp extends React.Component {
          if (mnode) {
              mnode[param_name] = new_val;
              this.setState({base_node: new_base}, callback)
+         }
+    }
+
+    _setNodeSize(uid, new_width, new_height, callback=null) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        if (mnode) {
+            mnode.fixed_size = true;
+            mnode.fixed_width = new_width;
+            mnode.fixed_height = new_height;
+            this.setState({base_node: new_base}, callback)
          }
     }
     
@@ -952,6 +969,15 @@ class MainApp extends React.Component {
         this._insertClipboard(this.last_focus_id, this.last_focus_pos)
     }
 
+    _unfixSizeLastFocus() {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(this.last_focus_id, new_base);
+        let parentLine = this._getMatchingNode(mnode.parent, new_base);
+        let parentBox = this._getMatchingNode(parentLine.parent, new_base);
+        parentBox.fixed_size = false;
+        this.setState({base_node: new_base})
+    }
+
 
     _copyTextToClipboard() {
         let the_text = window.getSelection().toString();
@@ -1003,7 +1029,9 @@ class MainApp extends React.Component {
             registerTurtleBox: this._registerTurtleBox,
             setTurtleRef: this._setTurtleRef,
             openErrorDrawer: this.props.openErrorDrawer,
-            updateIds: this._updateIds
+            updateIds: this._updateIds,
+            setNodeSize: this._setNodeSize,
+            unfixSizeLastFocus: this._unfixSizeLastFocus
         };
         return funcs
     }

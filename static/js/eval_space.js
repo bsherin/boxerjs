@@ -155,11 +155,11 @@ function left(degrees) {
 }
 
 function setxy(x, y) {
-    window.turtle_box_refs[current_turtle_id].current.goto(x, y)
+    window.turtle_box_refs[current_turtle_id].current.setxy(x, y)
 }
 
 function setheading(degrees) {
-    window.turtle_box_refs[current_turtle_id].current.angle(degrees)
+    window.turtle_box_refs[current_turtle_id].current.setheading(degrees)
 }
 
 function setlinewidth(w) {
@@ -171,7 +171,7 @@ function write(text) {
 }
 
 function setcolor(r, g, b, a) {
-    window.turtle_box_refs[current_turtle_id].current.color(r, g, b, a)
+    window.turtle_box_refs[current_turtle_id].current.setcolor(r, g, b, a)
 }
 
 function random(low, hi){

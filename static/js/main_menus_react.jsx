@@ -108,7 +108,7 @@ class ProjectMenu extends React.Component {
 
             function save_as_success(data_object) {
                 if (data_object["success"]) {
-                    window._project_name = new_name;
+                    window.world_name = new_name;
                     document.title = new_name;
                     self.props.clearStatusMessage();
                     data_object.alert_type = "alert-success";
@@ -215,6 +215,7 @@ class BoxMenu extends React.Component {
             "Insert JS Box": this._new_jsbox,
             "Insert Turtle Box": this._new_turtlebox,
             "Name Box": this._name_box,
+            "Unfix Size": this.props.unfixSizeLastFocus
         }
     }
 
@@ -224,6 +225,7 @@ class BoxMenu extends React.Component {
             "Insert JS Box": "box",
             "Insert Turtle Box": "box",
             "Name Box": "label",
+            "Unfix Size":"undo"
         }
     }
 
