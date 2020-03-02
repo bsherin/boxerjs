@@ -196,6 +196,10 @@ class BoxMenu extends React.Component {
         this.props.insertDataBoxLastFocus();
     }
 
+    _new_doitbox(event) {
+        this.props.insertDoitaBoxLastFocus();
+    }
+
     _new_jsbox(event) {
         this.props.insertJsBoxLastFocus();
     }
@@ -212,6 +216,7 @@ class BoxMenu extends React.Component {
     get option_dict () {
         return {
             "Insert Data Box": this._new_box,
+            "Insert Doit Box": this._new_doitbox,
             "Insert JS Box": this._new_jsbox,
             "Insert Turtle Box": this._new_turtlebox,
             "Name Box": this._name_box,
@@ -222,6 +227,7 @@ class BoxMenu extends React.Component {
     get icon_dict () {
         return {
             "Insert Data Box": "box",
+            "Insert Doit Box": "box",
             "Insert JS Box": "box",
             "Insert Turtle Box": "box",
             "Name Box": "label",
@@ -232,7 +238,7 @@ class BoxMenu extends React.Component {
     get label_dict() {
         return {
             "Insert Data Box": "{",
-            "Insert JS Box": "[",
+            "Insert Doit Box": "[",
             "Name Box": "|",
         }
 

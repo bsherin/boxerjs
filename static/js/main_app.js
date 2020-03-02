@@ -275,18 +275,27 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertDataBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+    _insertDataBoxinText(text_id, cursor_position, new_base = null, update = true, is_doit = false) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
         this._splitTextAtPosition(text_id, cursor_position, new_base, false);
         let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newDataBoxNode([]);
+        let new_node;
+        if (is_doit) {
+            new_node = this._newDoitBoxNode([]);
+        } else {
+            new_node = this._newDataBoxNode([]);
+        }
         new_node.line_list[0].node_list[0].setFocus = 0;
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         if (update) {
             this.setState({ base_node: new_base });
         }
+    }
+
+    _insertDoitBoxinText(text_id, cursor_position, new_base = null, update = true) {
+        this._insertDataBoxinText(text_id, cursor_position, new_base, update, true);
     }
 
     _insertTurtleBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
@@ -308,6 +317,10 @@ class MainApp extends React.Component {
 
     _insertDataBoxLastFocus() {
         this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos);
+    }
+
+    _insertDoitBoxLastFocus() {
+        this._insertDoitBoxinText(this.last_focus_id, this.last_focus_pos);
     }
 
     _insertJsBoxLastFocus() {
@@ -371,7 +384,7 @@ class MainApp extends React.Component {
         }
         if (recursive) {
             for (let node of line_pointer.node_list) {
-                if (node.kind == "databox") {
+                if (node.kind == "databox" || node.kind == "doitbox") {
                     for (let lin of node.line_list) {
                         lin.parent = node.unique_id;
                         this._healLine(lin);
@@ -456,7 +469,7 @@ class MainApp extends React.Component {
         if (obj1.kind != obj2.kind) {
             return false;
         }
-        if (obj1.kind == "databox") {
+        if (obj1.kind == "databox" || obj1.kind == "doitbox") {
             return this._compareDataboxes(obj1, obj2);
         }
         if (obj2.kind == "text") {
@@ -558,6 +571,33 @@ class MainApp extends React.Component {
             node.parent = uid;
         }
         return new_line;
+    }
+
+    _newDoitBoxNode(line_list = []) {
+        let uid = guid();
+        if (line_list.length == 0) {
+            let node_list = [this._newTextNode(" ")];
+            let new_line = this._newLineNode(node_list);
+            line_list = [new_line];
+        }
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_box = { kind: "doitbox",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            position: 0,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            unique_id: uid };
+        return new_box;
     }
 
     _newDataBoxNode(line_list = []) {
@@ -709,6 +749,11 @@ class MainApp extends React.Component {
     _insertDataBoxFromKey() {
         this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement));
     }
+
+    _insertDoitBoxFromKey() {
+        this._insertDoitBoxinText(document.activeElement.id, getCaretPosition(document.activeElement));
+    }
+
     _insertJsBoxFromKey() {
         this._insertJsBoxinText(document.activeElement.id, getCaretPosition(document.activeElement));
     }
@@ -758,7 +803,7 @@ class MainApp extends React.Component {
             lin.selected = false;
             for (let nd of lin.node_list) {
                 nd.selected = false;
-                if (nd.kind == "databox") {
+                if (nd.kind == "databox" || nd.kind == "doitbox") {
                     this._clearSelected(nd, new_base);
                 }
             }
@@ -817,7 +862,7 @@ class MainApp extends React.Component {
             for (let node of lin.node_list) {
                 node.unique_id = guid();
                 node.parent = lin.unique_id;
-                if (node.kind == "databox") {
+                if (node.kind == "databox" || node.kind == "doitbox") {
                     for (let lin2 of node.line_list) {
                         lin2.parent = node.unique_id;
                     }
@@ -963,6 +1008,7 @@ class MainApp extends React.Component {
             handleTextChange: this._handleTextChange,
             changeNode: this._changeNode,
             insertDataBox: this._insertDataBoxinText,
+            insertDoitBox: this._insertDoitBoxinText,
             deletePrecedingBox: this._deletePrecedingBox,
             splitLineAtTextPosition: this._splitLineAtTextPosition,
             getParentId: this._getParentId,
@@ -973,12 +1019,14 @@ class MainApp extends React.Component {
             unzoomBox: this._unzoomBox,
             storeFocus: this._storeFocus,
             insertDataBoxLastFocus: this._insertDataBoxLastFocus,
+            insertDoitBoxLastFocus: this._insertDoitBoxLastFocus,
             getMainState: this._getMainState,
             positionAfterBox: this._positionAfterBox,
             clearSelected: this._clearSelected,
             setSelected: this._setSelected,
             newTextNode: this._newTextNode,
             newDataBox: this._newDataBoxNode,
+            newDoitBox: this._newDoitBoxNode,
             newLineNode: this._newLineNode,
             addToClipboardStart: this._addToClipboardStart,
             insertClipboardLastFocus: this._insertClipboardLastFocus,
@@ -1017,7 +1065,7 @@ class MainApp extends React.Component {
             this._insertDataBoxFromKey();
         }], [["["], e => {
             e.preventDefault();
-            this._insertJsBoxFromKey();
+            this._insertDoitBoxFromKey();
         }], [["|"], e => {
             e.preventDefault();
             this._focusName();

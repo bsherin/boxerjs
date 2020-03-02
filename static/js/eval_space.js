@@ -1,5 +1,5 @@
 
-import _ from 'lodash'
+import {_convertNamedDoit, _convertLine, tokenizeLine} from "./transpile.js"
 export {doExecution}
 
 var _name_index;
@@ -17,28 +17,73 @@ function changeNodePromise(uid, param_name, new_val) {
     })
 }
 
-async function doExecution(the_code, box_id, base_node) {
+function addConverted(cdict) {
+    let nstring = "";
+    for (let nd in cdict) {
+        nstring += "\n" + cdict[nd].converted
+    }
+    return nstring
+}
+
+async function doExecution(the_code_line, box_id, base_node) {
     _base_node = base_node;
     let _start_node = _getMatchingNode(box_id, base_node);
     let _named_nodes = findNamedBoxesInScope(_start_node, base_node);
-    let _context_string = "";
-    _name_index = {};
+
+    let _user_databoxes = {};
+    let _user_doitboxes = {};
+    let _user_jsboxes = {};
     for (let _node of _named_nodes) {
         let _nstring;
         if (_node.kind == "databox") {
-            _name_index[_node.name] = _node.unique_id;
-            _nstring = dataBoxToString(_node);
+            _user_databoxes[_node.name] = {
+                    node: _node,
+                    converted: dataBoxToString(_node)
+            }
+        }
+        else if (_node.kind == "doitbox") {
+            let first_tokenized = tokenizeLine(_node.line_list[0]);
+            let arglist;
+            if (first_tokenized[0] == "input") {
+                arglist = first_tokenized.slice(1,);
+            }
+            else {
+                arglist = []
+            }
+            let args = [];
+            for (let arg of arglist) {
+                args.push([arg, "expression"])
+            }
+            _user_doitboxes[_node.name] = {
+                node:_node,
+                args: args
+            }
         }
         else {
-            _nstring = jsBoxToString(_node);
+            _user_jsboxes[_node.name] = {
+                node:_node,
+                converted: jsBoxToString(_node)
+            }
         }
-        _context_string += "\n" + _nstring
+        // _context_string += "\n" + _nstring
     }
+    for (let _dbname in _user_doitboxes) {
+
+        _user_doitboxes[_dbname].converted = _convertNamedDoit(_dbname, _user_doitboxes, _user_databoxes, _user_jsboxes)
+    }
+    let _context_string = "";
+    _context_string += addConverted(_user_databoxes);
+    _context_string += addConverted(_user_jsboxes);
+    _context_string += addConverted(_user_doitboxes);
+
+
+    let _converted_code = _convertLine(the_code_line, _user_doitboxes, _user_databoxes, _user_jsboxes);
+
     let _full_code = `
         function _tempFunc() {
-            ${_context_string}
-            return ${the_code} 
             ${cfunc}
+            ${_context_string}
+            return ${_converted_code} 
         } 
         _tempFunc()
     `;
@@ -53,7 +98,8 @@ async function doExecution(the_code, box_id, base_node) {
 }
 
 let cfunc = `async function change(boxname, newval) {
-    let mnode = _getMatchingNode(_name_index[boxname], _base_node);
+    console.log("entering change");
+    let mnode = _user_databoxes[boxname].node;
     let estring;
     if (typeof(newval) == "object") {
         let _newval =_.cloneDeep(newval);
@@ -108,7 +154,7 @@ async function redisplay() {
 async function forward(steps) {
     for (let i=0; i<steps; ++i) {
         // window.current_turtle_ref.current.forward(1);
-        window.turtle_box_refs[current_turtle_id].current.forward(1);;
+        window.turtle_box_refs[current_turtle_id].current.forward(1);
         //await delay(1)
     }
 }
@@ -212,7 +258,7 @@ function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtlebox
     if (!name_list) {
         name_list = []
     }
-    if (startBoxNode.kind == "databox") {
+    if (startBoxNode.kind == "databox" || startBoxNode.kind == "doitbox") {
         for (let lin of startBoxNode.line_list) {
             for (let node of lin.node_list) {
                 if ((node.kind != "text") && node.name) {

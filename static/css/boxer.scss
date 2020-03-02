@@ -15,7 +15,7 @@ $search-highlight-color: yellow;
     min-width: 75px;
     border-radius: 5px;
 
-    &.js-box {
+    &.js-box, &.doit-box {
         border-radius: 0;
         border: 1.5px solid black
     }

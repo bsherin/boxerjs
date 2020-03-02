@@ -62,7 +62,7 @@ class TextNode extends React.Component {
     async _runMe() {
         let parent_line = this._myLine();
 
-        let result = await doExecution(this.props.the_text, parent_line.parent, this.props.funcs.getBaseNode());
+        let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getBaseNode());
         if (!result) {
             return
         }
@@ -541,6 +541,9 @@ class DataBox extends React.Component {
         else {
             dbclass = "data-box"
         }
+        if (this.props.kind == "doitbox") {
+            dbclass = dbclass + " doit-box"
+        }
         if (this.props.selected) {
             dbclass = dbclass + " selected"
         }
@@ -610,6 +613,7 @@ class DataBox extends React.Component {
 
 DataBox.propTypes = {
     name: PropTypes.string,
+    kind: PropTypes.string,
     closed: PropTypes.bool,
     unique_id: PropTypes.string,
     line_list: PropTypes.array,
@@ -622,6 +626,7 @@ DataBox.propTypes = {
 };
 
 DataBox.defaultProps = {
+    kind: "databox",
     closed: false,
     am_zoomed: false,
     innerWidth: 0,
@@ -963,6 +968,7 @@ class DataboxLine extends React.Component {
             else  {
                 return (
                     <DataBox key={the_node.unique_id}
+                             kind={the_node.kind}
                               selected={the_node.selected}
                               className="data-box-outer"
                              fixed_size={the_node.fixed_size}
