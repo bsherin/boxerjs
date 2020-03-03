@@ -39,6 +39,7 @@ let boxer_statements = {
             return `
                 for (let _i = 0; _i < ${arglist[0]}; ++_i) {
                     ${arglist[1]}
+                    await delay(1)
                 } 
             `
         }
@@ -49,7 +50,7 @@ let boxer_statements = {
             ["newval", "expression"]
         ],
         converter: (arglist) => {
-            return `change("${arglist[0]}", ${arglist[1]})`
+            return `await change("${arglist[0]}", ${arglist[1]})`
         }
     }
 };

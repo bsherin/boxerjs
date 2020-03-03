@@ -1,5 +1,5 @@
 
-import {_convertNamedDoit, _convertLine, tokenizeLine} from "./transpile.js"
+import {_convertNamedDoit, _convertLine, tokenizeLine} from "./transpile.js";
 export {doExecution}
 
 var _name_index;
@@ -15,6 +15,10 @@ function changeNodePromise(uid, param_name, new_val) {
             resolve(data)
         })
     })
+}
+
+function delay(msecs) {
+    return new Promise(resolve => setTimeout(resolve, msecs));
 }
 
 function addConverted(cdict) {
@@ -59,9 +63,20 @@ async function doExecution(the_code_line, box_id, base_node) {
                 args: args
             }
         }
-        else {
-            _user_jsboxes[_node.name] = {
+        else if (_node.kind == "jsbox") {
+            let re = /(\w+?)\((.*)\)/g;
+            let m = re.exec(_node.name);
+            let fname = m[1];
+            let re2 = /(\w+)/g;
+            let var_string = m[2];
+            let arg_list = m[2].match(re2);
+            let args = [];
+            for (let arg of arg_list) {
+                args.push([arg, "expression"])
+            }
+            _user_jsboxes[fname] = {
                 node:_node,
+                args: args,
                 converted: jsBoxToString(_node)
             }
         }
@@ -80,7 +95,7 @@ async function doExecution(the_code_line, box_id, base_node) {
     let _converted_code = _convertLine(the_code_line, _user_doitboxes, _user_databoxes, _user_jsboxes);
 
     let _full_code = `
-        function _tempFunc() {
+        async function _tempFunc() {
             ${cfunc}
             ${_context_string}
             return ${_converted_code} 
@@ -98,7 +113,6 @@ async function doExecution(the_code_line, box_id, base_node) {
 }
 
 let cfunc = `async function change(boxname, newval) {
-    console.log("entering change");
     let mnode = _user_databoxes[boxname].node;
     let estring;
     if (typeof(newval) == "object") {
@@ -143,9 +157,6 @@ let cfunc = `async function change(boxname, newval) {
 }
 `;
 
-function delay(msecs) {
-    return new Promise(resolve => setTimeout(resolve, msecs));
-}
 
 async function redisplay() {
     await delay(300)

@@ -19,7 +19,7 @@ function _convertNamedDoit (boxname, user_doitboxes, user_databoxes, user_jsboxe
     } else {
         converted_body = convertStatementList(line_list, user_doitboxes, user_databoxes, user_jsboxes, local_vars)
     }
-    let name_string = `function ${boxname} (`;
+    let name_string = `async function ${boxname} (`;
     let first = true;
     for (let arg of local_vars) {
         if (!first) {
@@ -84,6 +84,9 @@ function getNameType(token, user_doitboxes, user_databoxes, user_jsboxes, local_
     else if (Object.keys(user_databoxes).includes(token)) {
         return "user_data"
     }
+    else if (Object.keys(user_jsboxes).includes(token)) {
+        return "user_js"
+    }
     else if (local_vars.includes(token)) {
         return "local_var"
     }
@@ -96,7 +99,8 @@ function consumeAndConvertNextArgument(consuming_line, user_doitboxes, user_data
     let new_consuming_line = _.cloneDeep(consuming_line);
     if (typeof(first_node) == "object") {
         if (first_node.kind == "doitbox") {
-            first_token = convertStatementLine(first_node.line_list[0], user_doitboxes, user_databoxes, user_jsboxes, local_vars)
+            let tline = tokenizeLine(first_node.line_list[0]);
+            first_token = consumeAndConvertNextArgument(tline, user_doitboxes, user_databoxes, user_jsboxes, local_vars)
         }
         else if (first_node.line_list.length == 1) {
             let first_line = first_node.line_list[0];
@@ -124,19 +128,24 @@ function consumeAndConvertNextArgument(consuming_line, user_doitboxes, user_data
     }
     else {
         if (!isNaN(first_node)) {
-            first_token = first_node
+            first_token = first_node;
+            new_consuming_line = new_consuming_line.slice(1,);
         }
         else {
             let args;
             let ntype = getNameType(first_node, user_doitboxes, user_databoxes, user_jsboxes, local_vars);
             if (ntype == "user_data" || ntype == "local_var") {
-                first_token = first_node
+                first_token = first_node;
+                new_consuming_line = new_consuming_line.slice(1,);
             }
             else {
                 if (ntype == "user_doit") {
                     args = user_doitboxes[first_node].args
                 } else if (ntype == "boxer_statement") {
                     args = boxer_statements[first_node].args
+                }
+                else if (ntype == "user_js") {
+                    args = user_jsboxes[first_node].args
                 }
                 new_consuming_line = new_consuming_line.slice(1,);
                 let converted_args = [];
@@ -146,7 +155,7 @@ function consumeAndConvertNextArgument(consuming_line, user_doitboxes, user_data
                     tokens_consumed += consume_result[1];
                     converted_args.push(consume_result[0])
                 }
-                if (ntype == "user_doit") {
+                if (ntype == "user_doit" || ntype == "user_js") {
                     let arg_string = "";
                     let first = true;
                     for (let arg of converted_args) {
@@ -158,7 +167,8 @@ function consumeAndConvertNextArgument(consuming_line, user_doitboxes, user_data
                     }
                     first_token = `${first_node}(${arg_string})`;
 
-                } else {
+                }
+                else {
                     first_token = boxer_statements[first_node].converter(converted_args)
                 }
             }
@@ -166,10 +176,13 @@ function consumeAndConvertNextArgument(consuming_line, user_doitboxes, user_data
     }
     let result_string = first_token;
     if (new_consuming_line.length > 0) {
-        let next_token = new_consuming_line[0].trim();
-        if (isOperator(next_token)) {
-            result_string += " " + operators(next_token);
-            result_string += consumeAndConvertNextArgument(new_consuming_line(1, ), user_doitboxes, user_databoxes, user_jsboxes, local_vars);
+        let next_token = new_consuming_line[0];
+        if (typeof(next_token) == "string") {
+            next_token = next_token.trim();
+            if (isOperator(next_token)) {
+                result_string += " " + operators[next_token] + " ";
+                result_string += consumeAndConvertNextArgument(new_consuming_line.slice(1, ), user_doitboxes, user_databoxes, user_jsboxes, local_vars)[0];
+            }
         }
     }
 
@@ -200,6 +213,9 @@ function convertStatementLine(line, user_doitboxes, user_databoxes, user_jsboxes
     if (statement_type == "user_doit") {
         args = user_doitboxes[statement_name].args
     }
+    else if (statement_type == "user_js") {
+        args = user_jsboxes[statement_name].args
+    }
     else if (statement_type == "boxer_statement"){
         args = boxer_statements[statement_name].args
     }
@@ -220,7 +236,7 @@ function convertStatementLine(line, user_doitboxes, user_databoxes, user_jsboxes
         }
     }
     let result_string;
-    if (statement_type == "user_doit") {
+    if (statement_type == "user_doit" || statement_type == "user_js") {
         let arg_string = "";
         let first = true;
         for (let arg of converted_args) {
@@ -230,7 +246,7 @@ function convertStatementLine(line, user_doitboxes, user_databoxes, user_jsboxes
             first = false;
             arg_string = arg_string + arg
         }
-        result_string = `${statement_name}(${arg_string})\n`;
+        result_string = `await ${statement_name}(${arg_string})\n`;
 
     }
     else {

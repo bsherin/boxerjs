@@ -496,6 +496,13 @@ class DataBox extends React.Component {
     }
 
     render() {
+        let type_label;
+        if (this.props.kind == "doitbox") {
+            type_label = "Doit"
+        }
+        else {
+            type_label = "Data"
+        }
         let dbclass;
         if (this.props.closed) {
             if ((this.props.name != null) || this.state.focusingName) {
@@ -503,6 +510,9 @@ class DataBox extends React.Component {
             }
             else {
                 dbclass = "closed-data-box"
+            }
+            if (this.props.kind == "doitbox") {
+                dbclass = dbclass + " doit-box";
             }
             if (this.props.selected) {
                 dbclass = dbclass + " selected"
@@ -524,7 +534,9 @@ class DataBox extends React.Component {
                             onMouseDown={(e)=>{e.preventDefault()}}
                             onClick={this._openMe}
                             icon={null}>
+                        <div className="closed-button-inner"></div>
                     </Button>
+                    <TypeLabel the_label={type_label}/>
                 </div>
             )
         }
@@ -542,10 +554,10 @@ class DataBox extends React.Component {
             dbclass = "data-box"
         }
         if (this.props.kind == "doitbox") {
-            dbclass = dbclass + " doit-box"
+            dbclass = dbclass + " doit-box";
         }
         if (this.props.selected) {
-            dbclass = dbclass + " selected"
+            dbclass = dbclass + " selected";
         }
         let outer_style;
         let inner_style;
@@ -581,7 +593,7 @@ class DataBox extends React.Component {
         }
         else {
             inner_style = {};
-            outer_style = {position: "relative"}
+            outer_style = {}
         }
         let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
         return (
@@ -605,6 +617,7 @@ class DataBox extends React.Component {
                             direction="both"
                             iconSize={15}/>
                     </div>
+                    <TypeLabel the_label={type_label}/>
                 </div>
             </React.Fragment>
         )
@@ -747,10 +760,10 @@ class JsBox extends React.Component {
         let dbclass;
         if (this.props.closed) {
             if ((this.props.name != null) || this.state.focusingName) {
-                dbclass = "closed-data-box data-box-with-name"
+                dbclass = "closed-data-box data-box-with-name doit-box"
             }
             else {
-                dbclass = "closed-data-box"
+                dbclass = "closed-data-box doit-box"
             }
             if (this.props.selected) {
                 dbclass = dbclass + " selected"
@@ -772,7 +785,9 @@ class JsBox extends React.Component {
                             onMouseDown={(e)=>{e.preventDefault()}}
                             onClick={this._openMe}
                             icon={null}>
+                        <div className="closed-button-inner"></div>
                     </Button>
+                    <TypeLabel the_label="JSbox"/>
                 </div>
             )
         }
@@ -829,6 +844,7 @@ class JsBox extends React.Component {
                                              first_line_number={null}
                             />
                         </div>
+                        <TypeLabel the_label="JSbox"/>
                 </div>
             </React.Fragment>
         )
@@ -879,6 +895,28 @@ class CloseButton extends React.Component {
 CloseButton.propTypes = {
     handlClick: PropTypes.func
 };
+
+class TypeLabel extends React.Component {
+    constructor (props) {
+        super(props);
+        doBinding(this);
+    }
+
+    shouldComponentUpdate(nextProps, nextState, nextContext) {
+        return false
+    }
+
+    render() {
+        return (
+            <span className="type-label">{this.props.the_label}</span>
+        )
+    }
+}
+
+TypeLabel.propTypes = {
+    the_label: PropTypes.string
+};
+
 
 class ZoomButton extends React.Component {
     constructor (props) {
