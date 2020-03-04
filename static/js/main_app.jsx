@@ -90,6 +90,7 @@ class MainApp extends React.Component {
         window.changeNode = this._changeNode;
         window.newLineNode = this._newLineNode;
         window.newTextNode = this._newTextNode;
+        window.newDoitNode = this._newDoitBoxNode;
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
