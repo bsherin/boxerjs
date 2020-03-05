@@ -168,6 +168,7 @@ function isBoxerStatement(token) {
 let operators = {
     "+": "+",
     "-": "-",
+    "*": "*",
     "=": "==",
     "<": "<",
     ">": ">",

@@ -77,10 +77,13 @@ function findNamedNode(name, starting_id) {
     return null
 }
 
-async function change(boxname, newval, my_node_id, eval_in_place) {
+async function change(boxname, newval, my_node_id, eval_in_place=null) {
     let is_local_var;
     let mnode;
     let estring;
+    if (!eval_in_place) {
+        eval_in_place = eval
+    }
     if (typeof(newval) == "object") {
         let dbstring = JSON.stringify(_newval);
         estring = boxname + " = " + dbstring;

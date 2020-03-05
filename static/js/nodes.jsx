@@ -17,7 +17,6 @@ export {DataBox}
 
 let currentlyDeleting = false;
 
-
 class TextNode extends React.Component {
     constructor (props) {
         super(props);

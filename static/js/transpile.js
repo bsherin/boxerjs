@@ -7,7 +7,6 @@ export {_convertNamedDoit, dataBoxToString, insertVirtualNode, _getMatchingNode,
 
 let current_turtle_id = null;
 
-// This must find only non-virtual doitboxes
 function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtleboxfound=false) {
     let named_nodes = [];
     if (!name_list) {
@@ -210,21 +209,26 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
         let called_doits = findCalledDoits(doitNode, virtualNodeTree, context);
         let called_doit_string = "";
         context.copied_doits = {};
+        let inserted_lines = 0;
         for (let called_doit of called_doits) {
             if (called_doit.node.parent == doitNode.unique_id) {
                 continue
             }
             let vnode = insertVirtualNode(called_doit.node, doitNode, virtualNodeTree);
+            inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
                 node: vnode,
                 args: called_doit.args
             };
             called_doit_string = "\n" + _convertNamedDoit(vnode, virtualNodeTree)
         }
+        let endat = line_list.length - inserted_lines;
         if (arglist.length > 0) {
-            converted_body = convertStatementList(line_list.slice(1,), virtualNodeTree, context)
+            converted_body = convertStatementList(line_list.slice(1, endat),
+                virtualNodeTree, context, true)
         } else {
-            converted_body = convertStatementList(line_list, virtualNodeTree, context)
+            converted_body = convertStatementList(line_list.slice(0, endat),
+                virtualNodeTree, context, true)
         }
         let name_string = `async function ${doitNode.name} (`;
         let first = true;
@@ -255,15 +259,6 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
 
 }
 
-function _convertLine(the_code_line, _user_doitboxes, _user_databoxes, _user_jsboxes) {
-    let token_list = tokenizeLine(the_code_line);
-    if (isBoxerStatement(token_list[0])) {
-        return [convertStatementLine(token_list, _user_doitboxes, _user_databoxes, _user_jsboxes), true]
-    }
-    else {
-        return [consumeAndConvertNextArgument(token_list, _user_doitboxes, _user_databoxes, _user_jsboxes)[0], false]
-    }
-}
 
 function tokenizeLine(line) {
     let token_list = [];
@@ -281,25 +276,25 @@ function tokenizeLine(line) {
     return token_list
 }
 
-function convertStatementList(line_list, virtualNodeTree, context) {
+function convertStatementList(line_list, virtualNodeTree, context, return_last_line=false) {
     let converted_string = "";
+    let counter = 0;
     for (let line of line_list) {
         let token_list = tokenizeLine(line);
-        converted_string += convertStatementLine(token_list, virtualNodeTree, context)
+        counter += 1;
+        let is_last_line = return_last_line && counter == line_list.length;
+        converted_string += convertStatementLine(token_list, virtualNodeTree, context, is_last_line)
     }
     return converted_string
 }
 
-function getNameType(token, context) {
+function getNameType(token, context, allow_other=false) {
     if (Object.keys(context.doit_boxes).includes(token)) {
         return "user_doit"
     }
     else if (Object.keys(context.copied_doits).includes(token)) {
         return "copied_doit"
     }
-    // else if (Object.keys(user_jsboxes).includes(token)) {
-    //     return "user_jsbox"
-    // }
     else if (isBoxerStatement(token)) {
         return "boxer_statement"
     }
@@ -311,6 +306,9 @@ function getNameType(token, context) {
     }
     else if (context.input_names.includes(token)) {
         return "input_name"
+    }
+    else if (allow_other) {
+        return "other"
     }
     else {
         throw `Got unknown name '${token}'`;
@@ -401,7 +399,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
                         first = false;
                         arg_string = arg_string + arg
                     }
-                    first_token = `${first_node}(${arg_string})`;
+                    first_token = `await ${first_node}(${arg_string})`;
 
                 }
                 else {
@@ -470,12 +468,20 @@ function dataBoxToString(dbox) {
     }
 }
 
-function convertStatementLine(token_list, virtualNodeTree, context) {
-    let statement_name = token_list[0];
-    if ((typeof(statement_name) == "object") || (statement_name.trim() == "")) {
+function convertStatementLine(token_list, virtualNodeTree, context, is_last_line=false) {
+    if (token_list.length == 0){
         return ""
     }
-    let statement_type = getNameType(statement_name, context);
+    let statement_name = token_list[0];
+    if ((typeof(statement_name) == "object")) {
+        if (is_last_line && !statement_name.name) {
+            return "return " + consumeAndConvertNextArgument(token_list, virtualNodeTree, context)[0]  + ";"
+        }
+        else {
+            return ""
+        }
+    }
+    let statement_type = getNameType(statement_name, context, is_last_line);
     let args;
     if (statement_type == "user_doit") {
         args = context.doit_boxes[statement_name].args
@@ -488,6 +494,14 @@ function convertStatementLine(token_list, virtualNodeTree, context) {
     }
     else if (statement_type == "boxer_statement"){
         args = boxer_statements[statement_name].args
+    }
+    else {
+        if (is_last_line && statement_type != "boxer_statement") {
+            return "return " + consumeAndConvertNextArgument(token_list, virtualNodeTree, context)[0] + ";"
+        }
+        else {
+            return ""
+        }
     }
     let consuming_line = _.cloneDeep(token_list);
     consuming_line = consuming_line.slice(1, );
@@ -533,6 +547,9 @@ function convertStatementLine(token_list, virtualNodeTree, context) {
     }
     if (consuming_line.length > 0) {
         result_string += "\n" + convertStatementLine(consuming_line, virtualNodeTree, context)
+    }
+    else if (is_last_line && statement_type != "boxer_statement") {
+        result_string = "return " + result_string + ";"
     }
     return result_string
 }
