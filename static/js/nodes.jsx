@@ -31,6 +31,7 @@ class TextNode extends React.Component {
         .replace(/&amp;/g, '&')
         .replace(/&gt;/g, '>')
         .replace(/&lt;/g, '<')
+          .replace(/\<.*?\>/g, " ")
     }
 
     unTrimSpaces(string) {
@@ -616,7 +617,9 @@ class DataBox extends React.Component {
                             direction="both"
                             iconSize={15}/>
                     </div>
-                    <TypeLabel the_label={type_label}/>
+                    {!this.props.am_zoomed &&
+                        <TypeLabel the_label={type_label}/>
+                    }
                 </div>
             </React.Fragment>
         )

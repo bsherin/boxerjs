@@ -1091,6 +1091,8 @@ class MainApp extends React.Component {
             }),
             React.createElement(DataBox, { name: zoomed_node.name,
                 funcs: this.funcs,
+                kind: zoomed_node.kind,
+                className: 'data-box-outer',
                 focusName: false,
                 am_zoomed: true,
                 closed: false,
