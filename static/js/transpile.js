@@ -220,7 +220,7 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
                 node: vnode,
                 args: called_doit.args
             };
-            called_doit_string = "\n" + _convertNamedDoit(vnode, virtualNodeTree)
+            called_doit_string += "\n" + _convertNamedDoit(vnode, virtualNodeTree)
         }
         let endat = line_list.length - inserted_lines;
         if (arglist.length > 0) {
