@@ -153,6 +153,14 @@ async function forward(steps) {
     }
 }
 
+function p5Move(x, y){
+    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y)
+}
+
+function p5Clear(x, y){
+    window.turtle_box_refs[current_turtle_id].current._clear(x, y)
+}
+
 function clear() {
     window.turtle_box_refs[current_turtle_id].current.clear()
 }
@@ -223,6 +231,7 @@ function animate(action, ms) {
 }
 
 function setfont(font) {
+
     window.turtle_box_refs[current_turtle_id].current.setfont(font)
 }
 

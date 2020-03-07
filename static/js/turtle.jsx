@@ -6,22 +6,6 @@ import {DragHandle} from "./resizing_layouts";
 
 export {TurtleBox}
 
-// get a handle for the canvases in the document
-// var imageCanvas = $('#imagecanvas')[0];
-// var imageContext = imageCanvas.getContext('2d');
-
-// imageContext.textAlign = "center";
-// imageContext.textBaseline = "middle";
-
-// var turtleCanvas = $('#turtlecanvas')[0];
-// var turtleContext = turtleCanvas.getContext('2d');
-
-// the turtle takes precedence when compositing
-// turtleContext.globalCompositeOperation = 'destination-over';
-
-// initialise the state of the turtle
-//var turtle = undefined;
-
 class TurtleBox extends React.Component {
 
     constructor(props) {
@@ -138,7 +122,8 @@ class TurtleBox extends React.Component {
             this.turtleContext.fill();
             this.turtleContext.restore();
         }
-        this.turtleContext.drawImage(this.imageRef.current, 0, 0, 300, 300, 0, 0, 300, 300);
+        this.turtleContext.drawImage(this.imageRef.current, 0, 0, this.props.fixed_width, this.props.fixed_height,
+            0, 0, this.props.fixed_width, this.props.fixed_height,);
     }
 
     // clear the display, don't move the turtle

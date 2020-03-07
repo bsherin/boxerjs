@@ -53,6 +53,22 @@ let boxer_statements = {
             return `setxy(${arglist[0]}, ${arglist[1]})`
         }
     },
+    p5move: {
+        args: [
+            ["xcoord", "number"],
+            ["ycoord", "number"]
+        ],
+        converter: (arglist) => {
+            return `p5Move(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    p5clear: {
+        args: [
+        ],
+        converter: (arglist) => {
+            return `p5Clear()`
+        }
+    },
     setheading: {
         args: [
             ["angle", "number"]
