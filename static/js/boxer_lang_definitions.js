@@ -10,6 +10,14 @@ let boxer_statements = {
             return `forward(${arglist[0]})`
         }
     },
+    back: {
+        args: [
+            ["steps", "number"]
+        ],
+        converter: (arglist) => {
+            return `back(${arglist[0]})`
+        }
+    },
     right: {
         args: [
             ["angle", "number"]
@@ -30,6 +38,12 @@ let boxer_statements = {
         args: [],
         converter: (arglist) => {
             return "clear()"
+        }
+    },
+    clean: {
+        args: [],
+        converter: (arglist) => {
+            return "clean()"
         }
     },
     penup: {
@@ -53,22 +67,6 @@ let boxer_statements = {
             return `setxy(${arglist[0]}, ${arglist[1]})`
         }
     },
-    p5move: {
-        args: [
-            ["xcoord", "number"],
-            ["ycoord", "number"]
-        ],
-        converter: (arglist) => {
-            return `p5Move(${arglist[0]}, ${arglist[1]})`
-        }
-    },
-    p5clear: {
-        args: [
-        ],
-        converter: (arglist) => {
-            return `p5Clear()`
-        }
-    },
     setheading: {
         args: [
             ["angle", "number"]
@@ -87,6 +85,121 @@ let boxer_statements = {
         args: [],
         converter: (arglist) => {
             return "hideTurtle()"
+        }
+    },
+    "set-pen-width": {
+        args:[
+            ["width", "number"]
+        ],
+        converter: (arglist) => {
+            return `setPenWidth(${arglist[0]})`
+        }
+    },
+
+    "set-pen-color": {
+        args:[
+            ["the_color", "boxorstring"]
+        ],
+        converter: (arglist) => {
+            return `setPenColor(${arglist[0]})`
+        }
+    },
+
+    "stamp-rectangle": {
+        args:[
+            ["width", "number"],
+            ["height", "number"]
+        ],
+        converter: (arglist) => {
+            return `stampRectangle(${arglist[0]},${arglist[1]})`
+        }
+    },
+
+    "stamp-hollow-rectangle": {
+        args:[
+            ["width", "number"],
+            ["height", "number"]
+        ],
+        converter: (arglist) => {
+            return `stampHollowRectangle(${arglist[0]},${arglist[1]})`
+        }
+    },
+    dot: {
+        args: [],
+        converter: (arglist) => {
+            return "dot()"
+        }
+    },
+    "stamp-ellipse": {
+        args:[
+            ["width", "number"],
+            ["height", "number"]
+        ],
+        converter: (arglist) => {
+            return `stampEllipse(${arglist[0]},${arglist[1]})`
+        }
+    },
+
+    "stamp-hollow-ellipse": {
+        args:[
+            ["width", "number"],
+            ["height", "number"]
+        ],
+        converter: (arglist) => {
+            return `stampHollowEllipse(${arglist[0]},${arglist[1]})`
+        }
+    },
+    "stamp-circle": {
+        args:[
+            ["radius", "number"]
+        ],
+        converter: (arglist) => {
+            return `stampCircle(${arglist[0]})`
+        }
+    },
+
+    "stamp-hollow-circle": {
+        args:[
+            ["radius", "number"],
+        ],
+        converter: (arglist) => {
+            return `stampHollowCircle(${arglist[0]})`
+        }
+    },
+
+    "set-graphics-mode": {
+        args:[
+            ["the_text", "text"]
+        ],
+        converter: (arglist) => {
+            return `setGraphicsMode(${arglist[0]})`
+        }
+    },
+
+    type: {
+        args:[
+            ["the_text", "text"],
+        ],
+        converter: (arglist) => {
+            return `type(${arglist[0]})`
+        }
+    },
+
+    "set-type-font": {
+        args:[
+            ["font_string", "text"],
+        ],
+        converter: (arglist) => {
+            return `setTypeFont(${arglist[0]})`
+        }
+    },
+
+    "set-sprite-size": {
+        args:[
+            ["the_size", "number"],
+        ],
+        converter: (arglist) => {
+            return `setSpriteSize(${arglist[0]})`
         }
     },
 
@@ -163,14 +276,20 @@ let boxer_statements = {
 
 let synonyms = {
     fd: "forward",
+    bk: "back",
     rt: "right",
     lt: "left",
     st: "showturtle",
+    show: "showturtle",
     ht: "hideturtle",
+    hide: "hideturtle",
+    seth: "setheading",
     cs: "reset",
     clearscreen: "reset",
     pu: "penup",
-    pd: "pendown"
+    pd: "pendown",
+    "stamp-rect": "stamp-rectangle",
+    "stamp-hollow-rect": "stamp-hollow-rectangle"
 };
 
 for (let name in synonyms) {

@@ -342,12 +342,9 @@ class MainApp extends React.Component {
     }
 
     _insertTurtleBoxLastFocus() {
-        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos)
-    }
-
-    _insertP5TurtleBoxLastFocus() {
         this._insertP5TurtleBoxinText(this.last_focus_id, this.last_focus_pos)
     }
+
 
     _insertDataBoxLastFocus() {
         this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos)
@@ -1101,7 +1098,6 @@ class MainApp extends React.Component {
             handleCodeChange: this._handleCodeChange,
             insertJsBoxLastFocus: this._insertJsBoxLastFocus,
             insertTurtleBoxLastFocus: this._insertTurtleBoxLastFocus,
-            insertP5TurtleBoxLastFocus: this._insertP5TurtleBoxLastFocus,
             getBaseNode: this._getBaseNode,
             insertNode: this._insertNode,
             registerTurtleBox: this._registerTurtleBox,

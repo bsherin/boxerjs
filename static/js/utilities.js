@@ -1,7 +1,8 @@
 
 import _ from "lodash";
 
-export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, arraysMatch, remove_duplicates}
+export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual,
+    arraysMatch, remove_duplicates, extractText, isNormalInteger}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -10,6 +11,13 @@ function doBinding(obj, seq = "_") {
             obj[key] = obj[key].bind(obj);
         }
     }
+}
+
+function extractText(abox) {
+    if (typeof(abox) != "object" || abox.kind != "databox") {
+        return null
+    }
+    return abox.line_list[0].node_list[0].the_text
 }
 
 function propsAreEqual(p1, p2, skipProps = []) {
@@ -35,6 +43,10 @@ function propsAreEqual(p1, p2, skipProps = []) {
 
 function isString (value) {
     return typeof value === 'string' || value instanceof String;
+}
+
+function isNormalInteger(str) {
+    return /^\+?(0|[1-9]\d*)$/.test(str);
 }
 
 function arraysMatch (arr1, arr2) {

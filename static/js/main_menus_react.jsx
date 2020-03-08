@@ -208,10 +208,6 @@ class BoxMenu extends React.Component {
         this.props.insertTurtleBoxLastFocus();
     }
 
-    _new_p5turtlebox(event) {
-        this.props.insertP5TurtleBoxLastFocus();
-    }
-
     _name_box() {
         this.props.focusNameLastFocus()
     }
@@ -223,7 +219,6 @@ class BoxMenu extends React.Component {
             "Insert Doit Box": this._new_doitbox,
             "Insert JS Box": this._new_jsbox,
             "Insert Turtle Box": this._new_turtlebox,
-            "Insert P5Turtle Box": this._new_p5turtlebox,
             "Name Box": this._name_box,
             "Unfix Size": this.props.unfixSizeLastFocus
         }
@@ -235,7 +230,6 @@ class BoxMenu extends React.Component {
             "Insert Doit Box": "box",
             "Insert JS Box": "box",
             "Insert Turtle Box": "box",
-            "Insert P5Turtle Box": "box",
             "Name Box": "label",
             "Unfix Size":"undo"
         }

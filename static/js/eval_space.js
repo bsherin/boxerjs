@@ -51,9 +51,12 @@ async function doExecution(the_code_line, box_id, base_node) {
     }
 
     let _full_code = `
+    async function _outerFunc() {
         ${global_declarations_string}
         ${_tempFuncString}
-        _tempFunc()
+        return await _tempFunc()
+    }
+    _outerFunc()
     `;
     window.virtualNodeTree = _virtualNodeTree;
     try {
@@ -140,45 +143,41 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
     }
 }
 
-
 async function redisplay() {
     await delay(300)
 }
 
 async function forward(steps) {
-    for (let i=0; i<steps; ++i) {
-        // window.current_turtle_ref.current.forward(1);
-        window.turtle_box_refs[current_turtle_id].current.forward(1);
-        //await delay(1)
-    }
+    window.turtle_box_refs[current_turtle_id].current._moveForward(steps);
 }
 
-function p5Move(x, y){
-    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y)
-}
-
-function p5Clear(x, y){
-    window.turtle_box_refs[current_turtle_id].current._clear(x, y)
+async function back(steps) {
+    window.turtle_box_refs[current_turtle_id].current._moveForward(-1 * steps);
 }
 
 function clear() {
-    window.turtle_box_refs[current_turtle_id].current.clear()
+    window.turtle_box_refs[current_turtle_id].current._clear()
 }
+
+function clean() {
+    window.turtle_box_refs[current_turtle_id].current._clean()
+}
+
 
 function reset() {
-    window.turtle_box_refs[current_turtle_id].current.reset()
+    window.turtle_box_refs[current_turtle_id].current._clear()
 }
 
-function wrap() {
-    window.turtle_box_refs[current_turtle_id].current.wrap()
+function setGraphicsMode(boxorstring) {
+    window.turtle_box_refs[current_turtle_id].current._setGraphicsMode(boxorstring)
 }
 
 function showTurtle() {
-    window.turtle_box_refs[current_turtle_id].current.showTurtle()
+    window.turtle_box_refs[current_turtle_id].current._showTurtle()
 }
 
 function hideTurtle() {
-    window.turtle_box_refs[current_turtle_id].current.hideTurtle()
+    window.turtle_box_refs[current_turtle_id].current._hideTurtle()
 }
 
 function redrawOnMove(bool) {
@@ -186,40 +185,77 @@ function redrawOnMove(bool) {
 }
 
 function penup() {
-    window.turtle_box_refs[current_turtle_id].current.penup();
+    window.turtle_box_refs[current_turtle_id].current._penup();
 }
 
 function pendown() {
-    window.turtle_box_refs[current_turtle_id].current.pendown();
+    window.turtle_box_refs[current_turtle_id].current._pendown();
+}
+
+function setPenWidth(w) {
+    window.turtle_box_refs[current_turtle_id].current._setPenWidth(w);
+}
+
+function stampRectangle(w, h) {
+    window.turtle_box_refs[current_turtle_id].current._stampRectangle(w, h);
+}
+
+function stampHollowRectangle(w, h) {
+    window.turtle_box_refs[current_turtle_id].current._stampRectangle(w, h, true);
+}
+
+function dot() {
+    window.turtle_box_refs[current_turtle_id].current._dot();
+}
+
+function stampEllipse(w, h) {
+    window.turtle_box_refs[current_turtle_id].current._stampEllipse(w, h);
+}
+
+function stampHollowEllipse(w, h) {
+    window.turtle_box_refs[current_turtle_id].current._stampEllipse(w, h, true);
+}
+
+function stampCircle(r) {
+    window.turtle_box_refs[current_turtle_id].current._stampEllipse(r * 2, r * 2);
+}
+
+function stampHollowCircle(r) {
+    window.turtle_box_refs[current_turtle_id].current._stampEllipse(r * 2, r * 2, true);
+}
+
+function type(boxortext) {
+    window.turtle_box_refs[current_turtle_id].current._type(boxortext);
+}
+
+function setTypeFont(boxortext) {
+    window.turtle_box_refs[current_turtle_id].current._setTypeFont(boxortext);
 }
 
 function right(degrees) {
     // current_turtle_ref.current.right(degrees)
-    window.turtle_box_refs[current_turtle_id].current.right(degrees)
+    window.turtle_box_refs[current_turtle_id].current._right(degrees)
 }
 
 function left(degrees) {
-    window.turtle_box_refs[current_turtle_id].current.left(degrees)
+    window.turtle_box_refs[current_turtle_id].current._left(degrees)
 }
 
 function setxy(x, y) {
-    window.turtle_box_refs[current_turtle_id].current.setxy(x, y)
+    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y)
 }
 
 function setheading(degrees) {
-    window.turtle_box_refs[current_turtle_id].current.setheading(degrees)
+    window.turtle_box_refs[current_turtle_id].current._setHeading(degrees)
 }
 
-function setlinewidth(w) {
-    window.turtle_box_refs[current_turtle_id].current.width(w)
+
+function setPenColor(the_text) {
+    window.turtle_box_refs[current_turtle_id].current._setPenColor(the_text)
 }
 
-function write(text) {
-    window.turtle_box_refs[current_turtle_id].current.write(text)
-}
-
-function setcolor(r, g, b, a) {
-    window.turtle_box_refs[current_turtle_id].current.setcolor(r, g, b, a)
+function setSpriteSize(the_size) {
+    window.turtle_box_refs[current_turtle_id].current._setSpriteSize(the_size)
 }
 
 function random(low, hi){
