@@ -6,7 +6,7 @@ import {DragHandle} from "./resizing_layouts";
 // import {DragHandle} from "./resizing_layouts";
 export {P5TurtleBox}
 
-
+p5.disableFriendlyErrors = true;
 
 class P5TurtleBox extends React.Component {
     constructor(props) {
@@ -41,8 +41,10 @@ class P5TurtleBox extends React.Component {
 
 
     _clear() {
+        this.p5.clear();
+        this.p5.background(this.bgcolor);
         this.bgp5.clear();
-        this.bgp5.background(this.bgcolor);
+        // this.bgp5.background(this.bgcolor);
         this.x = 0;
         this.y = 0;
         this.heading = 0;
@@ -51,8 +53,9 @@ class P5TurtleBox extends React.Component {
     }
 
     _clean() {
+        this.p5.clear();
         this.bgp5.clear();
-        this.bgp5.background(this.bgcolor);
+        this.p5.background(this.bgcolor);
         this._postDraw();
 
     }
@@ -109,6 +112,7 @@ class P5TurtleBox extends React.Component {
 
     _preDraw() {
         this.p5.clear();
+        this.p5.background(this.bgcolor);
         this.p5.copy(this.bgp5.get(), 0, 0, this.props.fixed_width, this.props.fixed_height, 0, 0, this.props.fixed_width, this.props.fixed_height);
         //this.p5.image(this.savedImage, 0, 0);
     }
@@ -238,6 +242,33 @@ class P5TurtleBox extends React.Component {
         }
 
         this.pen_color = this.bgp5.color(`rgb(${String(the_color_ints)})`);
+    }
+
+    _setBackgroundColor(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        let the_color_strings = the_text.trim().split(" ");
+        if (the_color_strings.length == 1) {
+            let the_str = the_color_strings[0];
+            if (isNormalInteger(the_str)) {
+                this.bgcolor = this.p5.color(parseInt(the_str));
+                return
+            }
+            else {
+                this.bgcolor = this.p5.color(the_str);
+                return
+            }
+        }
+        else {
+            let the_color_ints = [];
+            for (let c of the_color_strings) {
+                the_color_ints.push(parseInt(c))
+            }
+            this.bgcolor = this.p5.color(`rgb(${String(the_color_ints)})`);
+        }
+        this._preDraw();
+        this._postDraw()
+
     }
 
     _type(aboxorstring) {
@@ -390,14 +421,14 @@ class P5TurtleBox extends React.Component {
         this.bgp5 = p5;
         this.bgcanvasParentRef = canvasParentRef;
         this.bgp5.angleMode(this.bgp5.DEGREES);
-        this.bgp5.background(this.bgcolor);
+        // this.bgp5.background(this.bgcolor);
         p5.createCanvas(this.props.fixed_width, this.props.fixed_height).parent(canvasParentRef);
 
     }
     
     _initBgCanvas() {
         this.bgp5.clear();
-        p5.noLoop()
+        this.bgp5.noLoop()
     }
 
     _draw(p5) {
@@ -417,9 +448,14 @@ class P5TurtleBox extends React.Component {
         this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
     }
 
+    shouldComponentUpdate(nextProps, nextState, nextContext) {
+        return (nextProps.fixed_width / 2 != this.xcenter) || (this.props.fixed_height / 2 != this.ycenter)
+    }
+
     componentDidUpdate() {
         if (this.p5) {
             this.p5.clear();
+            this.p5.background(this.bgcolor);
             this.xcenter = this.props.fixed_width / 2;
             this.ycenter = this.props.fixed_height / 2;
             this.bgp5.resizeCanvas(this.props.fixed_width, this.props.fixed_height);

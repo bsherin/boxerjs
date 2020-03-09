@@ -105,6 +105,15 @@ let boxer_statements = {
         }
     },
 
+    "set-background-color": {
+        args:[
+            ["the_color", "boxorstring"]
+        ],
+        converter: (arglist) => {
+            return `setBackgroundColor(${arglist[0]})`
+        }
+    },
+
     "stamp-rectangle": {
         args:[
             ["width", "number"],

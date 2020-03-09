@@ -325,8 +325,8 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
     let new_consuming_line = _.cloneDeep(consuming_line);
     if (typeof(first_node) == "object") {
         if (first_node.kind == "doitbox") {
-            let tline = tokenizeLine(first_node.line_list[0]);
-            first_token = consumeAndConvertNextArgument(tline, virtualNodeTree, context)[0]
+            let fstring = convertStatementList(first_node.line_list, virtualNodeTree, context, true);
+            first_token = `(()=>{${fstring}})()\n`
         }
         else if (first_node.line_list.length == 1) {
             let first_line = first_node.line_list[0];
@@ -415,10 +415,13 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
             next_token = next_token.trim();
             if (isOperator(next_token)) {
                 result_string += " " + operators[next_token] + " ";
+                tokens_consumed += 1;
                 if (new_consuming_line.length <= 1) {
                     throw `Not enough arguments for operator '${next_token}'`
                 }
-                result_string += consumeAndConvertNextArgument(new_consuming_line.slice(1, ), virtualNodeTree, context)[0];
+                let cresult = consumeAndConvertNextArgument(new_consuming_line.slice(1, ), virtualNodeTree, context);
+                tokens_consumed += cresult[1];
+                result_string += cresult[0];
             }
         }
     }
@@ -472,10 +475,15 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
     if (token_list.length == 0){
         return ""
     }
-    let statement_name = token_list[0];
+    let consuming_line = _.cloneDeep(token_list);
+    let statement_name = consuming_line[0];
     if ((typeof(statement_name) == "object")) {
-        if (is_last_line && !statement_name.name) {
-            return "return " + consumeAndConvertNextArgument(token_list, virtualNodeTree, context)[0]  + ";"
+        if (is_last_line && !statement_name.name && statement_name.kind == "databox") {
+            return "return " + consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)[0]  + ";"
+        }
+        else if (statement_name.kind == "doitbox") {
+            let fstring = convertStatementList(statement_name.line_list, virtualNodeTree, context, true);
+            return `(()=>{${fstring}})()\n` + convertStatementLine(consuming_line.slice(1,), virtualNodeTree, context, true)
         }
         else {
             return ""
@@ -503,7 +511,7 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
             return ""
         }
     }
-    let consuming_line = _.cloneDeep(token_list);
+
     consuming_line = consuming_line.slice(1, );
     let consume_result;
     let converted_args = [];

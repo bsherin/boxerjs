@@ -249,9 +249,12 @@ function setheading(degrees) {
     window.turtle_box_refs[current_turtle_id].current._setHeading(degrees)
 }
 
-
 function setPenColor(the_text) {
     window.turtle_box_refs[current_turtle_id].current._setPenColor(the_text)
+}
+
+function setBackgroundColor(the_text) {
+    window.turtle_box_refs[current_turtle_id].current._setBackgroundColor(the_text)
 }
 
 function setSpriteSize(the_size) {
