@@ -94,6 +94,7 @@ class MainApp extends React.Component {
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
+        window.getBaseNode = this._getBaseNode;
 
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];

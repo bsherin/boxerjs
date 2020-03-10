@@ -1,7 +1,7 @@
 
 import _ from 'lodash';
 
-import {_convertNamedDoit, findNamedBoxesInScope, dataBoxToString, insertVirtualNode, _getMatchingNode, current_turtle_id} from "./transpile.js";
+import {findNamedBoxesInScope,_createLocalizedFunctionCall, _getMatchingNode, current_turtle_id} from "./transpile.js";
 export {doExecution}
 
 var _name_index;
@@ -31,34 +31,20 @@ function addConverted(cdict) {
 }
 
 async function doExecution(the_code_line, box_id, base_node) {
-    let local_the_code_line = _.cloneDeep(the_code_line);
-    let _tempDoitNode = window.newDoitNode([local_the_code_line]);
-    _tempDoitNode.name = "_tempFunc";
-    let _virtualNodeTree = _.cloneDeep(base_node);
-    let _start_node = _getMatchingNode(box_id, _virtualNodeTree);
-    let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node, _virtualNodeTree);
-    let _tempFuncString = _convertNamedDoit(_inserted_start_node, _virtualNodeTree);
+    window.context_functions = {};
+    window.virtualNodeTrees = {};
+    window.tell_function_counter = 0;
+    let _fname = _createLocalizedFunctionCall(the_code_line, box_id, base_node, true);
 
-    let _named_nodes = findNamedBoxesInScope(_start_node, _virtualNodeTree);
-    let global_declarations_string = "";
-    for (let _node of _named_nodes) {
-        if (_node.kind == "databox") {
-            global_declarations_string += "\n" + dataBoxToString(_node)
-        }
-        if (_node.kind == "jsbox") {
-            global_declarations_string += "\n" + jsBoxToString(_node)
-        }
+    let _full_code = "";
+
+    for (let cfunc in window.context_functions) {
+        _full_code += `${window.context_functions[cfunc]};\n`
     }
 
-    let _full_code = `
-    async function _outerFunc() {
-        ${global_declarations_string}
-        ${_tempFuncString}
-        return await _tempFunc()
-    }
-    _outerFunc()
+    _full_code += `
+    ${_fname}()
     `;
-    window.virtualNodeTree = _virtualNodeTree;
     try {
         let _result = await eval(_full_code);
         return _result;
@@ -69,9 +55,9 @@ async function doExecution(the_code_line, box_id, base_node) {
 
 
 
-function findNamedNode(name, starting_id) {
-    let start_node = _getMatchingNode(starting_id, window.virtualNodeTree);
-    let named_nodes = findNamedBoxesInScope(start_node, window.virtualNodeTree);
+function findNamedNode(name, starting_id, my_context_name) {
+    let start_node = _getMatchingNode(starting_id, window.virtualNodeTrees[my_context_name]);
+    let named_nodes = findNamedBoxesInScope(start_node, window.virtualNodeTrees[my_context_name]);
     for (let node of named_nodes) {
         if (node.name == name) {
             return node
@@ -87,6 +73,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
     if (!eval_in_place) {
         eval_in_place = eval
     }
+    let _my_context_name = await eval_in_place("_context_name");
     if (typeof(newval) == "object") {
         let dbstring = JSON.stringify(_newval);
         estring = boxname + " = " + dbstring;
@@ -98,7 +85,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
                 lin.parent = mnode.unique_id
             }
         }
-        let mnode = findNamedNode(boxname, my_node_id);
+        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
         if (!mnode || mnode.virtual) {
             return new Promise(function (resolve, reject) {
                 resolve()
@@ -123,7 +110,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
             estring = boxname + " = " + newval
         }
         eval_in_place(estring);
-        let mnode = findNamedNode(boxname, my_node_id);
+        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
         if (!mnode || mnode.virtual) {
             return new Promise(function(resolve, reject) {
                     resolve()
@@ -274,9 +261,4 @@ function setfont(font) {
     window.turtle_box_refs[current_turtle_id].current.setfont(font)
 }
 
-function jsBoxToString(jsbox) {
-    return `
-    async function ${jsbox.name} {${jsbox.the_code}}
-    `
-}
 

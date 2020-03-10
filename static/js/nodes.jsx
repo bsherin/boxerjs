@@ -71,7 +71,7 @@ class TextNode extends React.Component {
             let new_node = this.props.funcs.newTextNode(String(result));
             let new_line = this.props.funcs.newLineNode([new_node]);
             let new_databox = this.props.funcs.newDataBox([new_line]);
-            this.props.funcs.insertNode(new_databox, parent_line.unique_id, this._myNode().position + 1)
+            this.props.funcs.insertNode(new_databox, parent_line.unique_id, parent_line.node_list.length)
         }
         else {
 
@@ -81,7 +81,7 @@ class TextNode extends React.Component {
                 this.props.funcs.updateIds(updated_result.line_list);
             }
 
-            this.props.funcs.insertNode(updated_result, parent_line.unique_id, this._myNode().position + 1)
+            this.props.funcs.insertNode(updated_result, parent_line.unique_id, parent_line.node_list.length)
         }
     }
 

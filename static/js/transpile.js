@@ -3,9 +3,50 @@ import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
 import {guid} from "./utilities";
 
-export {_convertNamedDoit, dataBoxToString, insertVirtualNode, _getMatchingNode, current_turtle_id, findNamedBoxesInScope}
+export {_convertNamedDoit, insertVirtualNode, _createLocalizedFunctionCall,
+    _getMatchingNode, current_turtle_id, findNamedBoxesInScope}
 
 let current_turtle_id = null;
+
+function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=true) {
+    let local_the_code_line = _.cloneDeep(the_code_line);
+    let _tempDoitNode = window.newDoitNode([local_the_code_line]);
+    _tempDoitNode.name = "_tempFunc";
+    let _virtualNodeTree = _.cloneDeep(base_node);
+    let _start_node = _getMatchingNode(box_id, _virtualNodeTree);
+    let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node, _virtualNodeTree);
+    let _tempFuncString = _convertNamedDoit(_inserted_start_node, _virtualNodeTree);
+
+    let _named_nodes = findNamedBoxesInScope(_start_node, _virtualNodeTree);
+    let global_declarations_string = "";
+    for (let _node of _named_nodes) {
+        if (_node.kind == "databox") {
+            global_declarations_string += "\n" + dataBoxToString(_node)
+        }
+        if (_node.kind == "jsbox") {
+            global_declarations_string += "\n" + jsBoxToString(_node)
+        }
+    }
+    let fname;
+    if (root) {
+        fname = "_outerFunc";
+    }
+    else {
+        fname = "_tellFunc" + String(window.tell_function_counter);
+        window.tell_function_counter += 1;
+    }
+    window.virtualNodeTrees[fname] = _virtualNodeTree;
+    let func_defn = `
+    async function ${fname}() {
+        let _context_name = "${fname}";
+        ${global_declarations_string}
+        ${_tempFuncString}
+        return await _tempFunc()
+    }
+    `;
+    window.context_functions[fname] = func_defn;
+    return fname
+}
 
 function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtleboxfound=false) {
     let named_nodes = [];
@@ -181,7 +222,7 @@ function extractArgs(doitBoxNode) {
     return args
 }
 let eval_in_place_string = `async function eval_in_place(estring) {
-        eval(estring)
+        return eval(estring)
     }
 `;
 
@@ -304,6 +345,9 @@ function getNameType(token, context, allow_other=false) {
     else if (Object.keys(context.js_boxes).includes(token)) {
         return "user_js"
     }
+    else if (["tell", "ask"].includes(token)) {
+        return "boxer_tell"
+    }
     else if (context.input_names.includes(token)) {
         return "input_name"
     }
@@ -326,7 +370,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
     if (typeof(first_node) == "object") {
         if (first_node.kind == "doitbox") {
             let fstring = convertStatementList(first_node.line_list, virtualNodeTree, context, true);
-            first_token = `(()=>{${fstring}})()\n`
+            first_token = `await (async ()=>{${fstring}})()\n`
         }
         else if (first_node.line_list.length == 1) {
             let first_line = first_node.line_list[0];
@@ -445,6 +489,13 @@ function consumeAndConvertNextStatementList(consuming_line, virtualNodeTree, con
     }
 }
 
+
+function jsBoxToString(jsbox) {
+    return `
+    async function ${jsbox.name} {${jsbox.the_code}}
+    `
+}
+
 function dataBoxToString(dbox) {
     if (dbox.line_list.length == 1){
         let the_line = dbox.line_list[0];
@@ -471,6 +522,27 @@ function dataBoxToString(dbox) {
     }
 }
 
+function convertTell(token_list, virtualNodeTree, context, is_last_line) {
+    let startBox = context.data_boxes[token_list[1]];
+    let box_id = startBox.unique_id;
+    let the_node;
+    if (typeof(token_list[2]) == "object") {
+        the_node = token_list[2]
+    }
+    else {
+        the_node = window.newTextNode(token_list[2]);
+    }
+    let the_code_line = window.newLineNode([the_node]);
+    let _fname = _createLocalizedFunctionCall(the_code_line, box_id, window.getBaseNode(), false);
+
+    if (is_last_line) {
+        return `return await ${_fname}()`
+    }
+    else{
+        return `${_fname}()`
+    }
+}
+
 function convertStatementLine(token_list, virtualNodeTree, context, is_last_line=false) {
     if (token_list.length == 0){
         return ""
@@ -483,7 +555,7 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
         }
         else if (statement_name.kind == "doitbox") {
             let fstring = convertStatementList(statement_name.line_list, virtualNodeTree, context, true);
-            return `(()=>{${fstring}})()\n` + convertStatementLine(consuming_line.slice(1,), virtualNodeTree, context, true)
+            return `return await (async ()=>{${fstring}})()\n` + convertStatementLine(consuming_line.slice(1,), virtualNodeTree, context, true)
         }
         else {
             return ""
@@ -502,6 +574,9 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
     }
     else if (statement_type == "boxer_statement"){
         args = boxer_statements[statement_name].args
+    }
+    else if (statement_type == "boxer_tell") {
+        return convertTell(token_list, virtualNodeTree, context, is_last_line)
     }
     else {
         if (is_last_line && statement_type != "boxer_statement") {
