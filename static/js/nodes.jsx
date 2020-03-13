@@ -12,6 +12,7 @@ import {ReactCodemirror} from "./react-codemirror.js";
 import {doExecution} from "./eval_space.js";
 import {TurtleBox} from "./turtle.js";
 import {P5TurtleBox} from "./p5turtle.js"
+import {PixiTurtleBox} from "./pixiturtle.js"
 import {DragHandle} from "./resizing_layouts.js"
 
 export {DataBox}
@@ -1009,6 +1010,20 @@ class DataboxLine extends React.Component {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
                 return (
                     <P5TurtleBox key={the_node.unique_id}
+                               selected={the_node.selected}
+                               ref={window.turtle_box_refs[the_node.unique_id]}
+                               //name={the_node.name}
+                               fixed_width={the_node.fixed_width ? the_node.fixed_width : 300}
+                               fixed_height={the_node.fixed_height ? the_node.fixed_height : 300}
+                               funcs={this.props.funcs}
+                               unique_id={the_node.unique_id}
+                               closed={the_node.closed}/>
+                )
+            }
+            else if (the_node.kind == "pixiturtlebox") {
+                this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
+                return (
+                    <PixiTurtleBox key={the_node.unique_id}
                                selected={the_node.selected}
                                ref={window.turtle_box_refs[the_node.unique_id]}
                                //name={the_node.name}

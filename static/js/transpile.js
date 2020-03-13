@@ -63,7 +63,7 @@ function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtlebox
                     }
 
                 }
-                if (!turtleboxfound && (node.kind == "turtlebox" || node.kind == "p5turtlebox")) {
+                if (!turtleboxfound && (node.kind == "turtlebox" || node.kind == "p5turtlebox" || node.kind == "pixiturtlebox")) {
                     current_turtle_id = node.unique_id;
                     turtleboxfound = true
                 }
@@ -138,7 +138,8 @@ function _getMatchingNode(uid, node) {
     if (node.unique_id == uid) {
             return node
     }
-    if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind == "turtlebox") || (node.kind == "p5turtlebox") || (node.line_list.length == 0)) {
+    if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind == "turtlebox") || (node.kind == "pixiturtlebox")
+        || (node.kind == "p5turtlebox") || (node.line_list.length == 0)) {
         return false
     }
     for (let lin of node.line_list) {

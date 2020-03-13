@@ -1,7 +1,7 @@
 import React from "react";
 import Sketch from "react-p5";
 import PropTypes from 'prop-types';
-import {doBinding, extractText, isNormalInteger} from "./utilities.js";
+import {doBinding, extractText, isNormalInteger, degreesToRadians} from "./utilities.js";
 import {DragHandle} from "./resizing_layouts";
 // import {DragHandle} from "./resizing_layouts";
 export {P5TurtleBox}
@@ -37,6 +37,7 @@ class P5TurtleBox extends React.Component {
         this.pen_width = 1;
         this.pen_color = 0;
         this.sprite_size = 1;
+        this.turtle_bounds = null
     }
 
 
@@ -118,7 +119,7 @@ class P5TurtleBox extends React.Component {
     }
 
     _postDraw(draw_turtle=true) {
-        // this.savedImage = this.p5.get();
+        //this.p5.drawingContext.drawImage(this.bgp5.canvas, 0, 0, this.props.fixed_width, this.props.fixed_height, 0, 0, this.props.fixed_width, this.props.fixed_height);
         this.p5.copy(this.bgp5.get(), 0, 0, this.props.fixed_width, this.props.fixed_height, 0, 0, this.props.fixed_width, this.props.fixed_height);
         if (draw_turtle) {
             this._drawTurtle();
@@ -294,8 +295,9 @@ class P5TurtleBox extends React.Component {
         let minX = -1 * maxX;
         let maxY = this.props.fixed_height / 2;
         let minY = -1 * maxY;
-        let cosAngle = this.p5.cos(this.heading);
-        let sinAngle = this.p5.sin(this.heading);
+        let h_radians = degreesToRadians(this.heading);
+        let cosAngle = Math.cos(h_radians);
+        let sinAngle = Math.sin(h_radians);
         let x = this.x;
         let y = this.y;
         let self = this;
@@ -360,8 +362,11 @@ class P5TurtleBox extends React.Component {
             this.p5.push();
             this.p5.translate(cx, cy);
             this.p5.rotate(this.heading);
-            this.p5.copy(this.tp5.get(), 0, 0, this.props.fixed_width, this.props.fixed_height,
-                -1 * this.tx, -1 * this.ty, this.props.fixed_width, this.props.fixed_height);
+            this.p5.copy(this.tp5.get(),
+                this.turtle_bounds.min_x, this.turtle_bounds.min_y,
+                this.turtle_bounds.dw, this.turtle_bounds.dh,
+                -1 * this.tx + this.turtle_bounds.min_x, -1 * this.ty + this.turtle_bounds.min_y,
+                this.turtle_bounds.dw, this.turtle_bounds.dh);
             this.p5.pop()
         }
     }
@@ -369,7 +374,6 @@ class P5TurtleBox extends React.Component {
     _setup(p5, canvasParentRef) {
         this.p5 = p5;
         this.canvasParentRef = canvasParentRef;
-
         p5.createCanvas(this.props.fixed_width, this.props.fixed_height).parent(canvasParentRef); // use parent to render canvas in this ref (without that p5 render this canvas outside your component)
         p5.background(this.bgcolor);
         p5.angleMode(p5.DEGREES);
@@ -394,12 +398,18 @@ class P5TurtleBox extends React.Component {
         let w = 10;
         let h = 15;
         p5.noFill();
-        let f = this.sprite_size
+        let f = this.sprite_size;
         p5.triangle(
             x - f * w / 2, y + f * h / 2,
             x, y - f * h / 2,
             x + f * w / 2, y + f * h / 2
         );
+        this.turtle_bounds = {
+            min_x: x - f * w / 2,
+            dw: f * w,
+            min_y: y - f * h / 2,
+            dh: f * h
+        }
     }
 
     _tsetup(p5, canvasParentRef) {

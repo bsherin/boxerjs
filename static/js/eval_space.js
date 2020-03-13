@@ -7,7 +7,7 @@ export {doExecution}
 var _name_index;
 var _base_node;
 
-let delay_amount = 30;
+let delay_amount = 1;
 
 
 function changeNodePromise(uid, param_name, new_val) {
@@ -93,7 +93,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
         } else {
             return new Promise(function (resolve, reject) {
                 window.changeNode(mnode.unique_id, "line_list", _newval.line_list, async (data) => {
-                    await delay(300);
+                    await delay(delay_amount);
                     resolve(data)
                 })
             })
@@ -131,7 +131,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
 }
 
 async function redisplay() {
-    await delay(300)
+    await delay(delay_amount)
 }
 
 async function forward(steps) {

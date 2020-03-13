@@ -1,8 +1,8 @@
 
 import _ from "lodash";
 
-export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual,
-    arraysMatch, remove_duplicates, extractText, isNormalInteger}
+export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, rgbToHex,
+    arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians}
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -11,6 +11,10 @@ function doBinding(obj, seq = "_") {
             obj[key] = obj[key].bind(obj);
         }
     }
+}
+
+function degreesToRadians(deg) {
+    return deg * Math.PI / 180
 }
 
 function extractText(abox) {
@@ -47,6 +51,16 @@ function isString (value) {
 
 function isNormalInteger(str) {
     return /^\+?(0|[1-9]\d*)$/.test(str);
+}
+
+function componentToHex(c) {
+  var hex = c.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+
+function rgbToHex(r, g, b) {
+    return r * 65536 + g * 256 + b;
+  // return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
 }
 
 function arraysMatch (arr1, arr2) {

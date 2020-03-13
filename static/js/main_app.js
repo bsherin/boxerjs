@@ -138,7 +138,7 @@ class MainApp extends React.Component {
         if (node.unique_id == uid) {
             return node;
         }
-        if (node.kind == "text" || node.kind == "jsbox" || node.kind == "turtlebox" || node.kind == "p5turtlebox" || node.line_list.length == 0) {
+        if (node.kind == "text" || node.kind == "jsbox" || node.kind == "turtlebox" || node.kind == "p5turtlebox" || node.kind == "pixiturtlebox" || node.line_list.length == 0) {
             return false;
         }
         for (let lin of node.line_list) {
@@ -313,6 +313,19 @@ class MainApp extends React.Component {
             this.setState({ base_node: new_base });
         }
     }
+    _insertPixiTurtleBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newTurtleBox();
+        new_node.kind = "pixiturtlebox";
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
 
     _insertTurtleBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
         if (new_base == null) {
@@ -328,7 +341,7 @@ class MainApp extends React.Component {
     }
 
     _insertTurtleBoxLastFocus() {
-        this._insertP5TurtleBoxinText(this.last_focus_id, this.last_focus_pos);
+        this._insertPixiTurtleBoxinText(this.last_focus_id, this.last_focus_pos);
     }
 
     _insertDataBoxLastFocus() {
@@ -484,6 +497,10 @@ class MainApp extends React.Component {
         return tb1.width == tb2.width && tb1.height == tb2.height;
     }
 
+    _comparePixiTurtleBoxes(tb1, tb2) {
+        return tb1.width == tb2.width && tb1.height == tb2.height;
+    }
+
     _eqTest(obj1, obj2) {
         if (obj1.kind != obj2.kind) {
             return false;
@@ -501,6 +518,9 @@ class MainApp extends React.Component {
             return this._compareTurtleBoxes(obj1, obj2);
         }
         if (obj2.kind == "p5turtlebox") {
+            return this._compareP5TurtleBoxes(obj1, obj2);
+        }
+        if (obj2.kind == "pixiturtlebox") {
             return this._compareP5TurtleBoxes(obj1, obj2);
         } else {
             return this._compareLines(obj1, obj2);
