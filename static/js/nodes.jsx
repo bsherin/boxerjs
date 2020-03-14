@@ -101,6 +101,14 @@ class TextNode extends React.Component {
             currentlyDeleting = true;
             return
         }
+        if (event.key == "k") {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                let caret_pos = getCaretPosition(this.iRef);
+                this.props.funcs.deleteToLineEnd(this.props.unique_id, caret_pos)
+            }
+            return
+        }
         currentlyDeleting = false;
         if (event.key == "Enter") {
             event.preventDefault();

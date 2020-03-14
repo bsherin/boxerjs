@@ -422,6 +422,17 @@ class MainApp extends React.Component {
             }
         }
     }
+    _removeLine(uid, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        let mline = this._getMatchingNode(uid, new_base);
+        let parent_box = this._getMatchingNode(mline.parent, new_base);
+        parent_box.line_list.splice(mline.position, 1);
+        if (update) {
+            this.setState({ base_node: new_base }, callback);
+        }
+    }
 
     _removeNode(uid, new_base = null, update = true, callback) {
         if (new_base == null) {
@@ -525,6 +536,28 @@ class MainApp extends React.Component {
         } else {
             return this._compareLines(obj1, obj2);
         }
+    }
+
+    _deleteToLineEnd(text_id, caret_pos) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(text_id, this.state.base_node);
+        let parent_line = this._getMatchingNode(mnode.parent, new_base);
+        if (caret_pos == 0) {
+            if (mnode.position == 0) {
+                this.clipboard = [_.cloneDeep(parent_line)];
+                this._removeLine(parent_line.unique_id, new_base);
+                this.setState({ base_node: new_base });
+            }
+        }
+        if (caret_pos < mnode.the_text.length - 1) {
+            this._splitTextAtPosition(text_id, caret_pos, new_base);
+        }
+        if (mnode.position == parent_line.node_list.length - 1) {
+            return;
+        }
+        let deleted_nodes = parent_line.node_list.splice(mnode.position + 1);
+        this.clipboard = [this._newLineNode(deleted_nodes)];
+        this.setState({ base_node: new_base });
     }
 
     _deletePrecedingBox(text_id, clearClipboard = true) {
@@ -1052,6 +1085,7 @@ class MainApp extends React.Component {
             insertDataBox: this._insertDataBoxinText,
             insertDoitBox: this._insertDoitBoxinText,
             deletePrecedingBox: this._deletePrecedingBox,
+            deleteToLineEnd: this._deleteToLineEnd,
             splitLineAtTextPosition: this._splitLineAtTextPosition,
             getParentId: this._getParentId,
             getNode: this._getNode,
