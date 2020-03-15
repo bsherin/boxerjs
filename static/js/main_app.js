@@ -1009,6 +1009,7 @@ class MainApp extends React.Component {
             if (updated_lines.length > 2) {
                 this._insertLines(updated_lines.slice(1, updated_lines.length - 1), targetBox.unique_id, targetLine.position + 1, new_base, false);
             }
+            this._renumberNodes(targetBox.line_list);
         }
         let self = this;
         if (update) {
