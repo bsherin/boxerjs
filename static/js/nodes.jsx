@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 
 import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition, guid} from "./utilities.js";
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes} from "./utilities.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
@@ -87,20 +87,10 @@ class TextNode extends React.Component {
     }
 
     _handleKeyDown(event) {
-        if (event.key == "Backspace") {
-            let caret_pos = getCaretPosition(this.iRef);
-            if (caret_pos == 0){
-                event.preventDefault();
-                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting);
-
-            }
-            else {
-                let new_node = this.props.funcs.newTextNode(this.props.the_text.charAt(caret_pos - 1));
-                this.props.funcs.addToClipboardStart(new_node, !currentlyDeleting);
-            }
-            currentlyDeleting = true;
+        if (["Control", "Shift", "Meta"].includes(event.key)) {
             return
         }
+
         if (event.key == "k") {
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
@@ -109,36 +99,40 @@ class TextNode extends React.Component {
             }
             return
         }
-        currentlyDeleting = false;
-        if (event.key == "Enter") {
-            event.preventDefault();
-            if (event.ctrlKey || event.metaKey) {
-                this._runMe();
-            }
-            else {
-                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
-            }
 
+        if (event.ctrlKey || event.shiftKey || event.metaKey || event.altKey) {
             return
         }
-        if (event.key =="]") {
+
+        if (event.key == "Escape") {
             event.preventDefault();
-            this.props.funcs.positionAfterBox(this._myLine().parent);
-            return
+            this.props.funcs.clearSelected();
         }
-        if (event.key == "ArrowUp") {
-            event.preventDefault();
-            let my_line = this._myLine();
-            if (my_line.position == 0) {
-                this.props.funcs.focusName()
+        if (event.key == "Backspace") {
+            if (this.props.funcs.boxer_selected) {
+                event.preventDefault();
+                this.props.funcs.deleteBoxerSelection();
+                return;
+            }
+            let caret_pos = getCaretPosition(this.iRef);
+            if (caret_pos == 0){
+                event.preventDefault();
+                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting);
             }
             else {
-                let myDataBox = this._myBox();
-                let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+                let the_text = window.getSelection().toString();
+                if (the_text) {
+                    this.props.funcs.copyTextToClipboard()
+                }
+                else {
+                    let new_node = this.props.funcs.newTextNode(this.props.the_text.charAt(caret_pos - 1));
+                    this.props.funcs.addToClipboardStart(new_node, !currentlyDeleting);
+                }
             }
+            currentlyDeleting = true;
             return
         }
+        this.props.funcs.clearSelected();
         if (event.key == "ArrowDown") {
             event.preventDefault();
             let my_line = this._myLine();
@@ -181,6 +175,38 @@ class TextNode extends React.Component {
                 }
             }
         }
+
+        currentlyDeleting = false;
+        if (event.key == "Enter") {
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                this._runMe();
+            }
+            else {
+                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
+            }
+
+            return
+        }
+        if (event.key =="]") {
+            event.preventDefault();
+            this.props.funcs.positionAfterBox(this._myLine().parent);
+            return
+        }
+        if (event.key == "ArrowUp") {
+            event.preventDefault();
+            let my_line = this._myLine();
+            if (my_line.position == 0) {
+                this.props.funcs.focusName()
+            }
+            else {
+                let myDataBox = this._myBox();
+                let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            }
+            return
+        }
+
     }
 
     _myNode() {
@@ -209,11 +235,22 @@ class TextNode extends React.Component {
         $(this.iRef).off("mousedown");
 
         // This mousedown listener is necessary to prevent selection of text on doubleclick
-        $(this.iRef).mousedown(function(e) {
-            if (e.detail > 1) {
-                e.preventDefault();
+        $(this.iRef).mousedown(function(event) {
+
+            if (event.shiftKey) {
+                let sel = selectedAcrossBoxes(self.iRef);
+                if (sel) {
+                    event.preventDefault();
+                    let start_id = sel[0];
+                    let end_id = sel[1];
+                    self.props.funcs.selectSpan(start_id, end_id);
+                }
             }
-        })
+            else if (event.detail > 1) {
+                event.preventDefault();
+            }
+        });
+
     }
 
     componentDidMount () {
@@ -222,6 +259,7 @@ class TextNode extends React.Component {
     }
 
     componentDidUpdate () {
+
         this._setFocusIfRequired();
         this._listen_for_clicks();
     }
@@ -982,6 +1020,7 @@ class DataboxLine extends React.Component {
                               funcs={this.props.funcs}
                               unique_id={the_node.unique_id}
                               setFocus={the_node.setFocus}
+                              setEndSelection={the_node.setEndSelection}
                               the_text={the_node.the_text}/>
                 )
             }

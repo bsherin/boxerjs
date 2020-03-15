@@ -2,7 +2,8 @@
 import _ from "lodash";
 
 export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, rgbToHex,
-    arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians}
+    arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians, selectedAcrossBoxes}
+
 
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
@@ -77,6 +78,7 @@ function arraysMatch (arr1, arr2) {
 
 }
 
+
 function remove_duplicates (arrArg) {
   return arrArg.filter((elem, pos, arr) => {
     return arr.indexOf(elem) == pos;
@@ -97,25 +99,50 @@ function guid() {
 
 function getCaretPosition(editableDiv) {
   var caretPos = 0,
-    sel, range;
+      sel, range;
   if (window.getSelection) {
-    sel = window.getSelection();
-    if (sel.rangeCount) {
-      range = sel.getRangeAt(0);
-      if (range.commonAncestorContainer.parentNode == editableDiv) {
-        caretPos = range.endOffset;
+      sel = window.getSelection();
+      if (sel.rangeCount) {
+          range = sel.getRangeAt(0);
+          if (range.commonAncestorContainer.parentNode == editableDiv) {
+            caretPos = range.endOffset;
+          }
       }
-    }
-  } else if (document.selection && document.selection.createRange) {
-    range = document.selection.createRange();
-    if (range.parentElement() == editableDiv) {
-      var tempEl = document.createElement("span");
-      editableDiv.insertBefore(tempEl, editableDiv.firstChild);
-      var tempRange = range.duplicate();
-      tempRange.moveToElementText(tempEl);
-      tempRange.setEndPoint("EndToEnd", range);
-      caretPos = tempRange.text.length;
-    }
+  }
+  else if (document.selection && document.selection.createRange) {
+      range = document.selection.createRange();
+
+      if (range.parentElement() == editableDiv) {
+          var tempEl = document.createElement("span");
+          editableDiv.insertBefore(tempEl, editableDiv.firstChild);
+          var tempRange = range.duplicate();
+          tempRange.moveToElementText(tempEl);
+          tempRange.setEndPoint("EndToEnd", range);
+          caretPos = tempRange.text.length;
+      }
   }
   return caretPos;
+}
+
+function selectedAcrossBoxes(editableDiv) {
+    let range;
+    let sel;
+  let snode;
+  if (window.getSelection) {
+      sel = window.getSelection();
+      if (sel.rangeCount) {
+          range = sel.getRangeAt(0);
+
+          if (range.commonAncestorContainer.className && range.commonAncestorContainer.className.includes("editable")) {
+              snode =range.commonAncestorContainer  // will be the case if it has no text
+          }
+          else {
+              snode = range.commonAncestorContainer.parentNode
+          }
+          if (snode == editableDiv) {
+            return null
+          }
+      }
+  }
+  return [snode.id, editableDiv.id]
 }

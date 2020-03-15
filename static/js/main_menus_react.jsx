@@ -219,17 +219,17 @@ class BoxMenu extends React.Component {
             "Insert Doit Box": this._new_doitbox,
             "Insert JS Box": this._new_jsbox,
             "Insert Turtle Box": this._new_turtlebox,
-            "Name Box": this._name_box,
-            "Unfix Size": this.props.unfixSizeLastFocus
+            "Edit Box Name": this._name_box,
+            "Unfix Box Size": this.props.unfixSizeLastFocus
         }
     }
 
     get icon_dict () {
         return {
             "Insert Data Box": "box",
-            "Insert Doit Box": "box",
-            "Insert JS Box": "box",
-            "Insert Turtle Box": "box",
+            "Insert Doit Box": "code",
+            "Insert JS Box": "code",
+            "Insert Turtle Box": "media",
             "Name Box": "label",
             "Unfix Size":"undo"
         }
@@ -266,26 +266,48 @@ class EditMenu extends React.Component {
         doBinding(this)
     }
 
-    _past(event) {
+    _paste(event) {
         this.props.insertClipboardLastFocus();
+    }
+
+    _cut(event) {
+        this.props.cutSelected();
+    }
+
+    _copy(event) {
+        this.props.copySelected()
+    }
+
+    _undo(event) {
+        this.props.undo()
     }
 
 
     get option_dict () {
         return {
+            "Cut": this._cut,
+            "Copy": this._copy,
             "Paste": this._paste,
+            "Undo": this._undo,
         }
     }
 
     get icon_dict () {
         return {
-            "Paste": "box",
+            "Cut": "cut",
+            "Copy": "duplicate",
+            "Paste": "clipboard",
+            "Undo": "undo"
+
         }
     }
 
     get label_dict() {
         return {
+            "Cut": "ctr+x",
+            "Copy": "ctrl+v",
             "Paste": "ctrl+v",
+            "Undo": "ctrl+z"
         }
 
     }

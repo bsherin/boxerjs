@@ -428,9 +428,13 @@ class PixiTurtleBox extends React.Component {
     render() {
         let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
         let [tx, ty] = this._cxy();
+        let dbclass = "data-box turtle-box";
+        if (this.props.selected) {
+            dbclass += " selected"
+        }
         return (
             <div className="data-box-outer">
-                <div className="data-box turtle-box">
+                <div className={dbclass}>
                   <Stage width={this.props.fixed_width}
                          height={this.props.fixed_height}
                   >

@@ -76,6 +76,9 @@ class MainApp extends React.Component {
             this.state.base_node = base_node;
         }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
+        this.state.boxer_selected = false;
+        this.state.select_parent = null;
+        this.state.select_range = null;
         this.last_focus_id = null;
         this.last_focus_pos = null;
         this.state.innerWidth = window.innerWidth;
@@ -578,7 +581,9 @@ class MainApp extends React.Component {
         }
         let deleted_nodes = parent_line.node_list.splice(mnode.position + 1,);
         this.clipboard = [this._newLineNode(deleted_nodes)];
-        this.setState({base_node: new_base})
+        this.setState({base_node: new_base},()=>{
+            this._clearSelected()
+        })
     }
 
     _deletePrecedingBox(text_id, clearClipboard=true) {
@@ -893,7 +898,10 @@ class MainApp extends React.Component {
     }
 
 
-    _clearSelected(node=null, new_base=null, callback=null) {
+    _clearSelected(node=null, new_base=null, callback=null, force=true) {
+        if (!this.state.boxer_selected && !force) {
+            return
+        }
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -908,15 +916,28 @@ class MainApp extends React.Component {
             lin.selected = false;
             for (let nd of lin.node_list) {
                 nd.selected = false;
-                if (nd.kind == "databox" || nd.kind == "doitbox") {
+                if (nd.kind == "databox" || nd.kind == "doitbox" || nd.kind == "line") {
                     this._clearSelected(nd, new_base)
                 }
             }
         }
         if (new_base) {
-            this.setState({base_node: new_base}, callback)
+            this.setState({base_node: new_base, boxer_selected: false}, callback)
         }
-        return false
+    }
+
+    _selectChildren(node) {
+        node.selected = true;
+        if (node.kind == "line") {
+            for (let child of node.node_list) {
+                this._selectChildren(child)
+            }
+        }
+        else if (node.kind == "databox" || node.kind == "doitbox") {
+            for (let child of node.line_list) {
+                this._selectChildren(child)
+            }
+        }
     }
 
     _setSelected(id_list) {
@@ -1070,6 +1091,7 @@ class MainApp extends React.Component {
         }
         let self = this;
         if (update) {
+            this._clearSelected(null, new_base, null, true);
             this.setState({base_node: new_base}, positionCursor)
         }
         else{
@@ -1105,7 +1127,11 @@ class MainApp extends React.Component {
     }
 
 
-    _copyTextToClipboard() {
+    _copySelected() {
+        if (this.state.boxer_selected) {
+            this._copyBoxerSelection();
+            return
+        }
         let the_text = window.getSelection().toString();
         if (!the_text) {
             return
@@ -1121,6 +1147,162 @@ class MainApp extends React.Component {
 
     _setTurtleRef(uid, ref) {
         window.turtle_box_refs[uid] = ref
+    }
+
+    _findParents(node_id, base_node=null) {
+        if (!base_node) {
+            base_node = this.state.base_node
+        }
+        let mnode = this._getMatchingNode(node_id, base_node);
+        let parents = [mnode.unique_id];
+        let par = mnode.parent;
+        while (par) {
+            parents.push(par);
+            mnode = this._getMatchingNode(par, base_node);
+            par = mnode.parent
+        }
+        return parents
+    }
+
+    _deleteSelectedChildren(start_node, base_node) {
+        if (start_node.hasOwnProperty("node_list")) {
+            let new_node_list = [];
+            for (let node of start_node.node_list) {
+                if (!node.selected) {
+                    new_node_list.push(node)
+                }
+            }
+            start_node.node_list = new_node_list;
+            this._healLine(start_node);
+            for (let node of start_node.node_list) {
+                this._deleteSelectedChildren(node, base_node)
+            }
+        }
+        else if (start_node.hasOwnProperty("line_list")) {
+            let new_line_list = [];
+            for (let line of start_node.line_list) {
+                if (!line.selected) {
+                    new_line_list.push(line)
+                }
+            }
+            start_node.line_list = new_line_list;
+            this._renumberNodes(start_node.line_list);
+            for (let line of start_node.line_list) {
+                this._deleteSelectedChildren(line, base_node)
+            }
+        }
+    }
+
+    _cutSelected() {
+        if (this.state.boxer_selected) {
+            this._deleteBoxerSelection();
+            return
+        }
+        let sel = window.getSelection();
+        let the_text = sel.toString();
+        if (!the_text) {
+            return
+        }
+
+        let newTextNode = this._newTextNode(the_text);
+        this.clipboard = [this._newLineNode([newTextNode])];
+        let base_node = _.cloneDeep(this.state.base_node);
+        let tnode = this._getMatchingNode(sel.anchorNode.parentNode.id, base_node);
+        let start;
+        let num;
+        if (sel.anchorOffset < sel.focusOffset) {
+            start = sel.anchorOffset;
+            num = sel.focusOffset - start
+        }
+        if (sel.anchorOffset > sel.focusOffset) {
+            start = sel.focusOffset;
+            num = sel.anchorOffset - start
+        }
+        tnode.the_text = tnode.the_text.slice(0, start) + tnode.the_text.slice(start + num,);
+        this.setState({base_node: base_node})
+    }
+
+    _copyBoxerSelection() {
+        if (!this.state.boxer_selected) {
+            return
+        }
+        let select_parent_node = this._getMatchingNode(this.state.select_parent, this.state.base_node);
+        if (select_parent_node.kind == "line") {
+            let copied_nodes = select_parent_node.node_list.slice(this.state.select_range[0],
+                this.state.select_range[1] + 1);
+            this.clipboard = [this._newLineNode(_.cloneDeep(copied_nodes))]
+        }
+        else {
+            let copied_lines = selec_parent_node.line_list.slice(this.state.select_range[0],
+                this.state.select_range[1] + 1);
+            this.clipboard = [copied_lines];
+        }
+        this._clearSelected()
+    }
+
+    _deleteBoxerSelection() {
+        if (!this.state.boxer_selected) {
+            return
+        }
+        let base_node = _.cloneDeep(this.state.base_node);
+        let select_parent_node = this._getMatchingNode(this.state.select_parent, base_node);
+        let num_to_delete = this.state.select_range[1] - this.state.select_range[0] + 1;
+        if (select_parent_node.kind == "line") {
+            let deleted_nodes = select_parent_node.node_list.splice(this.state.select_range[0], num_to_delete);
+            this.clipboard = [this._newLineNode(_.cloneDeep(deleted_nodes))]
+        }
+        else {
+            this.clipboard = select_parent_node.line_list.splice(this.state.select_range[0], num_to_delete);
+
+        }
+
+        this.setState({base_node: base_node, boxer_selected: false})
+
+    }
+
+
+    _selectSpan(start_id, end_id) {
+        let base_node = _.cloneDeep(this.state.base_node);
+        let start_parents = this._findParents(start_id, base_node);
+        let end_parents = this._findParents(end_id, base_node);
+        let common_parent = null;
+        for (let par of start_parents) {
+            if (end_parents.includes(par)) {
+                common_parent = par;
+                break;
+            }
+        }
+        if (!common_parent) {
+            return null
+        }
+        let start_parent_id = start_parents[start_parents.indexOf(common_parent) - 1];
+        let end_parent_id = end_parents[end_parents.indexOf(common_parent) - 1];
+        let range;
+        let start_parent = this._getMatchingNode(start_parent_id, base_node);
+        let end_parent = this._getMatchingNode(end_parent_id, base_node);
+        if (start_parent.position > end_parent.position) {
+            range = [end_parent.position, start_parent.position]
+        }
+        else {
+            range = [start_parent.position, end_parent.position]
+        }
+        let cp = this._getMatchingNode(common_parent, base_node);
+        let nd_list;
+        if (cp.kind == "databox" || cp.kind == "doitbox" || cp.kind == "turtlebox") {
+            nd_list = cp.line_list
+        }
+        else {
+            nd_list = cp.node_list
+        }
+        for (let i = range[0]; i<=range[1]; ++i) {
+            this._selectChildren(nd_list[i])
+        }
+        this.setState({
+            base_node: base_node,
+            boxer_selected: true,
+            select_parent: common_parent,
+            select_range: range
+        })
     }
 
     get funcs () {
@@ -1145,6 +1327,8 @@ class MainApp extends React.Component {
             positionAfterBox: this._positionAfterBox,
             clearSelected: this._clearSelected,
             setSelected: this._setSelected,
+            selectSpan: this._selectSpan,
+            copySelected: this._copySelected,
             newTextNode: this._newTextNode,
             newDataBox: this._newDataBoxNode,
             newDoitBox: this._newDoitBoxNode,
@@ -1161,7 +1345,11 @@ class MainApp extends React.Component {
             openErrorDrawer: this.props.openErrorDrawer,
             updateIds: this._updateIds,
             setNodeSize: this._setNodeSize,
-            unfixSizeLastFocus: this._unfixSizeLastFocus
+            unfixSizeLastFocus: this._unfixSizeLastFocus,
+            boxer_selected: this.state.boxer_selected,
+            deleteBoxerSelection: this._deleteBoxerSelection,
+            cutSelected: this._cutSelected,
+            undo: this._undo
         };
         return funcs
     }
@@ -1176,7 +1364,7 @@ class MainApp extends React.Component {
                 />
                 <BoxMenu {...this.funcs}
                 />
-                <EditMenu {...EditMenu}
+                <EditMenu {...this.funcs}
                 />
                 <ViewMenu {...this.funcs}
                 />
@@ -1207,7 +1395,11 @@ class MainApp extends React.Component {
             }],
             [["ctrl+c", "command+c"], (e)=>{
                 e.preventDefault();
-                this._copyTextToClipboard()
+                this._copySelected()
+            }],
+            [["ctrl+x", "command+x"], (e)=>{
+                e.preventDefault();
+                this._cutSelected()
             }],
             [["ctrl+z", "command+z"], (e)=>{
                 e.preventDefault();
