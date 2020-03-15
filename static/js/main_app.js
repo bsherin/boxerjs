@@ -938,7 +938,7 @@ class MainApp extends React.Component {
         for (let lin of new_lines) {
             lin.parent = boxId;
         }
-        dbox.line_list.splice(position, 0, new_lines);
+        dbox.line_list.splice(position, 0, ...new_lines);
 
         if (update) {
             this.setState({ base_node: new_base });
@@ -1139,7 +1139,10 @@ class MainApp extends React.Component {
             this.clipboard = [this._newLineNode(_.cloneDeep(deleted_nodes))];
             this._healLine(select_parent_node);
             let focus_node;
-            if (start_spot == 0 || select_parent_node.node_list[start_spot].kind != "text") {
+            if (start_spot >= select_parent_node.node_list.length) {
+                focus_node = select_parent_node.node_list[select_parent_node.node_list.length - 1];
+                focus_node.setFocus = focus_node.the_text.length;
+            } else if (start_spot == 0 || select_parent_node.node_list[start_spot].kind != "text") {
                 focus_node = select_parent_node.node_list[start_spot + 1];
                 focus_node.setFocus = 0;
             } else {
@@ -1150,6 +1153,7 @@ class MainApp extends React.Component {
             this.clipboard = select_parent_node.line_list.splice(this.state.select_range[0], num_to_delete);
             let focus_node;
             let focus_line;
+            this._renumberNodes(select_parent_node.line_list);
             if (this.state.select_range[0] >= select_parent_node.line_list.length) {
                 focus_line = select_parent_node.line_list[this.state.select_range[0] - 1];
                 focus_node = focus_line.node_list[focus_line.node_list.length - 1];
@@ -1157,7 +1161,7 @@ class MainApp extends React.Component {
             } else {
                 focus_line = select_parent_node.line_list[this.state.select_range[0]];
                 focus_node = focus_line.node_list[0];
-                focus_node.setFocus = focus_node.the_text[0];
+                focus_node.setFocus = 0;
             }
         }
 
