@@ -258,7 +258,7 @@ class PixiTurtleBox extends React.Component {
     }
 
     _dot() {
-        this._stampRectangle(this.state.penWdth, this.state.penWidth)
+        this._stampRectangle(this.state.penWidth, this.state.penWidth)
     }
 
     _stampEllipse(w, h, hollow=false) {

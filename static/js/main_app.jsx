@@ -150,7 +150,7 @@ class MainApp extends React.Component {
         if (node.unique_id == uid) {
             return node
         }
-        if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind == "turtlebox") || (node.kind == "p5turtlebox") || (node.kind == "pixiturtlebox")
+        if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind.includes("turtlebox"))
             || (node.line_list.length == 0)) {
             return false
         }
@@ -309,42 +309,17 @@ class MainApp extends React.Component {
         }
         new_node.line_list[0].node_list[0].setFocus = 0;
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        let self = this;
         if (update) {
-            this.setState({base_node: new_base})
+            this.setState({base_node: new_base}, ()=>{
+                self._clearSelected()
+            })
         }
     }
     
     _insertDoitBoxinText(text_id, cursor_position, new_base=null, update=true) {
         this._insertDataBoxinText(text_id, cursor_position, new_base, update, true)
     }
-
-    _insertP5TurtleBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newTurtleBox();
-        new_node.kind = "p5turtlebox";
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-    }
-    _insertPixiTurtleBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newTurtleBox();
-        new_node.kind = "pixiturtlebox";
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({base_node: new_base})
-        }
-    }
-
 
     _insertTurtleBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
         if (new_base == null) {
@@ -360,7 +335,7 @@ class MainApp extends React.Component {
     }
 
     _insertTurtleBoxLastFocus() {
-        this._insertPixiTurtleBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos)
     }
 
 
@@ -526,13 +501,6 @@ class MainApp extends React.Component {
     _compareTurtleBoxes(tb1, tb2) {
         return tb1.width == tb2.width && tb1.height == tb2.height
     }
-    _compareP5TurtleBoxes(tb1, tb2) {
-        return tb1.width == tb2.width && tb1.height == tb2.height
-    }
-
-    _comparePixiTurtleBoxes(tb1, tb2) {
-        return tb1.width == tb2.width && tb1.height == tb2.height
-    }
 
 
     _eqTest(obj1, obj2) {
@@ -548,15 +516,10 @@ class MainApp extends React.Component {
         if (obj2.kind == "jsbox") {
             return this._compareJsBoxes(obj1, obj2)
         }
-        if (obj2.kind == "turtlebox") {
+        if (obj2.kind.includes("turtlebox")) {
             return this._compareTurtleBoxes(obj1, obj2)
         }
-        if (obj2.kind == "p5turtlebox") {
-            return this._compareP5TurtleBoxes(obj1, obj2)
-        }
-        if (obj2.kind == "pixiturtlebox") {
-            return this._compareP5TurtleBoxes(obj1, obj2)
-        }
+
         else {
             return this._compareLines(obj1, obj2)
         }
@@ -1164,35 +1127,6 @@ class MainApp extends React.Component {
         return parents
     }
 
-    _deleteSelectedChildren(start_node, base_node) {
-        if (start_node.hasOwnProperty("node_list")) {
-            let new_node_list = [];
-            for (let node of start_node.node_list) {
-                if (!node.selected) {
-                    new_node_list.push(node)
-                }
-            }
-            start_node.node_list = new_node_list;
-            this._healLine(start_node);
-            for (let node of start_node.node_list) {
-                this._deleteSelectedChildren(node, base_node)
-            }
-        }
-        else if (start_node.hasOwnProperty("line_list")) {
-            let new_line_list = [];
-            for (let line of start_node.line_list) {
-                if (!line.selected) {
-                    new_line_list.push(line)
-                }
-            }
-            start_node.line_list = new_line_list;
-            this._renumberNodes(start_node.line_list);
-            for (let line of start_node.line_list) {
-                this._deleteSelectedChildren(line, base_node)
-            }
-        }
-    }
-
     _cutSelected() {
         if (this.state.boxer_selected) {
             this._deleteBoxerSelection();
@@ -1219,6 +1153,7 @@ class MainApp extends React.Component {
             num = sel.anchorOffset - start
         }
         tnode.the_text = tnode.the_text.slice(0, start) + tnode.the_text.slice(start + num,);
+        tnode.setFocus = start;
         this.setState({base_node: base_node})
     }
 
@@ -1248,18 +1183,40 @@ class MainApp extends React.Component {
         let select_parent_node = this._getMatchingNode(this.state.select_parent, base_node);
         let num_to_delete = this.state.select_range[1] - this.state.select_range[0] + 1;
         if (select_parent_node.kind == "line") {
-            let deleted_nodes = select_parent_node.node_list.splice(this.state.select_range[0], num_to_delete);
-            this.clipboard = [this._newLineNode(_.cloneDeep(deleted_nodes))]
+            let start_spot = this.state.select_range[0]
+            let deleted_nodes = select_parent_node.node_list.splice(start_spot, num_to_delete);
+            this.clipboard = [this._newLineNode(_.cloneDeep(deleted_nodes))];
+            this._healLine(select_parent_node);
+            let focus_node;
+            if (start_spot == 0 || select_parent_node.node_list[start_spot].kind != "text") {
+                focus_node = select_parent_node.node_list[start_spot + 1];
+                focus_node.setFocus = 0
+                
+            }
+            else {
+                focus_node = select_parent_node.node_list[start_spot];
+                focus_node.setFocus = focus_node.the_text.length
+            }
+
         }
         else {
             this.clipboard = select_parent_node.line_list.splice(this.state.select_range[0], num_to_delete);
-
+            let focus_node;
+            let focus_line;
+            if (this.state.select_range[0] >= select_parent_node.line_list.length) {
+                focus_line = select_parent_node.line_list[this.state.select_range[0] - 1];
+                focus_node = focus_line.node_list[focus_line.node_list.length - 1];
+                focus_node.setFocus = focus_node.the_text.length
+            }
+            else {
+                focus_line = select_parent_node.line_list[this.state.select_range[0]];
+                focus_node = focus_line.node_list[0];
+                focus_node.setFocus = focus_node.the_text[0]
+            }
         }
 
         this.setState({base_node: base_node, boxer_selected: false})
-
     }
-
 
     _selectSpan(start_id, end_id) {
         let base_node = _.cloneDeep(this.state.base_node);

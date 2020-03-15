@@ -10,14 +10,14 @@ import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution} from "./eval_space.js";
-import {TurtleBox} from "./turtle.js";
-import {P5TurtleBox} from "./p5turtle.js"
 import {PixiTurtleBox} from "./pixiturtle.js"
 import {DragHandle} from "./resizing_layouts.js"
 
 export {DataBox}
 
 let currentlyDeleting = false;
+
+const resizeTolerance = 2;
 
 class TextNode extends React.Component {
     constructor (props) {
@@ -99,6 +99,19 @@ class TextNode extends React.Component {
             }
             return
         }
+        if (event.key == "Enter") {
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                this._runMe();
+            }
+            else {
+                currentlyDeleting = false;
+                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
+            }
+            // this.props.funcs.clearSelected();
+
+            return
+        }
 
         if (event.ctrlKey || event.shiftKey || event.metaKey || event.altKey) {
             return
@@ -122,7 +135,7 @@ class TextNode extends React.Component {
             else {
                 let the_text = window.getSelection().toString();
                 if (the_text) {
-                    this.props.funcs.copyTextToClipboard()
+                    this.props.funcs.copySelected()
                 }
                 else {
                     let new_node = this.props.funcs.newTextNode(this.props.the_text.charAt(caret_pos - 1));
@@ -177,17 +190,7 @@ class TextNode extends React.Component {
         }
 
         currentlyDeleting = false;
-        if (event.key == "Enter") {
-            event.preventDefault();
-            if (event.ctrlKey || event.metaKey) {
-                this._runMe();
-            }
-            else {
-                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
-            }
 
-            return
-        }
         if (event.key =="]") {
             event.preventDefault();
             this.props.funcs.positionAfterBox(this._myLine().parent);
@@ -540,7 +543,14 @@ class DataBox extends React.Component {
     _stopResize(e, ui, x, y, dx, dy) {
         let self = this;
         this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-            self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)})
+            if (dx < resizeTolerance && dy < resizeTolerance) {
+                self._setSize(false, false)
+            }
+            else {
+                self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
+            }
+        )
+
     }
 
     render() {
@@ -1039,35 +1049,7 @@ class DataboxLine extends React.Component {
                 )
             }
 
-            else if (the_node.kind == "turtlebox") {
-                this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
-                return (
-                    <TurtleBox key={the_node.unique_id}
-                               selected={the_node.selected}
-                               ref={window.turtle_box_refs[the_node.unique_id]}
-                               //name={the_node.name}
-                               fixed_width={the_node.fixed_width ? the_node.fixed_width : 300}
-                               fixed_height={the_node.fixed_height ? the_node.fixed_height : 300}
-                               funcs={this.props.funcs}
-                               unique_id={the_node.unique_id}
-                               closed={the_node.closed}/>
-                )
-            }
-            else if (the_node.kind == "p5turtlebox") {
-                this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
-                return (
-                    <P5TurtleBox key={the_node.unique_id}
-                               selected={the_node.selected}
-                               ref={window.turtle_box_refs[the_node.unique_id]}
-                               //name={the_node.name}
-                               fixed_width={the_node.fixed_width ? the_node.fixed_width : 300}
-                               fixed_height={the_node.fixed_height ? the_node.fixed_height : 300}
-                               funcs={this.props.funcs}
-                               unique_id={the_node.unique_id}
-                               closed={the_node.closed}/>
-                )
-            }
-            else if (the_node.kind == "pixiturtlebox") {
+            else if (the_node.kind.includes("turtlebox")) {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
                 return (
                     <PixiTurtleBox key={the_node.unique_id}
