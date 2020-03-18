@@ -850,7 +850,7 @@ class MainApp extends React.Component {
 
     }
 
-    _setSpriteParams(uid, pdict) {
+    _setSpriteParams(uid, pdict, callback=null) {
         let new_base = _.cloneDeep(this.state.base_node);
         let mnode = this._getMatchingNode(uid, new_base);
         for (let lin of mnode.line_list) {
@@ -860,7 +860,7 @@ class MainApp extends React.Component {
                 }
             }
         }
-        this.setState({base_node: new_base})
+        this.setState({base_node: new_base}, callback)
     }
 
     _newTurtleBox() {
@@ -943,9 +943,26 @@ class MainApp extends React.Component {
         let new_base = _.cloneDeep(this.state.base_node);
         let mnode = this._getMatchingNode(uid, new_base);
         if (mnode) {
-            mnode.fixed_size = true;
-            mnode.fixed_width = new_width;
-            mnode.fixed_height = new_height;
+            if (!mnode.new_width) {
+                mnode.fixed_size = false;
+                mnode.fixed_width = null;
+                mnode.fixed_height = null
+            }
+            else {
+                mnode.fixed_size = true;
+                mnode.fixed_width = new_width;
+                mnode.fixed_height = new_height;
+            }
+            this.setState({base_node: new_base}, callback)
+         }
+    }
+
+    _setGraphicsSize(uid, new_width, new_height, callback=null) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        if (mnode) {
+            mnode.graphics_fixed_width = new_width;
+            mnode.graphics_fixed_height = new_height;
             this.setState({base_node: new_base}, callback)
          }
     }
@@ -1489,6 +1506,7 @@ class MainApp extends React.Component {
             openErrorDrawer: this.props.openErrorDrawer,
             updateIds: this._updateIds,
             setNodeSize: this._setNodeSize,
+            setGraphicsSize: this._setGraphicsSize,
             unfixSizeLastFocus: this._unfixSizeLastFocus,
             boxer_selected: this.state.boxer_selected,
             deleteBoxerSelection: this._deleteBoxerSelection,

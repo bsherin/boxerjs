@@ -24,6 +24,10 @@ $search-highlight-color: yellow;
         border: 1px dashed black;
     }
 
+    &.sprite-box {
+        border-radius: 20px
+    }
+
     &.data-box-with-name {
         margin-top: 0
     }
@@ -63,6 +67,10 @@ $search-highlight-color: yellow;
         padding-left: 2px;
         padding-right: 2px;
         background-color: white;
+
+        &.clickable {
+            bottom: -3px
+        }
     }
 }
 
@@ -101,6 +109,7 @@ div[id^='selectableItem'] {
     &.doit-box {
         border-radius: 0
     }
+
     .closed-button-inner {
         border: none;
         background-color: lightgrey!important;
@@ -118,6 +127,10 @@ div[id^='selectableItem'] {
     padding-left: 2px!important;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+
+    &.sprite-name {
+        margin-left: 27px
+    }
 }
 
 .dragger {

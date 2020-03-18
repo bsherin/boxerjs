@@ -283,9 +283,9 @@ class SpriteBox extends React.Component {
 
     _moveForward(distance) {
         let sparams = this._getAllParams();
-        let maxX = this.props.fixed_width / 2;
+        let maxX = this.props.graphics_fixed_width / 2;
         let minX = -1 * maxX;
-        let maxY = this.props.fixed_height / 2;
+        let maxY = this.props.graphics_fixed_height / 2;
         let minY = -1 * maxY;
         let h_radians = degreesToRadians(sparams["heading"]);
         let cosAngle = Math.cos(h_radians);
@@ -328,7 +328,7 @@ class SpriteBox extends React.Component {
             function noWrap() {
                 self._moveTo(newX, newY, sparams["pen"]);
             }
-            if (this.do_wrap) {
+            if (self.props.do_wrap) {
                 if (newX > maxX)
                     xWrap(maxX, minX);
                 else if (newX < minX)
@@ -455,26 +455,35 @@ class GraphicsBox extends React.Component {
         this.setState({bgColor: color})
     }
 
+    _startResize(e, ui, startX, startY) {
+        let bounding_rect = this.boxRef.current.getBoundingClientRect();
+
+        let start_width = bounding_rect.width;
+        let start_height = bounding_rect.height;
+        this.setState({ resizing: true, dwidth: 0, dheight: 0,
+            startingWidth: start_width, startingHeight: start_height });
+    }
+
     _onResize(e, ui, x, y, dx, dy) {
         this.setState({dwidth: dx, dheight: dy})
     }
 
-    // _setSize(new_width, new_height) {
-    //     this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
-    // }
-    //
-    // _stopResize(e, ui, x, y, dx, dy) {
-    //     let self = this;
-    //     this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-    //         if (dx < resizeTolerance && dy < resizeTolerance) {
-    //             self._setSize(false, false)
-    //         }
-    //         else {
-    //             self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
-    //         }
-    //     )
-    //
-    // }
+    _setSize(new_width, new_height) {
+        this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
+    }
+
+    _stopResize(e, ui, x, y, dx, dy) {
+        let self = this;
+        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
+            if (dx < resizeTolerance && dy < resizeTolerance) {
+                self._setSize(false, false)
+            }
+            else {
+                self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
+            }
+        )
+
+    }
 
     render() {
         let type_label = "Data";
@@ -531,6 +540,17 @@ class GraphicsBox extends React.Component {
             if ((this.props.name != null) || this.state.focusingName) {
                 dbclass += " data-box-with-name"
             }
+            let gwidth;
+            let gheight;
+            if (this.state.resizing) {
+                gwidth = this.state.startingWidth + this.state.dwidth;
+                gheight = this.state.startingHeight + this.state.dheight;
+            }
+            else {
+                gwidth = this.props.graphics_fixed_width;
+                gheight = this.props.graphics_fixed_height;
+            }
+
             return (
                 <div className="data-box-outer">
                     <EditableTag the_name={this.props.name}
@@ -541,10 +561,10 @@ class GraphicsBox extends React.Component {
                              submitRef={this._submitNameRef}
                              boxId={this.props.unique_id}/>
                     <div className={dbclass} ref={this.boxRef}>
-                      <Stage width={this.props.graphics_fixed_width}
-                             height={this.props.graphics_fixed_height}
+                      <Stage width={gwidth}
+                             height={gheight}
                       >
-                          <Sprite width={this.props.graphics_fixed_width} height={this.props.graphics_fixed_height}
+                          <Sprite width={gwidth} height={gheight}
                                   texture={PIXI.Texture.WHITE}
                                   tint={this.state.bgColor} />
                           {sprite_components.length > 0 &&
@@ -963,8 +983,13 @@ class EditableTag extends React.Component {
             ceclass="bp3-text-overflow-ellipsis bp3-fill"
         }
 
+        let cname = "bp3-tag data-box-name";
+        if (this.props.am_sprite) {
+            cname += " sprite-name"
+        }
+
         return (
-            <span className="bp3-tag data-box-name" style={istyle}>
+            <span className={cname} style={istyle}>
                 <span> </span>
                 <ContentEditable className={ceclass}
                                  tagName="span"
@@ -989,8 +1014,13 @@ EditableTag.propTypes = {
     doneEditingName: PropTypes.func,
     focusingMe: PropTypes.bool,
     selected: PropTypes.bool,
-    boxWidth: PropTypes.number
+    boxWidth: PropTypes.number,
+    am_sprite: PropTypes.bool,
 };
+
+EditableTag.defaultProps = {
+    am_sprite: false
+}
 
 class DataBox extends React.Component {
     constructor (props) {
@@ -1012,7 +1042,7 @@ class DataBox extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextProps, this.props)
+        return this.state.resizing || !propsAreEqual(nextProps, this.props)
     }
 
     _handleChange(evt) {
@@ -1184,6 +1214,9 @@ class DataBox extends React.Component {
         if (this.props.kind == "doitbox") {
             dbclass = dbclass + " doit-box";
         }
+        else if (this.props.kind == "sprite") {
+            dbclass = dbclass + " sprite-box";
+        }
         if (this.props.selected) {
             dbclass = dbclass + " selected";
         }
@@ -1234,6 +1267,7 @@ class DataBox extends React.Component {
                                  focusingMe={this.state.focusingName}
                                  boxWidth={this.state.boxWidth}
                                  funcs={this.props.funcs}
+                                 am_sprite={this.props.kind == "sprite"}
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
@@ -1551,7 +1585,7 @@ class TypeLabel extends React.Component {
     render() {
         if (this.props.clickable) {
             return (
-                <button onClick={this._handleClick} className="type-label">{this.props.the_label}</button>
+                <button onClick={this._handleClick} className="type-label clickable">{this.props.the_label}</button>
             )
         }
         return (
