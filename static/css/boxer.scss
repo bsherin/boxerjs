@@ -10,7 +10,7 @@ $search-highlight-color: yellow;
     position: relative;  // Necessary so that close button is positioned relative to this
     overflow: hidden;
     padding: 5px;
-    margin: 3px 3px;
+    margin: 4px 4px;
     border: 1px solid black;
     min-width: 75px;
     border-radius: 5px;
@@ -20,7 +20,7 @@ $search-highlight-color: yellow;
         border: 1px solid black
     }
 
-    &.turtle-box {
+    &.transparent {
         border: 1px dashed black;
     }
 
@@ -84,7 +84,7 @@ div[id^='selectableItem'] {
 }
 
 .closed-data-box {
-    margin: 3px 3px;
+    margin: 4px 4px;
     display: block;
     width: 75px;
     height: 36px;
@@ -107,6 +107,9 @@ div[id^='selectableItem'] {
         height: 100%;
         width: 100%
 
+    }
+    &.transparent {
+        border: 1px dashed black;
     }
 }
 

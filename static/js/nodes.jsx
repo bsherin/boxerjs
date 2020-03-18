@@ -4,20 +4,585 @@ import PropTypes from "prop-types";
 
 import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition, guid, selectedAcrossBoxes} from "./utilities.js";
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, degreesToRadians, propsAreEqual} from "./utilities.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution} from "./eval_space.js";
-import {PixiTurtleBox} from "./pixiturtle.js"
 import {DragHandle} from "./resizing_layouts.js"
 
-export {DataBox}
+import {TriangleTurtle, Line, Rectangle, Ellipse} from "./pixi_shapes.js";
+import {Sprite, Stage, Text, AppConsumer} from "@inlet/react-pixi";
+import * as PIXI from "pixi.js";
+
+import {defaultBgColor, defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
+import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
+import {extractText} from "./utilities";
+
+export {DataBox, EditableTag}
 
 let currentlyDeleting = false;
 
 const resizeTolerance = 2;
+
+const sprite_params =[
+            "xPosition",
+            "yPosition",
+            "pen",
+            "shown",
+            "heading",
+            "spriteSize",
+            "penColor",
+            "penWidth",
+            "fontFamily",
+            "fontSize",
+            "fontStyle"
+    ];
+
+class SpriteBox extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+    }
+
+    _cX(x) {
+        let xcenter = this.props.graphics_fixed_width / 2;
+        return xcenter + x
+    }
+
+    _cY(y) {
+        let ycenter = this.props.graphics_fixed_height / 2;
+        return ycenter - y
+    }
+
+    _c(x, y) {
+        return [this._cX(x), this._cY(y)]
+    }
+
+    _turtleX() {
+        return this._getParam("xPosition")
+    }
+
+    _turtleY() {
+        return this._getParam("yPosition")
+    }
+
+    _cxy() {
+        return [this._cX(this._turtleX()), this._cY(this._turtleY())]
+    }
+
+    _myNode() {
+        return this.props.funcs.getNode(this.props.unique_id)
+    }
+
+    _extractValue(nd) {
+        let the_text = nd.line_list[0].node_list[0].the_text;
+        if (isNaN(the_text)){
+            if (the_text.toLowerCase() == "false") {
+                return false
+            }
+            else if (the_text.toLowerCase() == "true") {
+                return true
+            }
+            return the_text
+        }
+        else {
+            return eval(the_text)
+        }
+    }
+
+    _getParam(pname) {
+        let mnode = this._myNode();
+        for (let lin of mnode.line_list) {
+            for (let nd of lin.node_list) {
+                if (nd.name == pname) {
+                    return this._extractValue(nd)
+                }
+            }
+        }
+        return null
+    }
+
+    _getAllParams() {
+        let pdict = {};
+        let mnode = this._myNode();
+        for (let lin of mnode.line_list) {
+            for (let nd of lin.node_list) {
+                if (sprite_params.includes(nd.name)) {
+                    pdict[nd.name]  = this._extractValue(nd)
+                }
+            }
+        }
+        return pdict
+    }
+
+    _setMyParams(param_dict, callback) {
+        this.props.funcs.setSpriteParams(this.props.unique_id, param_dict, callback)
+    }
+
+    _clean() {
+        this.props.clearComponents();
+    }
+
+    _clear() {
+        this.props.clearComponents();
+        this._setMyParams({
+            xPosition: 0,
+            yPosition: 0,
+            pen: true,
+            shown: true,
+            heading: 0,
+            "spriteSize": 1,
+            "penColor": defaultPenColor,
+            "penWidth": defaultPenWidth,
+            "fontFamily": defaultFontFamily,
+            "fontSize": defaultFontSize,
+            "fontStyle": defaultFontStyle
+        })
+    }
+
+    _setHeading(deg) {
+        this._setMyParams({"heading": deg})
+    }
+
+    _right(deg) {
+        this._setHeading(this._getParam("heading") + deg)
+    }
+
+    _left(deg) {
+        this._setHeading(this._getParam("heading") - deg)
+    }
+
+    _penup() {
+        this._setMyParams({pen: false})
+    }
+
+    _pendown() {
+        this._setMyParams({pen: true})
+    }
+
+    _showTurtle() {
+        this._setMyParams({shown: true})
+    }
+
+    _hideTurtle() {
+        this._setMyParams({shown: false})
+    }
+
+    _stampRectangle(w, h, hollow=false) {
+        let sparams = this._getAllParams();
+        let new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]}
+                                   width={w} height={h} fill={hollow ? null : sparams["penColor"]}
+                                   fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_width}
+                                   penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}
+        />);
+        this.props.addComponent(new_comp)
+    }
+
+    _dot() {
+        let sparams = this._getAllParams();
+        this._stampRectangle(sparams.penWidth, sparams.penWidth)
+    }
+
+    _stampEllipse(w, h, hollow=false) {
+        let sparams = this._getAllParams();
+        let [tx, ty] = this._c(sparams.xPosition, sparams.yPosition);
+        let new_comp = (<Ellipse x={tx} y={ty} width={w} height={h} fill={hollow ? null : sparams.penColor}
+                                 penWidth={sparams.penWidth} penColor={sparams.penColor}
+        />);
+        this.props.addComponent(new_comp)
+    }
+
+    _getText(aboxorstring) {
+        let the_text = null;
+        if (typeof(aboxorstring) == "object") {
+            the_text = extractText(abox);
+        }
+        else if (typeof(aboxorstring) == "string") {
+            the_text = aboxorstring
+        }
+        else if (typeof(aboxorstring) == "number") {
+            the_text = aboxorstring
+        }
+        return the_text
+    }
+
+    _setGraphicsMode(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        if (the_text.toLowerCase() == "clip") {
+            this.props.setWrap(false);
+        }
+        else {
+            this.props.setWrap(true);
+        }
+    }
+
+    _setTypeFont(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        let [fname, fstyle, fsize] = the_text.trim().split(" ");
+        this._setMyParams({fontFamily: fname, fontStyle: fstyle, fontsize: parseInt(fsize)})
+    }
+
+
+    _setPenColor(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        let the_color_strings = the_text.trim().split(" ");
+        let pcolor = convertColorArg(the_color_strings);
+        this._setMyParams({penColor: pcolor});
+    }
+
+    _setBackgroundColor(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        let the_color_strings = the_text.trim().split(" ");
+        let bgcolor = convertColorArg(the_color_strings);
+        this.props.setBgColor(bgcolor)
+    }
+
+    _type(aboxorstring) {
+        let the_text = this._getText(aboxorstring);
+        if (!the_text) return;
+        let sparams = this._getAllParams();
+        const style = new PIXI.TextStyle({
+          fontFamily: sparams.fontFamily,
+          fontSize: sparams.fontSize,
+          fontStyle: sparams.fontStyle,
+        });
+        let [x, y] = this._c(sparams.xPosition, sparams.yPosition);
+        let new_comp =  (<Text x={x} y={y} align="center" text={the_text}/>);
+        this.props.addComponent(new_comp)
+    }
+
+    _setPenWidth(w) {
+        this._setMyParams({penWidth: w});
+    }
+    _moveTo(newX, newY, pdown=null, callback=null) {
+        let sparams = this._getAllParams();
+        if (pdown == null) {
+            pdown = sparams["pen"]
+        }
+        if (newX != this.props.xPosition || newY != this.props.yPosition) {
+            let new_comp;
+            if (pdown) {
+                new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
+                                  xend={newX} yend={newY}
+                                  fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_height}
+                                  penwidth={sparams.penWidth} pencolor={sparams.penColor}
+
+                />);
+                this.props.addComponent(new_comp);
+            }
+            this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+
+        }
+    }
+
+    _moveForward(distance) {
+        let sparams = this._getAllParams();
+        let maxX = this.props.fixed_width / 2;
+        let minX = -1 * maxX;
+        let maxY = this.props.fixed_height / 2;
+        let minY = -1 * maxY;
+        let h_radians = degreesToRadians(sparams["heading"]);
+        let cosAngle = Math.cos(h_radians);
+        let sinAngle = Math.sin(h_radians);
+        let x = sparams["xPosition"];
+        let y = sparams["yPosition"];
+        let self = this;
+        if (distance > 0) {
+            var newX = sparams["xPosition"] + sinAngle * distance;
+            var newY = sparams["yPosition"] + cosAngle * distance;
+
+            function xWrap(cutBound, otherBound) {
+                var distanceToEdge = Math.abs((cutBound - x) / sinAngle);
+                var edgeY = cosAngle * distanceToEdge + y;
+                self._moveTo(cutBound, edgeY, sparams["pen"],()=> {
+                    distance -= distanceToEdge;
+                    x = otherBound;
+                    y = edgeY;
+                    self._moveTo(x, y, false, ()=>{
+                        if (distance > 0) {
+                            self._moveForward(distance)
+                        }});
+                });
+
+            }
+            function yWrap(cutBound, otherBound) {
+                var distanceToEdge = Math.abs((cutBound - y) / cosAngle);
+                var edgeX = sinAngle * distanceToEdge + x;
+                self._moveTo(edgeX, cutBound, sparams["pen"],()=> {
+                    distance -= distanceToEdge;
+                    x = edgeX;
+                    y = otherBound;
+                    self._moveTo(x, y, false, ()=>{
+                        if (distance > 0) {
+                            self._moveForward(distance)
+                        }
+                    });
+                });
+            }
+            function noWrap() {
+                self._moveTo(newX, newY, sparams["pen"]);
+            }
+            if (this.do_wrap) {
+                if (newX > maxX)
+                    xWrap(maxX, minX);
+                else if (newX < minX)
+                    xWrap(minX, maxX);
+                else if (newY > maxY)
+                    yWrap(maxY, minY);
+                else if (newY < minY)
+                    yWrap(minY, maxY);
+                else
+                    noWrap();
+            }
+            else {
+                noWrap();
+            }
+        }
+    };
+
+    render() {
+        let sparams = this._getAllParams();
+        let [tx, ty] = this._c(sparams["xPosition"], sparams["yPosition"]);
+        let tt = <TriangleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
+        if (this.props.showGraphics) {
+            if (sparams.shown) {
+                return tt
+            }
+            return null
+
+        }
+        else {
+            return (
+                <DataBox {...this.props} clickable_label={false}/>
+            )
+        }
+
+    }
+}
+
+
+
+class GraphicsBox extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.do_wrap = true;
+        this.boxRef = React.createRef();
+        this.state = {
+            drawnComponents:[],
+            focusingName: false,
+            boxWidth: null,
+            resizing: false,
+            dwidth: 0,
+            dheight: 0,
+            startingWidth: null,
+            startingHeight: null
+        }
+    }
+
+    _closeMe() {
+        if (this.props.am_zoomed) {
+            this._unzoomeMe()
+        }
+        else {
+            let have_focus = this.boxRef.current.contains(document.activeElement);
+            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
+                if (have_focus) {
+                    this.props.funcs.positionAfterBox(this.props.unique_id)
+                }
+            })
+        }
+    }
+
+    _submitNameRef(the_ref) {
+        this.nameRef = the_ref
+    }
+
+    _doneEditingName(callback=null) {
+        this.setState({focusingName: false}, callback)
+    }
+
+    componentDidMount() {
+        if (this.boxRef) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
+            }
+        }
+    }
+
+    componentDidUpdate () {
+        let self = this;
+        if (this.props.focusName) {
+            if (this.nameRef) {
+                $(this.nameRef).focus();
+                this.setState({focusingName: true},()=>{
+                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                });
+            }
+        }
+        if (!this.props.closed && this.boxRef.current) {
+            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
+            }
+        }
+    }
+
+    _flipMe() {
+        this.boxRef = React.createRef();
+        this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+    }
+
+    _addComponent(new_comp) {
+        // this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp);
+        this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
+    }
+
+    _clearComponents() {
+        this.setState({drawnComponents: []})
+    }
+
+    _setWrap(wrap) {
+        this.do_wrap = wrap;
+    }
+
+    _setBgColor(color) {
+        this.setState({bgColor: color})
+    }
+
+    _onResize(e, ui, x, y, dx, dy) {
+        this.setState({dwidth: dx, dheight: dy})
+    }
+
+    // _setSize(new_width, new_height) {
+    //     this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+    // }
+    //
+    // _stopResize(e, ui, x, y, dx, dy) {
+    //     let self = this;
+    //     this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
+    //         if (dx < resizeTolerance && dy < resizeTolerance) {
+    //             self._setSize(false, false)
+    //         }
+    //         else {
+    //             self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
+    //         }
+    //     )
+    //
+    // }
+
+    render() {
+        let type_label = "Data";
+        let dbclass;
+        if (this.props.closed) {
+            return (
+                <DataBox {...this.props} clickable_label={false}/>
+            )
+        }
+        else if (!this.props.showGraphics) {
+            return (
+                <DataBox {...this.props} clickable_label={true} label_function={this._flipMe}/>
+            )
+        }
+        else {
+            let sprite_components = [];
+            for (let lin of this.props.line_list) {
+                for (let nd of lin.node_list) {
+                    if (nd.kind == "sprite") {
+                        this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
+                        let new_comp = (
+                            <AppConsumer>
+                                {app =>
+                                    <SpriteBox {...nd}
+                                               key={nd.unique_id}
+                                               app={app}
+                                               ref={window.turtle_box_refs[nd.unique_id]}
+                                               funcs={this.props.funcs}
+                                               graphics_fixed_width={this.props.graphics_fixed_width}
+                                               graphics_fixed_height={this.props.graphics_fixed_height}
+                                               addComponent={this._addComponent}
+                                               do_wrap={this.do_wrap}
+                                               setWrap={this._setWrap}
+                                               setBgColor={this._setBgColor}
+                                               clearComponents={this._clearComponents}
+                                               showGraphics={this.props.showGraphics}/>
+                                }
+                            </AppConsumer>
+                        );
+                        if (new_comp) {
+                            sprite_components.push(new_comp)
+                        }
+                    }
+                }
+            }
+            let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
+            let dbclass = "data-box";
+            if (this.props.transparent) {
+                dbclass += " transparent"
+            }
+            if (this.props.selected) {
+                dbclass += " selected"
+            }
+            if ((this.props.name != null) || this.state.focusingName) {
+                dbclass += " data-box-with-name"
+            }
+            return (
+                <div className="data-box-outer">
+                    <EditableTag the_name={this.props.name}
+                             focusingMe={this.state.focusingName}
+                             boxWidth={this.state.boxWidth}
+                             funcs={this.props.funcs}
+                             doneEditingName={this._doneEditingName}
+                             submitRef={this._submitNameRef}
+                             boxId={this.props.unique_id}/>
+                    <div className={dbclass} ref={this.boxRef}>
+                      <Stage width={this.props.graphics_fixed_width}
+                             height={this.props.graphics_fixed_height}
+                      >
+                          <Sprite width={this.props.graphics_fixed_width} height={this.props.graphics_fixed_height}
+                                  texture={PIXI.Texture.WHITE}
+                                  tint={this.state.bgColor} />
+                          {sprite_components.length > 0 &&
+                              sprite_components}
+                          {(this.state.drawnComponents.length > 0) &&
+                            this.state.drawnComponents}
+                      </Stage>
+                        <DragHandle position_dict={draghandle_position_dict}
+                                dragStart={this._startResize}
+                                onDrag={this._onResize}
+                                dragEnd={this._stopResize}
+                                direction="both"
+                                iconSize={15}/>
+                    </div>
+                    {!this.props.am_zoomed &&
+                        <TypeLabel clickable={true}
+                                   clickFunc={this._flipMe}
+                                   the_label={type_label}/>
+                    }
+                </div>
+            )
+
+        }
+    }
+}
+
+GraphicsBox.propTypes = {
+    unique_id: PropTypes.string,
+    graphics_fixed_width: PropTypes.number,
+    graphics_fixed_height: PropTypes.number,
+    showGraphics: PropTypes.bool,
+    funcs: PropTypes.object
+};
+
+GraphicsBox.defaultProps = {
+    graphics_fixed_width: 300,
+    graphicx_fixed_height: 300
+};
 
 class TextNode extends React.Component {
     constructor (props) {
@@ -446,9 +1011,9 @@ class DataBox extends React.Component {
         };
     }
 
-    // shouldComponentUpdate(nextProps, nextState) {
-    //     return !propsAreEqual(nextProps, this.props)
-    // }
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextProps, this.props)
+    }
 
     _handleChange(evt) {
         let the_html = evt.target.value;
@@ -575,6 +1140,9 @@ class DataBox extends React.Component {
             if (this.props.selected) {
                 dbclass = dbclass + " selected"
             }
+            if (this.props.transparent) {
+                dbclass += " transparent"
+            }
             return (
                 <div className="data-box-outer">
                     {(this.props.name || this.state.focusingName) &&
@@ -594,7 +1162,9 @@ class DataBox extends React.Component {
                             icon={null}>
                         <div className="closed-button-inner"></div>
                     </Button>
-                    <TypeLabel the_label={type_label}/>
+                    <TypeLabel clickable={this.props.clickable_label}
+                               clickFunc={this.props.label_function}
+                               the_label={type_label}/>
                 </div>
             )
         }
@@ -616,6 +1186,9 @@ class DataBox extends React.Component {
         }
         if (this.props.selected) {
             dbclass = dbclass + " selected";
+        }
+        if (this.props.transparent) {
+            dbclass += " transparent"
         }
         let outer_style;
         let inner_style;
@@ -676,7 +1249,9 @@ class DataBox extends React.Component {
                             iconSize={15}/>
                     </div>
                     {!this.props.am_zoomed &&
-                        <TypeLabel the_label={type_label}/>
+                        <TypeLabel clickable={this.props.clickable_label}
+                                   clickFunc={this.props.label_function}
+                                   the_label={type_label}/>
                     }
                 </div>
             </React.Fragment>
@@ -688,6 +1263,8 @@ DataBox.propTypes = {
     name: PropTypes.string,
     kind: PropTypes.string,
     closed: PropTypes.bool,
+    clickable_label: PropTypes.bool,
+    label_function: PropTypes.func,
     unique_id: PropTypes.string,
     line_list: PropTypes.array,
     funcs: PropTypes.object,
@@ -701,6 +1278,7 @@ DataBox.propTypes = {
 DataBox.defaultProps = {
     kind: "databox",
     closed: false,
+    clickable_label: false,
     am_zoomed: false,
     innerWidth: 0,
     innerHeight: 0
@@ -847,7 +1425,7 @@ class JsBox extends React.Component {
                             icon={null}>
                         <div className="closed-button-inner"></div>
                     </Button>
-                    <TypeLabel the_label="JSbox"/>
+                    <TypeLabel the_label="JSbox" clickable_label={false}/>
                 </div>
             )
         }
@@ -904,7 +1482,7 @@ class JsBox extends React.Component {
                                              first_line_number={null}
                             />
                         </div>
-                        <TypeLabel the_label="JSbox"/>
+                        <TypeLabel the_label="JSbox" clickable_label={false}/>
                 </div>
             </React.Fragment>
         )
@@ -965,8 +1543,17 @@ class TypeLabel extends React.Component {
     shouldComponentUpdate(nextProps, nextState, nextContext) {
         return false
     }
+    
+    _handleClick() {
+        this.props.clickFunc();
+    }
 
     render() {
+        if (this.props.clickable) {
+            return (
+                <button onClick={this._handleClick} className="type-label">{this.props.the_label}</button>
+            )
+        }
         return (
             <span className="type-label">{this.props.the_label}</span>
         )
@@ -974,7 +1561,13 @@ class TypeLabel extends React.Component {
 }
 
 TypeLabel.propTypes = {
-    the_label: PropTypes.string
+    the_label: PropTypes.string,
+    clickable: PropTypes.bool,
+    clickFunc: PropTypes.func
+};
+
+TypeLabel.defaultProps = {
+    clickable: false
 };
 
 
@@ -1012,9 +1605,9 @@ class DataboxLine extends React.Component {
         super(props);
         doBinding(this);
     }
-    // shouldComponentUpdate(nextProps, nextState) {
-    //     return !propsAreEqual(nextProps, this.props)
-    // }
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextProps, this.props)
+    }
 
     _handleSelection(selectedKeys) {
         this.props.funcs.setSelected(selectedKeys);
@@ -1049,18 +1642,22 @@ class DataboxLine extends React.Component {
                 )
             }
 
-            else if (the_node.kind.includes("turtlebox")) {
+            else if (the_node.kind == "sprite") {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
                 return (
-                    <PixiTurtleBox key={the_node.unique_id}
-                               selected={the_node.selected}
-                               ref={window.turtle_box_refs[the_node.unique_id]}
-                               //name={the_node.name}
-                               fixed_width={the_node.fixed_width ? the_node.fixed_width : 300}
-                               fixed_height={the_node.fixed_height ? the_node.fixed_height : 300}
-                               funcs={this.props.funcs}
-                               unique_id={the_node.unique_id}
-                               closed={the_node.closed}/>
+                    <SpriteBox {...the_node}
+                                key={the_node.unique_id}
+                                ref={window.turtle_box_refs[the_node.unique_id]}
+                                funcs={this.props.funcs}
+                                showGraphics={this.props.showGraphics}/>
+                )
+            }
+            else if (the_node.kind == "graphics") {
+                return (
+                    <GraphicsBox {...the_node}
+                                 key={the_node.unique_id}
+                                 funcs={this.props.funcs}
+                                 ref={window.turtle_box_refs[the_node.unique_id]}/>
                 )
             }
 
@@ -1077,8 +1674,10 @@ class DataboxLine extends React.Component {
                              funcs={this.props.funcs}
                              unique_id={the_node.unique_id}
                              closed={the_node.closed}
+                             transparent={the_node.transparent}
                              am_zoomed={the_node.am_zoomed}
                              focusName={the_node.focusName}
+                             clickable_label={false}
                              line_list={the_node.line_list}/>
                 )
             }

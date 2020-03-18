@@ -19,6 +19,7 @@ import { KeyTrap } from "./key_trap";
 import { getCaretPosition } from "./utilities";
 import { withStatus } from "./toaster.js";
 import { withErrorDrawer } from "./error_drawer.js";
+import { container_kinds } from "./shared_consts.js";
 
 let tsocket = null;
 
@@ -26,6 +27,9 @@ let tsocket = null;
 $(document).on('mousedown', "button", function (event) {
     event.preventDefault();
 });
+
+import { defaultBgColor, defaultPenWidth, defaultPenColor, defaultFontFamily } from "./shared_consts.js";
+import { defaultFontSize, defaultFontStyle } from "./shared_consts.js";
 
 const MAX_UNDO_SAVES = 20;
 
@@ -93,6 +97,9 @@ class MainApp extends React.Component {
 
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];
+        let new_base = _.cloneDeep(this.state.base_node);
+        new_base.line_list[0].node_list[0].setFocus = true;
+        this.setState({ base_node: new_base });
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
@@ -141,7 +148,7 @@ class MainApp extends React.Component {
         if (node.unique_id == uid) {
             return node;
         }
-        if (node.kind == "text" || node.kind == "jsbox" || node.kind.includes("turtlebox") || node.line_list.length == 0) {
+        if (!container_kinds.includes(node.kind) || node.line_list.length == 0) {
             return false;
         }
         for (let lin of node.line_list) {
@@ -319,8 +326,57 @@ class MainApp extends React.Component {
         }
     }
 
+    _insertGraphicsBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newGraphicsBox();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
+
+    _insertSpriteBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newSpriteBox();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({ base_node: new_base });
+        }
+    }
+
     _insertTurtleBoxLastFocus() {
         this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos);
+    }
+
+    _toggleBoxTransparency(boxId) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(boxId, new_base);
+        let mline = this._getMatchingNode(mnode.parent, new_base);
+        if (mline.parent == null) return;
+        let mbox = this._getMatchingNode(mline.parent, new_base);
+        if (mbox.name == "world") return;
+        mbox.transparent = !mbox.transparent;
+        this.setState({ base_node: new_base });
+    }
+
+    _toggleBoxTransparencyLastFocus() {
+        this._toggleBoxTransparency(this.last_focus_id);
+    }
+
+    _insertGraphicsBoxLastFocus() {
+        this._insertGraphicsBoxinText(this.last_focus_id, this.last_focus_pos);
+    }
+
+    _insertSpriteBoxLastFocus() {
+        this._insertSpriteBoxinText(this.last_focus_id, this.last_focus_pos);
     }
 
     _insertDataBoxLastFocus() {
@@ -392,7 +448,7 @@ class MainApp extends React.Component {
         }
         if (recursive) {
             for (let node of line_pointer.node_list) {
-                if (node.kind == "databox" || node.kind == "doitbox") {
+                if (container_kinds.includes(node.kind)) {
                     for (let lin of node.line_list) {
                         lin.parent = node.unique_id;
                         this._healLine(lin);
@@ -488,7 +544,7 @@ class MainApp extends React.Component {
         if (obj1.kind != obj2.kind) {
             return false;
         }
-        if (obj1.kind == "databox" || obj1.kind == "doitbox") {
+        if (container_kinds.includes(obj1.kind)) {
             return this._compareDataboxes(obj1, obj2);
         }
         if (obj2.kind == "text") {
@@ -653,7 +709,8 @@ class MainApp extends React.Component {
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
-        let new_box = { kind: "databox",
+        let new_box = {
+            kind: "databox",
             key: uid,
             name: null,
             parent: null,
@@ -662,6 +719,7 @@ class MainApp extends React.Component {
             fixed_height: null,
             focusName: false,
             am_zoomed: false,
+            transparent: false,
             position: 0,
             selected: false,
             line_list: line_list,
@@ -670,20 +728,126 @@ class MainApp extends React.Component {
         return new_box;
     }
 
+    _newGraphicsBox(line_list = []) {
+        let uid = guid();
+        if (line_list.length == 0) {
+            let node_list = [this._newTextNode(" ")];
+            let new_line = this._newLineNode(node_list);
+            line_list = [new_line];
+        }
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_node = {
+            kind: "graphics",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            transparent: false,
+            position: 0,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            unique_id: uid,
+            graphics_fixed_width: 300,
+            graphics_fixed_height: 300,
+            showGraphics: true
+        };
+        return new_node;
+    }
+
+    _addGraphicsComponent(uid, the_comp) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        mnode.drawn_components = [...mnode.drawn_components, the_comp];
+        this.setState({ base_node: new_base });
+    }
+
+    _newValueBox(name, value) {
+        let node_list = [this._newTextNode(String(value))];
+        let new_line = this._newLineNode(node_list);
+        let line_list = [new_line];
+        let vbox = this._newDataBoxNode(line_list);
+        vbox.name = String(name);
+        return vbox;
+    }
+
+    _newSpriteBox() {
+        let uid = guid();
+        let node_list = [this._newTextNode(" ")];
+        let param_dict = {
+            "xPosition": 0,
+            "yPosition": 0,
+            pen: true,
+            shown: true,
+            heading: 0,
+            "spriteSize": 1,
+            "penColor": defaultPenColor,
+            "penWidth": defaultPenWidth,
+            "fontFamily": defaultFontFamily,
+            "fontSize": defaultFontSize,
+            "fontStyle": defaultFontStyle
+        };
+        for (let param in param_dict) {
+            node_list.push(this._newValueBox(param, param_dict[param]));
+            node_list.push(this._newTextNode(" "));
+        }
+        let new_line = this._newLineNode(node_list);
+        let line_list = [new_line];
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_node = {
+            kind: "sprite",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            transparent: false,
+            position: 0,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            unique_id: uid
+
+        };
+        return new_node;
+    }
+
+    _setSpriteParams(uid, pdict) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        for (let lin of mnode.line_list) {
+            for (let nd of lin.node_list) {
+                if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                    nd.line_list[0].node_list[0].the_text = String(pdict[nd.name]);
+                }
+            }
+        }
+        this.setState({ base_node: new_base });
+    }
+
     _newTurtleBox() {
         let uid = guid();
-        let new_node = {
-            kind: "turtlebox",
-            key: uid,
-            selected: false,
-            unique_id: uid,
-            position: 0,
-            parent: null,
-            width: 50,
-            fixed_width: 300,
-            fixed_height: 300,
-            height: 50
-        };
+        let sprite = this._newSpriteBox();
+        sprite.transparent = true;
+        let node_list = [sprite];
+        let new_line = this._newLineNode(node_list);
+        let line_list = [new_line];
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_node = this._newGraphicsBox(line_list);
+        new_node.transparent = true;
         return new_node;
     }
 
@@ -732,6 +896,17 @@ class MainApp extends React.Component {
         let mnode = this._getMatchingNode(uid, new_base);
         if (mnode) {
             mnode[param_name] = new_val;
+            this.setState({ base_node: new_base }, callback);
+        }
+    }
+
+    _changeNodeFromDict(uid, param_dict, callback = null) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(uid, new_base);
+        if (mnode) {
+            for (let param in param_dict) {
+                mnode[param] = param_dict[param];
+            }
             this.setState({ base_node: new_base }, callback);
         }
     }
@@ -849,7 +1024,7 @@ class MainApp extends React.Component {
             lin.selected = false;
             for (let nd of lin.node_list) {
                 nd.selected = false;
-                if (nd.kind == "databox" || nd.kind == "doitbox" || nd.kind == "line") {
+                if (container_kinds.includes(nd.kind) || nd.kind == "line") {
                     this._clearSelected(nd, new_base);
                 }
             }
@@ -865,7 +1040,7 @@ class MainApp extends React.Component {
             for (let child of node.node_list) {
                 this._selectChildren(child);
             }
-        } else if (node.kind == "databox" || node.kind == "doitbox") {
+        } else if (container_kinds.includes(node.kind)) {
             for (let child of node.line_list) {
                 this._selectChildren(child);
             }
@@ -920,7 +1095,7 @@ class MainApp extends React.Component {
             for (let node of lin.node_list) {
                 node.unique_id = guid();
                 node.parent = lin.unique_id;
-                if (node.kind == "databox" || node.kind == "doitbox") {
+                if (container_kinds.includes(node.kind)) {
                     for (let lin2 of node.line_list) {
                         lin2.parent = node.unique_id;
                     }
@@ -1195,7 +1370,7 @@ class MainApp extends React.Component {
         }
         let cp = this._getMatchingNode(common_parent, base_node);
         let nd_list;
-        if (cp.kind == "databox" || cp.kind == "doitbox" || cp.kind == "turtlebox") {
+        if (container_kinds.includes(cp.kind)) {
             nd_list = cp.line_list;
         } else {
             nd_list = cp.node_list;
@@ -1215,6 +1390,7 @@ class MainApp extends React.Component {
         let funcs = {
             handleTextChange: this._handleTextChange,
             changeNode: this._changeNode,
+            changeNodeFromDict: this._changeNodeFromDict,
             insertDataBox: this._insertDataBoxinText,
             insertDoitBox: this._insertDoitBoxinText,
             deletePrecedingBox: this._deletePrecedingBox,
@@ -1244,6 +1420,8 @@ class MainApp extends React.Component {
             handleCodeChange: this._handleCodeChange,
             insertJsBoxLastFocus: this._insertJsBoxLastFocus,
             insertTurtleBoxLastFocus: this._insertTurtleBoxLastFocus,
+            insertGraphicsBoxLastFocus: this._insertGraphicsBoxLastFocus,
+            insertSpriteBoxLastFocus: this._insertSpriteBoxLastFocus,
             getBaseNode: this._getBaseNode,
             insertNode: this._insertNode,
             registerTurtleBox: this._registerTurtleBox,
@@ -1255,7 +1433,10 @@ class MainApp extends React.Component {
             boxer_selected: this.state.boxer_selected,
             deleteBoxerSelection: this._deleteBoxerSelection,
             cutSelected: this._cutSelected,
-            undo: this._undo
+            undo: this._undo,
+            setSpriteParams: this._setSpriteParams,
+            addGraphicsComponent: this._addGraphicsComponent,
+            toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus
         };
         return funcs;
     }
@@ -1309,6 +1490,7 @@ class MainApp extends React.Component {
             React.createElement(DataBox, { name: zoomed_node.name,
                 funcs: this.funcs,
                 kind: zoomed_node.kind,
+                transparent: zoomed_node.transparent,
                 className: 'data-box-outer',
                 focusName: false,
                 am_zoomed: true,
@@ -1316,6 +1498,7 @@ class MainApp extends React.Component {
                 innerHeight: this.state.innerHeight,
                 innerWidth: this.state.innerWidth,
                 unique_id: this.state.zoomed_node_id,
+                clickable_label: false,
                 line_list: zoomed_node.line_list }),
             React.createElement(KeyTrap, { global: true, bindings: key_bindings })
         );

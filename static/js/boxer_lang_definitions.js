@@ -7,7 +7,7 @@ let boxer_statements = {
             ["steps", "number"]
         ],
         converter: (arglist) => {
-            return `forward(${arglist[0]})`
+            return `forward(current_turtle_id, ${arglist[0]})`
         }
     },
     back: {
@@ -15,7 +15,7 @@ let boxer_statements = {
             ["steps", "number"]
         ],
         converter: (arglist) => {
-            return `back(${arglist[0]})`
+            return `back(current_turtle_id, ${arglist[0]})`
         }
     },
     right: {
@@ -23,7 +23,7 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `right(${arglist[0]})`
+            return `right(current_turtle_id, ${arglist[0]})`
         }
     },
     left: {
@@ -31,31 +31,31 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `left(${arglist[0]})`
+            return `left(current_turtle_id, ${arglist[0]})`
         }
     },
     clear: {
         args: [],
         converter: (arglist) => {
-            return "clear()"
+            return "clear(current_turtle_id)"
         }
     },
     clean: {
         args: [],
         converter: (arglist) => {
-            return "clean()"
+            return "clean(current_turtle_id)"
         }
     },
     penup: {
         args: [],
         converter: (arglist) => {
-            return "penup()"
+            return "penup(current_turtle_id)"
         }
     },
     pendown: {
         args: [],
         converter: (arglist) => {
-            return "pendown()"
+            return "pendown(current_turtle_id)"
         }
     },
     setxy: {
@@ -64,7 +64,7 @@ let boxer_statements = {
             ["ycoord", "number"]
         ],
         converter: (arglist) => {
-            return `setxy(${arglist[0]}, ${arglist[1]})`
+            return `setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]})`
         }
     },
     setheading: {
@@ -72,19 +72,19 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `setheading(${arglist[0]})`
+            return `setheading(current_turtle_id, ${arglist[0]})`
         }
     },
     showturtle: {
         args: [],
         converter: (arglist) => {
-            return "showTurtle()"
+            return "showTurtle(current_turtle_id)"
         }
     },
     hideturtle: {
         args: [],
         converter: (arglist) => {
-            return "hideTurtle()"
+            return "hideTurtle(current_turtle_id)"
         }
     },
     "set-pen-width": {
@@ -92,7 +92,7 @@ let boxer_statements = {
             ["width", "number"]
         ],
         converter: (arglist) => {
-            return `setPenWidth(${arglist[0]})`
+            return `setPenWidth(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -101,7 +101,7 @@ let boxer_statements = {
             ["the_color", "boxorstring"]
         ],
         converter: (arglist) => {
-            return `setPenColor(${arglist[0]})`
+            return `setPenColor(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -110,7 +110,7 @@ let boxer_statements = {
             ["the_color", "boxorstring"]
         ],
         converter: (arglist) => {
-            return `setBackgroundColor(${arglist[0]})`
+            return `setBackgroundColor(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -120,7 +120,7 @@ let boxer_statements = {
             ["height", "number"]
         ],
         converter: (arglist) => {
-            return `stampRectangle(${arglist[0]},${arglist[1]})`
+            return `stampRectangle(current_turtle_id, ${arglist[0]},${arglist[1]})`
         }
     },
 
@@ -130,13 +130,13 @@ let boxer_statements = {
             ["height", "number"]
         ],
         converter: (arglist) => {
-            return `stampHollowRectangle(${arglist[0]},${arglist[1]})`
+            return `stampHollowRectangle(current_turtle_id, ${arglist[0]},${arglist[1]})`
         }
     },
     dot: {
         args: [],
         converter: (arglist) => {
-            return "dot()"
+            return "dot(current_turtle_id)"
         }
     },
     "stamp-ellipse": {
@@ -145,7 +145,7 @@ let boxer_statements = {
             ["height", "number"]
         ],
         converter: (arglist) => {
-            return `stampEllipse(${arglist[0]},${arglist[1]})`
+            return `stampEllipse(current_turtle_id, ${arglist[0]},${arglist[1]})`
         }
     },
 
@@ -155,7 +155,7 @@ let boxer_statements = {
             ["height", "number"]
         ],
         converter: (arglist) => {
-            return `stampHollowEllipse(${arglist[0]},${arglist[1]})`
+            return `stampHollowEllipse(current_turtle_id, ${arglist[0]},${arglist[1]})`
         }
     },
     "stamp-circle": {
@@ -163,7 +163,7 @@ let boxer_statements = {
             ["radius", "number"]
         ],
         converter: (arglist) => {
-            return `stampCircle(${arglist[0]})`
+            return `stampCircle(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -172,7 +172,7 @@ let boxer_statements = {
             ["radius", "number"],
         ],
         converter: (arglist) => {
-            return `stampHollowCircle(${arglist[0]})`
+            return `stampHollowCircle(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -181,7 +181,7 @@ let boxer_statements = {
             ["the_text", "text"]
         ],
         converter: (arglist) => {
-            return `setGraphicsMode(${arglist[0]})`
+            return `setGraphicsMode(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -190,7 +190,7 @@ let boxer_statements = {
             ["the_text", "text"],
         ],
         converter: (arglist) => {
-            return `type(${arglist[0]})`
+            return `type(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -199,7 +199,7 @@ let boxer_statements = {
             ["font_string", "text"],
         ],
         converter: (arglist) => {
-            return `setTypeFont(${arglist[0]})`
+            return `setTypeFont(current_turtle_id, ${arglist[0]})`
         }
     },
 
@@ -208,14 +208,14 @@ let boxer_statements = {
             ["the_size", "number"],
         ],
         converter: (arglist) => {
-            return `setSpriteSize(${arglist[0]})`
+            return `setSpriteSize(current_turtle_id, ${arglist[0]})`
         }
     },
 
     reset: {
         args: [],
         converter: (arglist) => {
-            return "reset()"
+            return "reset(current_turtle_id)"
         }
     },
     repeat: {

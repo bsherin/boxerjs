@@ -5,6 +5,7 @@ export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, r
     arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians, selectedAcrossBoxes}
 
 
+const container_kinds = ["doitbox", "databox", "sprite", "graphics"];
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
     for (const key of Object.getOwnPropertyNames(proto)) {

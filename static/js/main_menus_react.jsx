@@ -208,6 +208,14 @@ class BoxMenu extends React.Component {
         this.props.insertTurtleBoxLastFocus();
     }
 
+    _new_graphicsbox(event) {
+        this.props.insertGraphicsBoxLastFocus();
+    }
+
+    _new_spritebox(event) {
+        this.props.insertSpriteBoxLastFocus();
+    }
+
     _name_box() {
         this.props.focusNameLastFocus()
     }
@@ -219,19 +227,25 @@ class BoxMenu extends React.Component {
             "Insert Doit Box": this._new_doitbox,
             "Insert JS Box": this._new_jsbox,
             "Insert Turtle Box": this._new_turtlebox,
+            "Insert Graphics Box": this._new_graphicsbox,
+            "Insert Sprite Box": this._new_spritebox,
             "Edit Box Name": this._name_box,
-            "Unfix Box Size": this.props.unfixSizeLastFocus
+            "Unfix Box Size": this.props.unfixSizeLastFocus,
+            "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus
         }
     }
 
     get icon_dict () {
         return {
-            "Insert Data Box": "box",
+            "Insert Data Box": "cube",
             "Insert Doit Box": "code",
             "Insert JS Box": "code",
             "Insert Turtle Box": "media",
+            "Insert Graphics Box": "media",
+            "Insert Sprite Box": "symbol-triangle-up",
             "Name Box": "label",
-            "Unfix Size":"undo"
+            "Unfix Size":"undo",
+            "Toggle Transparency": "eye-open"
         }
     }
 
@@ -239,7 +253,7 @@ class BoxMenu extends React.Component {
         return {
             "Insert Data Box": "{",
             "Insert Doit Box": "[",
-            "Name Box": "|",
+            "Edit Box Name": "|",
         }
 
     }

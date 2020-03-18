@@ -1,12 +1,11 @@
 
 import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
-import {guid} from "./utilities";
+import {guid} from "./utilities.js";
+import {container_kinds} from "./shared_consts.js";
 
 export {_convertNamedDoit, insertVirtualNode, _createLocalizedFunctionCall,
-    _getMatchingNode, current_turtle_id, findNamedBoxesInScope}
-
-let current_turtle_id = null;
+    _getMatchingNode, findNamedBoxesInScope}
 
 function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=true) {
     let local_the_code_line = _.cloneDeep(the_code_line);
@@ -16,8 +15,15 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
     let _start_node = _getMatchingNode(box_id, _virtualNodeTree);
     let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node, _virtualNodeTree);
     let _tempFuncString = _convertNamedDoit(_inserted_start_node, _virtualNodeTree);
-
-    let _named_nodes = findNamedBoxesInScope(_start_node, _virtualNodeTree);
+    let fname;
+    if (root) {
+        fname = "_outerFunc";
+    }
+    else {
+        fname = "_tellFunc" + String(window.tell_function_counter);
+        window.tell_function_counter += 1;
+    }
+    let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(_start_node, _virtualNodeTree);
     let global_declarations_string = "";
     for (let _node of _named_nodes) {
         if (_node.kind == "databox") {
@@ -27,14 +33,10 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
             global_declarations_string += "\n" + jsBoxToString(_node)
         }
     }
-    let fname;
-    if (root) {
-        fname = "_outerFunc";
+    if (current_turtle_id) {
+        global_declarations_string += `\n let current_turtle_id = "${current_turtle_id}"`
     }
-    else {
-        fname = "_tellFunc" + String(window.tell_function_counter);
-        window.tell_function_counter += 1;
-    }
+
     window.virtualNodeTrees[fname] = _virtualNodeTree;
     let func_defn = `
     async function ${fname}() {
@@ -48,45 +50,75 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
     return fname
 }
 
-function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, turtleboxfound=false) {
+function getContainedNames(theNode, name_list, current_turtle_id) {
+    let new_names = [];
+    let new_nodes = [];
+    if (theNode.name) {
+        if (!current_turtle_id && (theNode.kind == "sprite")) {
+                current_turtle_id = theNode.unique_id;
+        }
+        if ((theNode.kind != "text") && theNode.name) {
+            if (!name_list.includes(theNode.name)) {
+                new_names.push(theNode.name);
+                new_nodes.push(theNode)
+            }
+        }
+    }
+    for (let lin of theNode.line_list) {
+        for (let node of lin.node_list) {
+            if (!current_turtle_id && (node.kind == "sprite")) {
+                current_turtle_id = node.unique_id;
+            }
+            if ((node.kind != "text") && node.name) {
+                if (!name_list.includes(node.name) && !new_names.includes(node.name)) {
+                    new_names.push(node.name);
+                    new_nodes.push(node)
+                }
+            }
+            if (container_kinds.includes(node.kind) && node.transparent) {
+                let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, name_list.concat(new_names), current_turtle_id);
+                new_names = new_names.concat(sub_names);
+                new_nodes = new_nodes.concat(sub_nodes);
+                current_turtle_id = new_current_turtle_id
+            }
+
+        }
+    }
+    return [new_names, new_nodes, current_turtle_id]
+}
+
+function findNamedBoxesInScope(startBoxNode, baseNode, name_list=null, current_turtle_id=null) {
     let named_nodes = [];
     if (!name_list) {
         name_list = []
     }
-    if (startBoxNode.kind == "databox" || startBoxNode.kind == "doitbox") {
-        for (let lin of startBoxNode.line_list) {
-            for (let node of lin.node_list) {
-                if ((node.kind != "text") && node.name) {
-                    if (!name_list.includes(node.name)) {
-                        named_nodes.push(node);
-                        name_list.push(node.name)
-                    }
-
-                }
-                if (!turtleboxfound && (node.kind == "turtlebox" || node.kind == "p5turtlebox" || node.kind == "pixiturtlebox")) {
-                    current_turtle_id = node.unique_id;
-                    turtleboxfound = true
-                }
-            }
-        }
+    if (container_kinds.includes(startBoxNode.kind)) {
+        let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(startBoxNode, name_list, current_turtle_id);
+        name_list = name_list.concat(sub_names);
+        named_nodes = named_nodes.concat(sub_nodes);
+        current_turtle_id = new_current_turtle_id
     }
 
     if (startBoxNode.parent == null) {
-        return named_nodes
+        return [named_nodes, current_turtle_id]
     }
     let parentLine = _getMatchingNode(startBoxNode.parent, baseNode);
     if (!parentLine) {
-        return named_nodes
+        return [named_nodes, current_turtle_id]
     }
     let parentBox = _getMatchingNode(parentLine.parent, baseNode);
-    named_nodes = named_nodes.concat(findNamedBoxesInScope(parentBox, baseNode, name_list, turtleboxfound));
-    return named_nodes
+    let [new_named_nodes, new_current_turtle_id] = findNamedBoxesInScope(parentBox, baseNode, name_list, current_turtle_id);
+    named_nodes = named_nodes.concat(new_named_nodes);
+    current_turtle_id = new_current_turtle_id;
+    return [named_nodes, current_turtle_id]
 }
 
 function preprocessNamedBoxes(namedNodes) {
     let doit_boxes = {};
     let data_boxes = {};
     let js_boxes = {};
+    let graphics_boxes = {};
+    let sprite_boxes = {};
     for (let node of namedNodes) {
         if (node.kind == "databox") {
             data_boxes[node.name] = node;
@@ -109,6 +141,12 @@ function preprocessNamedBoxes(namedNodes) {
                 args: args
             }
         }
+        else if (node.kind == "graphics") {
+            data_boxes[node.name] = node
+        }
+        else if (node.kind == "sprite") {
+            data_boxes[node.name] = node
+        }
         else {
             let re = /(\w+?)\((.*)\)/g;
             let m = re.exec(node.name);
@@ -129,6 +167,8 @@ function preprocessNamedBoxes(namedNodes) {
     return {
         doit_boxes: doit_boxes,
         data_boxes: data_boxes,
+        graphics_boxes: graphics_boxes,
+        sprite_boxes: sprite_boxes,
         js_boxes: js_boxes,
         input_names: [],
     }
@@ -138,8 +178,7 @@ function _getMatchingNode(uid, node) {
     if (node.unique_id == uid) {
             return node
     }
-    if ((node.kind == "text") || (node.kind == "jsbox") || (node.kind == "turtlebox") || (node.kind == "pixiturtlebox")
-        || (node.kind == "p5turtlebox") || (node.line_list.length == 0)) {
+    if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
         return false
     }
     for (let lin of node.line_list) {
@@ -157,7 +196,7 @@ function _getMatchingNode(uid, node) {
 }
 
 function makeChildrenVirtual(node) {
-    if (node.kind == "databox" || node.kind == "doitbox") {
+    if (container_kinds.includes(node.kind)) {
         for (let line of node.line_list) {
             line.virtual = true;
             for (let lnode of line.node_list) {
@@ -172,7 +211,7 @@ function insertVirtualNode(nodeToInsert, boxToInsertIn, virtualNodeTree) {
     let lnodeToInsert = _.cloneDeep(nodeToInsert);
     let new_id = guid();
     lnodeToInsert.unique_id = new_id;
-    if (lnodeToInsert.kind == "databox" || lnodeToInsert.kind == "doitbox") {
+    if (container_kinds.includes(lnodeToInsert.kind)) {
         window.updateIds(lnodeToInsert.line_list);
         for (let lin of lnodeToInsert.line_list) {
             lin.parent = new_id
@@ -230,7 +269,7 @@ let eval_in_place_string = `async function eval_in_place(estring) {
 function _convertNamedDoit (doitNode, virtualNodeTree) {
 
     try {
-        let _named_nodes = findNamedBoxesInScope(doitNode, virtualNodeTree);
+        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, virtualNodeTree);
         let context = preprocessNamedBoxes(_named_nodes);
         let lvarstring = "";
         for (let dboxName in context.data_boxes) {
@@ -239,6 +278,9 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
             if (parentLine.parent == doitNode.unique_id) {
                 lvarstring += "\n" + dataBoxToString(dbox);
             }
+        }
+        if (current_turtle_id) {
+            lvarstring += `\n let current_turtle_id = "${current_turtle_id}"`
         }
         let line_list = doitNode.line_list;
         let arglist = context.doit_boxes[doitNode.name].args;
@@ -298,7 +340,6 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
         let title = `Error transpiling doit box '${doitNode.name}'`;
         window.addErrorDrawerEntry({title: title, content: `<pre>${error}</pre>`})
     }
-
 }
 
 
