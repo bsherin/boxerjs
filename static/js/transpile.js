@@ -51,6 +51,7 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
 }
 
 function getContainedNames(theNode, name_list, current_turtle_id) {
+
     let new_names = [];
     let new_nodes = [];
     if (theNode.name) {
@@ -64,26 +65,32 @@ function getContainedNames(theNode, name_list, current_turtle_id) {
             }
         }
     }
-    for (let lin of theNode.line_list) {
-        for (let node of lin.node_list) {
-            if (!current_turtle_id && (node.kind == "sprite")) {
-                current_turtle_id = node.unique_id;
-            }
-            if ((node.kind != "text") && node.name) {
-                if (!name_list.includes(node.name) && !new_names.includes(node.name)) {
-                    new_names.push(node.name);
-                    new_nodes.push(node)
-                }
-            }
-            if (container_kinds.includes(node.kind) && node.transparent) {
-                let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, name_list.concat(new_names), current_turtle_id);
-                new_names = new_names.concat(sub_names);
-                new_nodes = new_nodes.concat(sub_nodes);
-                current_turtle_id = new_current_turtle_id
-            }
-
-        }
+    if (theNode.closetLine) {
+        processContainedLine(theNode.closetLine)
     }
+    for (let lin of theNode.line_list) {
+        processContainedLine(lin)
+    }
+        function processContainedLine(lin) {
+            for (let node of lin.node_list) {
+                if (!current_turtle_id && (node.kind == "sprite")) {
+                    current_turtle_id = node.unique_id;
+                }
+                if ((node.kind != "text") && node.name) {
+                    if (!name_list.includes(node.name) && !new_names.includes(node.name)) {
+                        new_names.push(node.name);
+                        new_nodes.push(node)
+                    }
+                }
+                if (container_kinds.includes(node.kind) && node.transparent) {
+                    let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, name_list.concat(new_names), current_turtle_id);
+                    new_names = new_names.concat(sub_names);
+                    new_nodes = new_nodes.concat(sub_nodes);
+                    current_turtle_id = new_current_turtle_id
+                }
+
+            }
+        }
     return [new_names, new_nodes, current_turtle_id]
 }
 
@@ -181,6 +188,17 @@ function _getMatchingNode(uid, node) {
     if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
         return false
     }
+    if (node.closetLine) {
+        if (node.closetLine.unique_id == uid) {
+            return node.closetLine
+        }
+        for (let nd of node.closetLine.node_list) {
+            let match = _getMatchingNode(uid, nd);
+            if (match) {
+                return match
+            }
+        }
+    }
     for (let lin of node.line_list) {
         if (lin.unique_id == uid) {
             return lin
@@ -204,6 +222,13 @@ function makeChildrenVirtual(node) {
                 makeChildrenVirtual(lnode)
             }
         }
+        if (node.closetLine) {
+            node.closetLine.virtual = true;
+            for (let lnode of node.closetLine.node_list) {
+                lnode.virtual = true;
+                makeChildrenVirtual(lnode)
+            }
+        }
     }
 }
 
@@ -215,6 +240,10 @@ function insertVirtualNode(nodeToInsert, boxToInsertIn, virtualNodeTree) {
         window.updateIds(lnodeToInsert.line_list);
         for (let lin of lnodeToInsert.line_list) {
             lin.parent = new_id
+        }
+        if (lnodeToInsert.closetLine) {
+            lnodeToInsert.closetLine.unique_id = guid();
+            lnodeToInsert.closetLine.parent = new_id
         }
     }
     lnodeToInsert.virtual = true;
@@ -338,7 +367,8 @@ function _convertNamedDoit (doitNode, virtualNodeTree) {
     }
     catch(error) {
         let title = `Error transpiling doit box '${doitNode.name}'`;
-        window.addErrorDrawerEntry({title: title, content: `<pre>${error}</pre>`})
+        window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
+
     }
 }
 
@@ -363,6 +393,7 @@ function convertStatementList(line_list, virtualNodeTree, context, return_last_l
     let converted_string = "";
     let counter = 0;
     for (let line of line_list) {
+        if (line.amCloset) continue;
         let token_list = tokenizeLine(line);
         counter += 1;
         let is_last_line = return_last_line && counter == line_list.length;

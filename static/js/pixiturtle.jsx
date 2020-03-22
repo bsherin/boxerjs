@@ -1,7 +1,7 @@
 import React from "react";
 
 import PropTypes from 'prop-types';
-import {doBinding, extractText, isNormalInteger, degreesToRadians, rgbToHex} from "./utilities.js";
+import {doBinding, extractText, isNormalInteger, degreesToRadians, rgbToHex, guid} from "./utilities.js";
 import {DragHandle} from "./resizing_layouts";
 
 import { Graphics, Point } from 'pixi.js';
@@ -232,6 +232,7 @@ class PixiTurtleBox extends React.Component {
             let new_comp;
             if (pdown) {
                 new_comp = (<Line x={this.state.turtleX} y={this.state.turtleY}
+                                  key={guid()}
                                   xend={newX} yend={newY}
                                   fw={this.props.fixed_width} fh={this.props.fixed_height}
                                   penwidth={this.state.penWidth} pencolor={this.state.penColor}

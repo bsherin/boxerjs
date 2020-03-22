@@ -11,12 +11,12 @@ import "../css/boxer.scss";
 import {doBinding, guid} from "./utilities.js";
 import {DataBox} from "./nodes.js";
 import {BoxerNavbar} from "./blueprint_navbar.js";
-import {ProjectMenu, BoxMenu, EditMenu, ViewMenu} from "./main_menus_react.js";
+import {ProjectMenu, BoxMenu, MakeMenu, EditMenu, ViewMenu} from "./main_menus_react.js";
 import {postAjax} from "./communication_react.js"
 
 import {BoxerSocket} from "./boxer_socket.js"
 import {KeyTrap} from "./key_trap";
-import {getCaretPosition} from "./utilities";
+import {getCaretPosition, propsAreEqual} from "./utilities";
 import {withStatus} from "./toaster.js";
 import {withErrorDrawer} from "./error_drawer.js";
 import {container_kinds} from "./shared_consts.js";
@@ -30,7 +30,7 @@ $(document).on('mousedown', "button",
     }
 );
 
-import {defaultBgColor, defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
+import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
 import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
 
 const MAX_UNDO_SAVES = 20;
@@ -73,9 +73,10 @@ class MainApp extends React.Component {
         }
         else {
             let base_node = _.cloneDeep(props.world_state.base_node);
-            for (let lin of base_node.line_list) {
-                this._healLine(lin, true)
-            }
+            this._healStructure(base_node);
+            // for (let lin of base_node.line_list) {
+            //     this._healLine(lin, true)
+            // }
             this.state.base_node = base_node;
         }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
@@ -128,7 +129,6 @@ class MainApp extends React.Component {
     }
 
     _undo() {
-
         if (this.history.length > 0) {
             this.undoing = true;
             this.setState({"base_node": this.history.shift()})
@@ -160,6 +160,17 @@ class MainApp extends React.Component {
         }
         if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
             return false
+        }
+        if (node.closetLine) {
+            if (node.closetLine.unique_id == uid) {
+                return node.closetLine
+            }
+            for (let nd of node.closetLine.node_list) {
+                let match = this._getMatchingNode(uid, nd);
+                if (match) {
+                    return match
+                }
+            }
         }
         for (let lin of node.line_list) {
             if (lin.unique_id == uid) {
@@ -383,8 +394,26 @@ class MainApp extends React.Component {
 
     }
 
+    _toggleCloset(boxId) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(boxId, new_base);
+        let mline = this._getMatchingNode(mnode.parent, new_base);
+        if (mline.parent == null) return;
+        let mbox = this._getMatchingNode(mline.parent, new_base);
+        mbox.showCloset = !mbox.showCloset;
+        if (mbox.showCloset && !mbox.closetLine) {
+            mbox.closetLine = this._newClosetLine();
+            mbox.closetLine.parent =mbox.unique_id
+        }
+        this.setState({base_node: new_base})
+    }
+
     _toggleBoxTransparencyLastFocus() {
         this._toggleBoxTransparency(this.last_focus_id)
+    }
+
+    _toggleClosetLastFocus() {
+        this._toggleCloset(this.last_focus_id)
     }
 
     _insertGraphicsBoxLastFocus() {
@@ -414,68 +443,6 @@ class MainApp extends React.Component {
         node_list.splice(n2, 1)
     }
 
-    _healLine(line_pointer, recursive=false) {
-        let done = false;
-
-        // Merge adjacent text nodes
-        while (!done) {
-            this._renumberNodes(line_pointer.node_list);
-            done = true;
-            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
-                if ((line_pointer.node_list[i].kind == "text") && (line_pointer.node_list[i + 1].kind == "text")) {
-                    this._mergeTextNodes(i, i + 1, line_pointer.node_list);
-                    done = false;
-                    break
-                }
-            }
-        }
-        // Insert text node at start if necessary
-        if (line_pointer.node_list[0].kind != "text") {
-            let new_node = this._newTextNode("");
-            line_pointer.node_list.splice(0, 0, new_node);
-            new_node.parent = line_pointer.unique_id;
-            this._renumberNodes(line_pointer.node_list);
-        }
-        // Insert text node at end if necessary
-        if (_.last(line_pointer.node_list).kind != "text") {
-            let new_node = this._newTextNode("");
-            line_pointer.node_list.push(new_node);
-            new_node.parent = line_pointer.unique_id;
-            this._renumberNodes(line_pointer.node_list);
-        }
-        done = false;
-
-        // Insert text nodes between adjacent boxes
-        while (!done) {
-            this._renumberNodes(line_pointer.node_list);
-            done = true;
-            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
-                if ((line_pointer.node_list[i].kind != "text") && (line_pointer.node_list[i + 1].kind != "text")) {
-                    let new_node = this._newTextNode("");
-                    line_pointer.node_list.splice(i + 1, 0, new_node);
-                    new_node.parent = line_pointer.unique_id;
-                    done = false;
-                    break
-                }
-            }
-        }
-
-        // Make sure all child notes point to the parent
-        for (let node of line_pointer.node_list) {
-            node.parent = line_pointer.unique_id;
-        }
-        if (recursive) {
-            for (let node of line_pointer.node_list) {
-                if (container_kinds.includes(node.kind)) {
-                    for (let lin of node.line_list) {
-                        lin.parent = node.unique_id;
-                        this._healLine(lin)
-                    }
-                }
-
-            }
-        }
-    }
     _removeLine(uid, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
@@ -589,7 +556,14 @@ class MainApp extends React.Component {
         if (caret_pos == 0) {
             if (mnode.position == 0)  {
                 this.clipboard = [_.cloneDeep(parent_line)];
-                this._removeLine(parent_line.unique_id, new_base);
+                if (parent_line.amCloset) {
+                    let newnode = this._newTextNode();
+                    newnode.parent = parent_line.unique_id;
+                    parent_line.node_list = [new_node]
+                }
+                else {
+                    this._removeLine(parent_line.unique_id, new_base);
+                }
                 this.setState({base_node: new_base})
             }
         }
@@ -613,7 +587,7 @@ class MainApp extends React.Component {
         let focus_pos;
         let self = this;
         if (mnode.position == 0) {
-            if (parent_line.position != 0) {
+            if (!parent_line.amCloset && parent_line.position != 0) {
                 let dbox = this._getMatchingNode(parent_line.parent, this.state.base_node);
                 let first_line = dbox.line_list[parent_line.position - 1];
                 let preceding_node = _.last(first_line.node_list);
@@ -681,6 +655,20 @@ class MainApp extends React.Component {
         return new_node
     }
 
+    _newClosetLine() {
+        let closet_box = this._newDataBoxNode([], true);
+        closet_box.transparent = true;
+        closet_box.name = "closet";
+        let node_list = [
+            this._newTextNode(""),
+            closet_box,
+            this._newTextNode("")
+        ];
+        let ncloset = this._newLineNode(node_list);
+        ncloset.amCloset = true;
+        return ncloset
+    }
+
     _newLineNode(node_list=[]) {
         let uid = guid();
         if (node_list.length == 0) {
@@ -691,6 +679,7 @@ class MainApp extends React.Component {
                         parent: null,
                         position: 0,
                         node_list: node_list,
+                        amCloset: false,
                         unique_id: uid};
         for (let node of node_list) {
             node.parent = uid
@@ -708,6 +697,7 @@ class MainApp extends React.Component {
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
+        this._renumberNodes(line_list);
         let new_box = {kind: "doitbox",
                         key: uid,
                         name: null,
@@ -721,11 +711,13 @@ class MainApp extends React.Component {
                         selected: false,
                         line_list: line_list,
                         closed: false,
+                        showCloset: false,
+                        closetLine: null,
                         unique_id: uid};
         return new_box
     }
 
-    _newDataBoxNode(line_list=[]) {
+    _newDataBoxNode(line_list=[], amClosetBox=false) {
         let uid = guid();
         if (line_list.length == 0) {
             let node_list = [this._newTextNode(" ")];
@@ -735,6 +727,7 @@ class MainApp extends React.Component {
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
+        this._renumberNodes(line_list);
         let new_box = {
             kind: "databox",
             key: uid,
@@ -750,6 +743,8 @@ class MainApp extends React.Component {
             selected: false,
             line_list: line_list,
             closed: false,
+            showCloset: false,
+            closetLine: null,
             unique_id: uid};
         return new_box
     }
@@ -764,6 +759,7 @@ class MainApp extends React.Component {
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
+        this._renumberNodes(line_list);
         let new_node = {
             kind: "graphics",
             key: uid,
@@ -779,6 +775,8 @@ class MainApp extends React.Component {
             selected: false,
             line_list: line_list,
             closed: false,
+            showCloset: false,
+            closetLine: null,
             unique_id: uid,
             graphics_fixed_width: 300,
             graphics_fixed_height: 300,
@@ -805,7 +803,6 @@ class MainApp extends React.Component {
 
     _newSpriteBox() {
         let uid = guid();
-        let node_list = [this._newTextNode(" ")];
         let param_dict = {
             "xPosition": 0,
             "yPosition": 0,
@@ -819,15 +816,29 @@ class MainApp extends React.Component {
             "fontSize": defaultFontSize,
             "fontStyle": defaultFontStyle
         };
-        for (let param in param_dict) {
-            node_list.push(this._newValueBox(param, param_dict[param]));
-            node_list.push(this._newTextNode(" "))
+
+        let main_params = ["xPosition", "yPosition", "pen", "shown", "heading"];
+        let closet_params = ["spriteSize", "penColor", "penWidth", "fontFamily", "fontSize", "fontStyle"];
+
+        let main_node_list = [this._newTextNode(" ")];
+        for (let param of main_params) {
+            main_node_list.push(this._newValueBox(param, param_dict[param]));
+            main_node_list.push(this._newTextNode(" "))
         }
-        let new_line = this._newLineNode(node_list);
-        let line_list = [new_line];
+        let main_line = this._newLineNode(main_node_list);
+
+        let closet_node_list = [this._newTextNode(" ")];
+        for (let param of closet_params) {
+            closet_node_list.push(this._newValueBox(param, param_dict[param]));
+            closet_node_list.push(this._newTextNode(" "))
+        }
+        let closet_line = this._newLineNode(closet_node_list);
+
+        let line_list = [main_line];
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
+        this._renumberNodes(line_list);
         let new_node = {
             kind: "sprite",
             key: uid,
@@ -843,7 +854,9 @@ class MainApp extends React.Component {
             selected: false,
             line_list: line_list,
             closed: false,
-            unique_id: uid,
+            showCloset: false,
+            closetLine: closet_line,
+            unique_id: uid
 
         };
         return new_node
@@ -860,6 +873,12 @@ class MainApp extends React.Component {
                 }
             }
         }
+        for (let nd of mnode.closetLine.node_list) {
+            if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                    nd.line_list[0].node_list[0].the_text = String(pdict[nd.name])
+            }
+        }
+
         this.setState({base_node: new_base}, callback)
     }
 
@@ -897,6 +916,129 @@ class MainApp extends React.Component {
             setFocus: null,
         };
         return new_node
+    }
+
+    _nodeCreators() {
+        return {
+            jsbox: this._newJsBoxNode,
+            text: this._newTextNode,
+            doitbox: this._newDoitBoxNode,
+            databox: this._newDataBoxNode,
+            sprite: this._newSpriteBox,
+            graphics: this._newGraphicsBox,
+            line: this._newLineNode
+        }
+    }
+
+    _healers() {
+        return {
+            jsbox: null,
+            text: null,
+            doitbox: this._newDoitBoxNode,
+            databox: this._newDataBoxNode,
+            sprite: this._newSpriteBox,
+            graphics: this._newGraphicsBox,
+            line: this._healLine
+        }
+    }
+
+    _healStructure(start_node, parent_node, parent_id=null) {
+        this._addMissingParams(start_node);
+        if (parent_id) {
+            start_node.parent = parent_id
+        }
+        if (start_node.kind == "line") {
+            this._healLine(start_node, true)
+        }
+        else if (container_kinds.includes(start_node.kind)) {
+            for (let lin of start_node.line_list) {
+                // noinspection JSPrimitiveTypeWrapperUsage
+                lin.parent = start_node.unique_id;
+                this._healStructure(lin, start_node)
+            }
+            this._renumberNodes(start_node.line_list);
+            if (start_node.closetLine) {
+                start_node.closetLine.parent = start_node.unique_id;
+                start_node.amCloset = true;
+                this._healStructure(start_node.closetLine)
+            }
+        }
+        else if (start_node.kind.includes("turtle")) {
+            parent_node.node_list.splice(start_node.position, 1, this._newTurtleBox())
+        }
+    }
+
+    _addMissingParams(start_node) {
+        let model_node = this._nodeCreators()[start_node.kind]();
+        for (let param in model_node) {
+            if (!start_node.hasOwnProperty(param)) {
+                start_node[param] = model_node[param]
+            }
+        }
+    }
+
+    _healLine(line_pointer, recursive=false) {
+        let done = false;
+
+        // Merge adjacent text nodes
+        while (!done) {
+            this._renumberNodes(line_pointer.node_list);
+            done = true;
+            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
+                if ((line_pointer.node_list[i].kind == "text") && (line_pointer.node_list[i + 1].kind == "text")) {
+                    this._mergeTextNodes(i, i + 1, line_pointer.node_list);
+                    done = false;
+                    break
+                }
+            }
+        }
+        // Insert text node at start if necessary
+        if (line_pointer.node_list[0].kind != "text") {
+            let new_node = this._newTextNode("");
+            line_pointer.node_list.splice(0, 0, new_node);
+            new_node.parent = line_pointer.unique_id;
+            this._renumberNodes(line_pointer.node_list);
+        }
+        // Insert text node at end if necessary
+        if (_.last(line_pointer.node_list).kind != "text") {
+            let new_node = this._newTextNode("");
+            line_pointer.node_list.push(new_node);
+            new_node.parent = line_pointer.unique_id;
+            this._renumberNodes(line_pointer.node_list);
+        }
+        done = false;
+
+        // Insert text nodes between adjacent boxes
+        while (!done) {
+            this._renumberNodes(line_pointer.node_list);
+            done = true;
+            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
+                if ((line_pointer.node_list[i].kind != "text") && (line_pointer.node_list[i + 1].kind != "text")) {
+                    let new_node = this._newTextNode("");
+                    line_pointer.node_list.splice(i + 1, 0, new_node);
+                    new_node.parent = line_pointer.unique_id;
+                    done = false;
+                    break
+                }
+            }
+        }
+
+        // Make sure all child notes point to the parent
+        for (let node of line_pointer.node_list) {
+            node.parent = line_pointer.unique_id;
+        }
+        if (recursive) {
+            for (let node of line_pointer.node_list) {
+                this._healStructure(node, line_pointer)
+                // if (container_kinds.includes(node.kind)) {
+                //     for (let lin of node.line_list) {
+                //         lin.parent = node.unique_id;
+                //         this._healLine(lin)
+                //     }
+                // }
+
+            }
+        }
     }
 
 
@@ -943,7 +1085,7 @@ class MainApp extends React.Component {
         let new_base = _.cloneDeep(this.state.base_node);
         let mnode = this._getMatchingNode(uid, new_base);
         if (mnode) {
-            if (!mnode.new_width) {
+            if (!new_width) {
                 mnode.fixed_size = false;
                 mnode.fixed_width = null;
                 mnode.fixed_height = null
@@ -1065,6 +1207,15 @@ class MainApp extends React.Component {
         if (node == null) {
             node = new_base
         }
+        if (node.closetLine) {
+            node.closetLine.selected = false;
+            for (let nd of node.closetLine.node_list) {
+                nd.selected = false;
+                if (container_kinds.includes(nd.kind) || nd.kind == "line") {
+                    this._clearSelected(nd, new_base)
+                }
+            }
+        }
 
         if (node.line_list.length == 0) {
             return
@@ -1093,6 +1244,9 @@ class MainApp extends React.Component {
         else if (container_kinds.includes(node.kind)) {
             for (let child of node.line_list) {
                 this._selectChildren(child)
+            }
+            if (node.closetLine) {
+                this._selectChildren(node.closetLine)
             }
         }
     }
@@ -1151,7 +1305,11 @@ class MainApp extends React.Component {
                     for (let lin2 of node.line_list) {
                         lin2.parent = node.unique_id;
                     }
-                    this._updateIds(node.line_list)
+                    this._updateIds(node.line_list);
+                    if (node.closetLine) {
+                        node.closetLine.parent = node.unique_id;
+                        this._updateIds(node.closetLine);
+                    }
                 }
             }
         }
@@ -1363,7 +1521,7 @@ class MainApp extends React.Component {
             this.clipboard = [this._newLineNode(_.cloneDeep(copied_nodes))]
         }
         else {
-            let copied_lines = selec_parent_node.line_list.slice(this.state.select_range[0],
+            let copied_lines = select_parent_node.line_list.slice(this.state.select_range[0],
                 this.state.select_range[1] + 1);
             this.clipboard = [copied_lines];
         }
@@ -1387,7 +1545,7 @@ class MainApp extends React.Component {
                 focus_node = select_parent_node.node_list[select_parent_node.node_list.length - 1];
                 focus_node.setFocus = focus_node.the_text.length
             }
-            else if (start_spot == 0 || select_parent_node.node_list[start_spot].kind != "text") {
+            else if (select_parent_node.node_list[start_spot].kind != "text") {
                 focus_node = select_parent_node.node_list[start_spot + 1];
                 focus_node.setFocus = 0
                 
@@ -1403,6 +1561,14 @@ class MainApp extends React.Component {
             let focus_node;
             let focus_line;
             this._renumberNodes(select_parent_node.line_list);
+            if (select_parent_node.line_list.length == 0) {
+                let new_line = this._newLineNode();
+                new_line.parent = select_parent_node.unique_id;
+                new_line.position = 0;
+                select_parent_node.line_list = [new_line];
+                let focus_node = new_line.node_list[0];
+                focus_node.setFocus = 0
+            }
             if (this.state.select_range[0] >= select_parent_node.line_list.length) {
                 focus_line = select_parent_node.line_list[this.state.select_range[0] - 1];
                 focus_node = focus_line.node_list[focus_line.node_list.length - 1];
@@ -1414,6 +1580,9 @@ class MainApp extends React.Component {
                 focus_node.setFocus = 0
             }
 
+        }
+        for (let lin of base_node.line_list) {
+            this._healLine(lin, true);
         }
 
         this.setState({base_node: base_node, boxer_selected: false})
@@ -1492,6 +1661,7 @@ class MainApp extends React.Component {
             newDataBox: this._newDataBoxNode,
             newDoitBox: this._newDoitBoxNode,
             newLineNode: this._newLineNode,
+            newClosetLine: this._newClosetLine,
             addToClipboardStart: this._addToClipboardStart,
             insertClipboardLastFocus: this._insertClipboardLastFocus,
             handleCodeChange: this._handleCodeChange,
@@ -1514,7 +1684,9 @@ class MainApp extends React.Component {
             undo: this._undo,
             setSpriteParams: this._setSpriteParams,
             addGraphicsComponent: this._addGraphicsComponent,
-            toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus
+            toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus,
+            toggleClosetLastFocus: this._toggleClosetLastFocus,
+            toggleCloset: this._toggleCloset
         };
         return funcs
     }
@@ -1527,9 +1699,11 @@ class MainApp extends React.Component {
                              {...this.props.statusFuncs}
                              world_state={this.props.world_state}
                 />
-                <BoxMenu {...this.funcs}
-                />
                 <EditMenu {...this.funcs}
+                />
+                <MakeMenu {...this.funcs}
+                />
+                <BoxMenu {...this.funcs}
                 />
                 <ViewMenu {...this.funcs}
                 />
@@ -1579,6 +1753,8 @@ class MainApp extends React.Component {
                 />
                 <DataBox name={zoomed_node.name}
                          funcs={this.funcs}
+                         showCloset={zoomed_node.showCloset}
+                         closetLine={zoomed_node.closetLine}
                          kind={zoomed_node.kind}
                          transparent={zoomed_node.transparent}
                          className="data-box-outer"

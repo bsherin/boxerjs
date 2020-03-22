@@ -16,7 +16,7 @@ import {TriangleTurtle, Line, Rectangle, Ellipse} from "./pixi_shapes.js";
 import {Sprite, Stage, Text, AppConsumer} from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 
-import {defaultBgColor, defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
+import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
 import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
 import {extractText} from "./utilities";
 
@@ -101,6 +101,11 @@ class SpriteBox extends React.Component {
                 }
             }
         }
+        for (let nd of mnode.closetLine.node_list) {
+            if (nd.name == pname) {
+                return this._extractValue(nd)
+            }
+        }
         return null
     }
 
@@ -112,6 +117,11 @@ class SpriteBox extends React.Component {
                 if (sprite_params.includes(nd.name)) {
                     pdict[nd.name]  = this._extractValue(nd)
                 }
+            }
+        }
+        for (let nd of mnode.closetLine.node_list) {
+            if (sprite_params.includes(nd.name)) {
+                pdict[nd.name] = this._extractValue(nd)
             }
         }
         return pdict
@@ -414,6 +424,13 @@ class GraphicsBox extends React.Component {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
         }
+        if (this.nameRef){
+            $(this.nameRef).focus(this._gotNameFocus)
+        }
+    }
+
+    _gotNameFocus() {
+        this.setState({focusingName: true})
     }
 
     componentDidUpdate () {
@@ -500,12 +517,17 @@ class GraphicsBox extends React.Component {
         }
         else {
             let sprite_components = [];
-            for (let lin of this.props.line_list) {
+            let acindex = 0;
+            let temp_ll = _.cloneDeep(this.props.line_list);
+            if (this.props.closetLine) {
+                temp_ll.push(this.props.closetLine)
+            }
+            for (let lin of temp_ll) {
                 for (let nd of lin.node_list) {
                     if (nd.kind == "sprite") {
                         this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
                         let new_comp = (
-                            <AppConsumer>
+                            <AppConsumer key={"ac" + String(acindex)}>
                                 {app =>
                                     <SpriteBox {...nd}
                                                key={nd.unique_id}
@@ -523,6 +545,7 @@ class GraphicsBox extends React.Component {
                                 }
                             </AppConsumer>
                         );
+                        acindex += 1;
                         if (new_comp) {
                             sprite_components.push(new_comp)
                         }
@@ -537,9 +560,9 @@ class GraphicsBox extends React.Component {
             if (this.props.selected) {
                 dbclass += " selected"
             }
-            if ((this.props.name != null) || this.state.focusingName) {
-                dbclass += " data-box-with-name"
-            }
+            // if ((this.props.name != null) || this.state.focusingName) {
+                dbclass += " data-box-with-name";
+            // }
             let gwidth;
             let gheight;
             if (this.state.resizing) {
@@ -550,9 +573,13 @@ class GraphicsBox extends React.Component {
                 gwidth = this.props.graphics_fixed_width;
                 gheight = this.props.graphics_fixed_height;
             }
+            let outer_class = "data-box-outer";
+            if (this.props.name == null && !this.state.focusingName) {
+                outer_class += " empty-name"
+            }
 
             return (
-                <div className="data-box-outer">
+                <div className={outer_class}>
                     <EditableTag the_name={this.props.name}
                              focusingMe={this.state.focusingName}
                              boxWidth={this.state.boxWidth}
@@ -564,7 +591,7 @@ class GraphicsBox extends React.Component {
                       <Stage width={gwidth}
                              height={gheight}
                       >
-                          <Sprite width={gwidth} height={gheight}
+                          <Sprite width={gwidth} height={gheight} key="bgsprite"
                                   texture={PIXI.Texture.WHITE}
                                   tint={this.state.bgColor} />
                           {sprite_components.length > 0 &&
@@ -665,6 +692,9 @@ class TextNode extends React.Component {
             updated_result.unique_id = guid();
             if (updated_result.kind == "databox") {
                 this.props.funcs.updateIds(updated_result.line_list);
+                if (updated_result.closetLine) {
+                    this.props.funcs.updateIds([updated_result.closetLine])
+                }
             }
 
             this.props.funcs.insertNode(updated_result, parent_line.unique_id, parent_line.node_list.length)
@@ -675,7 +705,11 @@ class TextNode extends React.Component {
         if (["Control", "Shift", "Meta"].includes(event.key)) {
             return
         }
-
+        if (event.key == "F9") {
+            event.preventDefault();
+            this.props.funcs.toggleCloset(this.props.unique_id)
+            return
+        }
         if (event.key == "k") {
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
@@ -735,6 +769,10 @@ class TextNode extends React.Component {
             event.preventDefault();
             let my_line = this._myLine();
             let myDataBox = this._myBox();
+            if (my_line.amCloset) {
+                let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            }
             if (my_line.position < (myDataBox.line_list.length - 1)) {
                 let firstTextNodeId = myDataBox.line_list[my_line.position + 1].node_list[0].unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
@@ -784,15 +822,18 @@ class TextNode extends React.Component {
         if (event.key == "ArrowUp") {
             event.preventDefault();
             let my_line = this._myLine();
-            if (my_line.position == 0) {
+            let myDataBox = this._myBox();
+            if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
                 this.props.funcs.focusName()
             }
+            else if (my_line.position == 0) {
+                let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            }
             else {
-                let myDataBox = this._myBox();
                 let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
             }
-            return
         }
 
     }
@@ -913,7 +954,9 @@ class TextNode extends React.Component {
 
 TextNode.propTypes = {
     the_text: PropTypes.string,
-    setFocus: PropTypes.number,
+    setFocus: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.number]),
     unique_id: PropTypes.string,
     selected: PropTypes.bool,
     funcs: PropTypes.object,
@@ -929,6 +972,10 @@ class EditableTag extends React.Component {
         doBinding(this);
     }
 
+    shouldComponentUpdate(nextProps, nextState) {
+        return this.props.focusingMe || !propsAreEqual(nextProps, this.props)
+    }
+
     _handleChange(event) {
         this.props.funcs.changeNode(this.props.boxId, "name", event.target.value)
     }
@@ -940,11 +987,19 @@ class EditableTag extends React.Component {
             if (myDataBox.kind == "jsbox") {
                 this.props.funcs.changeNode(this.props.boxId, "setFocus", 0);
             }
+            else if (myDataBox.showCloset) {
+                let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+            }
             else {
                 let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
             }
 
+        }
+        if (event.key =="]") {
+            event.preventDefault();
+            this.props.funcs.positionAfterBox(this.props.boxId);
         }
     }
 
@@ -966,26 +1021,25 @@ class EditableTag extends React.Component {
         else {
             html = this.props.the_name
         }
-        if ((this.props.the_name == null) && !this.props.focusingMe) {
-            istyle = {display: "none"};
-        }
-        else {
-            istyle = {};
-        }
+
+        istyle = {};
+
         if (this.props.boxWidth != null && !this.props.focusingMe) {
             istyle.maxWidth = this.props.boxWidth - 20;
+        }
+        let cname = "bp3-tag data-box-name";
+        if (this.props.am_sprite) {
+            cname += " sprite-name"
+        }
+        if (this.props.the_name == null && !this.props.focusingMe) {
+            cname += " empty-tag"
         }
         let ceclass;
         if (this.props.focusingMe) {
             ceclass = "bp3-fill"
         }
         else {
-            ceclass="bp3-text-overflow-ellipsis bp3-fill"
-        }
-
-        let cname = "bp3-tag data-box-name";
-        if (this.props.am_sprite) {
-            cname += " sprite-name"
+            ceclass="bp3-text-overflow-ellipsis bp3-fill";
         }
 
         return (
@@ -1042,7 +1096,7 @@ class DataBox extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        return this.state.resizing || !propsAreEqual(nextProps, this.props)
+        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
     }
 
     _handleChange(evt) {
@@ -1082,6 +1136,13 @@ class DataBox extends React.Component {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
         }
+        if (this.nameRef){
+            $(this.nameRef).focus(this._gotNameFocus)
+        }
+    }
+
+    _gotNameFocus() {
+        this.setState({focusingName: true})
     }
 
     componentDidUpdate () {
@@ -1098,6 +1159,9 @@ class DataBox extends React.Component {
             if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
+        }
+        if (this.nameRef){
+            $(this.nameRef).focus(this._gotNameFocus)
         }
     }
 
@@ -1198,19 +1262,30 @@ class DataBox extends React.Component {
                 </div>
             )
         }
-        let the_content = this.props.line_list.map((the_line, index) => (
-                <DataboxLine key={the_line.unique_id}
-                             unique_id={the_line.unique_id}
-                             funcs={this.props.funcs}
-                             node_list={the_line.node_list}/>
-            ));
 
-        if ((this.props.name != null) || this.state.focusingName) {
-            dbclass = "data-box data-box-with-name"
+        let the_content = this.props.line_list.map((the_line, index) => {
+                return (
+                    <DataboxLine key={the_line.unique_id}
+                                 unique_id={the_line.unique_id}
+                                 amCloset={the_line.amCloset}
+                                 funcs={this.props.funcs}
+                                 node_list={the_line.node_list}/>
+                )
+        });
+
+        if (this.props.showCloset) {
+            let cline = this.props.closetLine;
+            let clinenode = (
+                <DataboxLine key={cline.unique_id}
+                                 unique_id={cline.unique_id}
+                                 amCloset={cline.amCloset}
+                                 funcs={this.props.funcs}
+                                 node_list={cline.node_list}/>
+            );
+            the_content.unshift(clinenode)
         }
-        else {
-            dbclass = "data-box"
-        }
+
+        dbclass = "data-box data-box-with-name";
         if (this.props.kind == "doitbox") {
             dbclass = dbclass + " doit-box";
         }
@@ -1260,9 +1335,13 @@ class DataBox extends React.Component {
             outer_style = {}
         }
         let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
+        let outer_class = "data-box-outer";
+        if (this.props.name == null && !this.state.focusingName) {
+            outer_class += " empty-name"
+        }
         return (
             <React.Fragment>
-                <div className="data-box-outer" style={outer_style} ref={this.outerRef}>
+                <div className={outer_class} style={outer_style} ref={this.outerRef}>
                     <EditableTag the_name={this.props.name}
                                  focusingMe={this.state.focusingName}
                                  boxWidth={this.state.boxWidth}
@@ -1305,8 +1384,12 @@ DataBox.propTypes = {
     selected: PropTypes.bool,
     am_zoomed: PropTypes.bool,
     fixed_size: PropTypes.bool,
-    fixed_width: PropTypes.number,
-    fixed_height: PropTypes.number
+    fixed_width: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.number]),
+    fixed_height: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.number])
 };
 
 DataBox.defaultProps = {
@@ -1328,6 +1411,10 @@ class JsBox extends React.Component {
         this.state.focusingName = false;
         this.state.boxWidth = null;
         this.cmobject = null;
+    }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
     }
 
     _handleCodeChange(new_code) {
@@ -1639,9 +1726,13 @@ class DataboxLine extends React.Component {
         super(props);
         doBinding(this);
     }
-    shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextProps, this.props)
-    }
+
+    // If I have shouldComponentUpdate here I run into focus problems
+    // When a new box is created it doesn't clear the setFocus in the text node
+
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     return !propsAreEqual(nextProps, this.props)
+    // }
 
     _handleSelection(selectedKeys) {
         this.props.funcs.setSelected(selectedKeys);
@@ -1699,6 +1790,8 @@ class DataboxLine extends React.Component {
                 return (
                     <DataBox key={the_node.unique_id}
                              kind={the_node.kind}
+                             showCloset={the_node.showCloset}
+                             closetLine={the_node.closetLine}
                               selected={the_node.selected}
                               className="data-box-outer"
                              fixed_size={the_node.fixed_size}
@@ -1716,8 +1809,15 @@ class DataboxLine extends React.Component {
                 )
             }
         });
+        let cname;
+        if (this.props.amCloset) {
+            cname = "data-line am-closet"
+        }
+        else {
+            cname = "data-line"
+        }
         return (
-            <div className="data-line">
+            <div className={cname}>
                     {the_content}
             </div>
         )

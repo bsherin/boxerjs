@@ -3,14 +3,14 @@
 import React from "react";
 import PropTypes from 'prop-types';
 
-import { MenuItem, Menu, Popover, PopoverPosition, Button } from "@blueprintjs/core";
+import { MenuItem, Menu, Popover, MenuDivider, PopoverPosition, Button } from "@blueprintjs/core";
 
 import {showModalReact} from "./modal_react.js";
 import {doFlash} from "./toaster.js"
 import {doBinding} from "./utilities.js";
 import {postAjax} from "./communication_react";
 
-export {ProjectMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
+export {ProjectMenu, MakeMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
 
 class MenuComponent extends React.Component {
     constructor(props) {
@@ -27,6 +27,9 @@ class MenuComponent extends React.Component {
         let choices = pruned_list.map((opt_name, index) => {
                 let icon = this.props.icon_dict.hasOwnProperty(opt_name) ? this.props.icon_dict[opt_name] : null;
                 let label = this.props.label_dict.hasOwnProperty(opt_name) ? this.props.label_dict[opt_name] : null;
+                if (this.props.option_dict[opt_name] == "divider") {
+                    return <MenuDivider key={index}/>
+                }
                 return (
                     <MenuItem disabled={this.props.disable_all || this.props.disabled_items.includes(opt_name)}
                               onClick={this.props.option_dict[opt_name]}
@@ -186,7 +189,7 @@ ProjectMenu.propTypes = {
     hidden_items: PropTypes.array
 };
 
-class BoxMenu extends React.Component {
+class MakeMenu extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -216,6 +219,58 @@ class BoxMenu extends React.Component {
         this.props.insertSpriteBoxLastFocus();
     }
 
+
+    get option_dict () {
+        return {
+            "Data Box": this._new_box,
+            "Doit Box": this._new_doitbox,
+            "JS Box": this._new_jsbox,
+            "divider1": "divider",
+            "Turtle Box": this._new_turtlebox,
+            "Graphics Box": this._new_graphicsbox,
+            "Sprite Box": this._new_spritebox,
+        }
+    }
+
+    get icon_dict () {
+        return {
+            "Data Box": "cube",
+            "Doit Box": "code",
+            "JS Box": "code",
+            "Turtle Box": "media",
+            "Graphics Box": "media",
+            "Sprite Box": "symbol-triangle-up",
+        }
+    }
+
+    get label_dict() {
+        return {
+            "Data Box": "{",
+            "Doit Box": "[",
+        }
+
+    }
+
+
+    render () {
+        return (
+            <MenuComponent menu_name="Make"
+                           option_dict={this.option_dict}
+                           icon_dict={this.icon_dict}
+                           label_dict={this.label_dict}
+                           disabled_items={this.props.disabled_items}
+                           hidden_items={[]}
+            />
+        )
+    }
+}
+
+class BoxMenu extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this)
+    }
+
     _name_box() {
         this.props.focusNameLastFocus()
     }
@@ -223,37 +278,26 @@ class BoxMenu extends React.Component {
 
     get option_dict () {
         return {
-            "Insert Data Box": this._new_box,
-            "Insert Doit Box": this._new_doitbox,
-            "Insert JS Box": this._new_jsbox,
-            "Insert Turtle Box": this._new_turtlebox,
-            "Insert Graphics Box": this._new_graphicsbox,
-            "Insert Sprite Box": this._new_spritebox,
-            "Edit Box Name": this._name_box,
+            "Name": this._name_box,
             "Unfix Box Size": this.props.unfixSizeLastFocus,
+            "Toggle Closet": this.props.toggleClosetLastFocus,
             "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus
         }
     }
 
     get icon_dict () {
         return {
-            "Insert Data Box": "cube",
-            "Insert Doit Box": "code",
-            "Insert JS Box": "code",
-            "Insert Turtle Box": "media",
-            "Insert Graphics Box": "media",
-            "Insert Sprite Box": "symbol-triangle-up",
-            "Name Box": "label",
+            "Name": "label",
             "Unfix Size":"undo",
+            "Toggle Closet": "one-column",
             "Toggle Transparency": "eye-open"
         }
     }
 
     get label_dict() {
         return {
-            "Insert Data Box": "{",
-            "Insert Doit Box": "[",
-            "Edit Box Name": "|",
+            "Name": "|",
+            "Toggle Closet": "F9"
         }
 
     }

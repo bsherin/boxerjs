@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import { Icon } from "@blueprintjs/core";
 import { DraggableCore } from "react-draggable"
 import {doBinding, guid} from "./utilities.js";
+import {propsAreEqual} from "./utilities";
 
 export {HorizontalPanes, VerticalPanes, HANDLE_WIDTH, DragHandle}
 
@@ -19,6 +20,10 @@ class DragHandle extends React.Component {
         this.startY = null;
         this.lastX = null;
         this.lastY = null;
+    }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextProps, this.props)
     }
 
     get icon_dict() {

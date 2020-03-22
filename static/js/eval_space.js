@@ -75,18 +75,24 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
     }
     let _my_context_name = await eval_in_place("_context_name");
     if (typeof(newval) == "object") {
+        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
+        if (!mnode || mnode.kind == "doitbox" || newval.kind == "doitbox") {
+            return new Promise(function (resolve, reject) {
+                resolve()
+            })
+        }
+
+        let _newval = _.cloneDeep(newval);
+        window.updateIds(_newval.line_list);
+        for (let lin of _newval.line_list) {
+            lin.parent = mnode.unique_id
+        }
+
         let dbstring = JSON.stringify(_newval);
         estring = boxname + " = " + dbstring;
         eval_in_place(estring);
-        let _newval = _.cloneDeep(newval);
-        if (_newval.kind == "databox") {
-            window.updateIds(_newval.line_list);
-            for (let lin of _newval.line_list) {
-                lin.parent = mnode.unique_id
-            }
-        }
-        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
-        if (!mnode || mnode.virtual) {
+
+        if (mnode.virtual) {
             return new Promise(function (resolve, reject) {
                 resolve()
             })
@@ -121,7 +127,8 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
             let newline = window.newLineNode([newtext]);
             newline.parent = mnode.unique_id;
             return new Promise(function(resolve, reject) {
-                window.changeNode(mnode.unique_id, "line_list", [newline], async (data)=>{
+                window.changeNode(mnode.unique_id, "line_list",
+                    [newline], async (data)=>{
                     await delay(delay_amount);
                     resolve(data)
                 })

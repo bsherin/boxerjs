@@ -89,6 +89,9 @@ div[id^='selectableItem'] {
     display: inline-block;
     vertical-align: top;
     position: relative;
+    &.empty-name {
+        top: -9px
+    }
 }
 
 .closed-data-box {
@@ -131,6 +134,19 @@ div[id^='selectableItem'] {
     &.sprite-name {
         margin-left: 27px
     }
+    &.empty-tag {
+        min-height: 2px;
+        min-width: 30px;
+        height: 2px;
+        bottom: -2px;
+        opacity: 0;
+        .bp3-fill {
+            height: 2px;
+        }
+        &:hover {
+            opacity: 100
+        }
+    }
 }
 
 .dragger {
@@ -147,7 +163,10 @@ div[id^='selectableItem'] {
 
 .data-line {
     display: block;
-    border: none
+    border: none;
+    &.am-closet {
+        background-color: $light-gray4;
+    }
 }
 
 .editable {
