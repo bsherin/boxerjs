@@ -748,8 +748,8 @@ class MainApp extends React.Component {
             showCloset: false,
             closetLine: null,
             unique_id: uid,
-            graphics_fixed_width: 300,
-            graphics_fixed_height: 300,
+            graphics_fixed_width: 303,
+            graphics_fixed_height: 303,
             showGraphics: true
         };
         return new_node;
@@ -912,6 +912,12 @@ class MainApp extends React.Component {
     }
 
     _healStructure(start_node, parent_node, parent_id = null) {
+        if (start_node.kind.includes("turtle")) {
+            let new_turtlebox = this._newTurtleBox();
+            new_turtlebox.parent = start_node.unique_id;
+            parent_node.node_list.splice(start_node.position, 1, new_turtlebox);
+            return;
+        }
         this._addMissingParams(start_node);
         if (parent_id) {
             start_node.parent = parent_id;
@@ -930,8 +936,6 @@ class MainApp extends React.Component {
                 start_node.amCloset = true;
                 this._healStructure(start_node.closetLine);
             }
-        } else if (start_node.kind.includes("turtle")) {
-            parent_node.node_list.splice(start_node.position, 1, this._newTurtleBox());
         }
     }
 
@@ -1265,7 +1269,7 @@ class MainApp extends React.Component {
                     this._updateIds(node.line_list);
                     if (node.closetLine) {
                         node.closetLine.parent = node.unique_id;
-                        this._updateIds(node.closetLine);
+                        this._updateIds([node.closetLine]);
                     }
                 }
             }

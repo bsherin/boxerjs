@@ -386,7 +386,13 @@ function tokenizeLine(line) {
             token_list.push(node)
         }
     }
-    return token_list
+    let pruned_list = [];
+    for (let token of token_list) {
+        if (token != "") {
+            pruned_list.push(token)
+        }
+    }
+    return pruned_list
 }
 
 function convertStatementList(line_list, virtualNodeTree, context, return_last_line=false) {
@@ -623,7 +629,7 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
     let consuming_line = _.cloneDeep(token_list);
     let statement_name = consuming_line[0];
     if ((typeof(statement_name) == "object")) {
-        if (is_last_line && !statement_name.name && statement_name.kind == "databox") {
+        if (is_last_line && !statement_name.name) {
             return "return " + consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)[0]  + ";"
         }
         else if (statement_name.kind == "doitbox") {

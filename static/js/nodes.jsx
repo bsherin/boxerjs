@@ -40,6 +40,24 @@ const sprite_params =[
             "fontStyle"
     ];
 
+const base_scale = .125;
+class TurtleTurtle extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+    }
+
+    render () {
+        return (<Sprite image="/static/assets/turtle_image.png"
+                        x={this.props.x}
+                        y={this.props.y}
+                        scale={base_scale * this.props.sf}
+                        angle={this.props.heading}
+                        anchor={[0.5, 0.5]}/>
+        )
+    }
+}
+
 class SpriteBox extends React.Component {
     constructor(props) {
         super(props);
@@ -270,6 +288,15 @@ class SpriteBox extends React.Component {
     _setPenWidth(w) {
         this._setMyParams({penWidth: w});
     }
+
+    _setSpriteSize(aboxorstring) {
+        let the_arg = this._getText(aboxorstring);
+        if (typeof(the_arg) == "string") {
+            the_arg = parseInt(the_arg)
+        }
+        this._setMyParams({spriteSize: the_arg});
+    }
+
     _moveTo(newX, newY, pdown=null, callback=null) {
         let sparams = this._getAllParams();
         if (pdown == null) {
@@ -359,7 +386,8 @@ class SpriteBox extends React.Component {
     render() {
         let sparams = this._getAllParams();
         let [tx, ty] = this._c(sparams["xPosition"], sparams["yPosition"]);
-        let tt = <TriangleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
+        // let tt = <TriangleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
+        let tt = <TurtleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
         if (this.props.showGraphics) {
             if (sparams.shown) {
                 return tt
@@ -492,7 +520,7 @@ class GraphicsBox extends React.Component {
     _stopResize(e, ui, x, y, dx, dy) {
         let self = this;
         this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-            if (dx < resizeTolerance && dy < resizeTolerance) {
+            if (Math.abs(dx) < resizeTolerance && Math.abs(dy) < resizeTolerance) {
                 self._setSize(false, false)
             }
             else {
@@ -588,6 +616,7 @@ class GraphicsBox extends React.Component {
                              submitRef={this._submitNameRef}
                              boxId={this.props.unique_id}/>
                     <div className={dbclass} ref={this.boxRef}>
+                        <CloseButton handleClick={this._closeMe}/>
                       <Stage width={gwidth}
                              height={gheight}
                       >
@@ -626,10 +655,6 @@ GraphicsBox.propTypes = {
     funcs: PropTypes.object
 };
 
-GraphicsBox.defaultProps = {
-    graphics_fixed_width: 300,
-    graphicx_fixed_height: 300
-};
 
 class TextNode extends React.Component {
     constructor (props) {
@@ -701,7 +726,7 @@ class TextNode extends React.Component {
         }
     }
 
-    _handleKeyDown(event) {
+   _handleKeyDown(event) {
         if (["Control", "Shift", "Meta"].includes(event.key)) {
             return
         }
@@ -722,6 +747,7 @@ class TextNode extends React.Component {
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
                 this._runMe();
+                return false
             }
             else {
                 currentlyDeleting = false;
@@ -1074,7 +1100,7 @@ EditableTag.propTypes = {
 
 EditableTag.defaultProps = {
     am_sprite: false
-}
+};
 
 class DataBox extends React.Component {
     constructor (props) {
@@ -1642,7 +1668,7 @@ class CloseButton extends React.Component {
                     className="close-button"
                       minimal={true}
                       small={true}
-                      intent="primary"
+                      intent="none"
                       onMouseDown={(e)=>{e.preventDefault()}}
                       onClick={this.props.handleClick}
                       icon="small-cross">
@@ -1708,7 +1734,7 @@ class ZoomButton extends React.Component {
                     className="zoom-button"
                       minimal={true}
                       small={true}
-                      intent="primary"
+                      intent="none"
                       onMouseDown={(e)=>{e.preventDefault()}}
                       onClick={this.props.handleClick}
                       icon="zoom-to-fit">

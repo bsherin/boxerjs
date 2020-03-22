@@ -2,6 +2,7 @@ import {PixiComponent} from "@inlet/react-pixi";
 import {Graphics, Point} from "pixi.js";
 
 import { useApp } from '@inlet/react-pixi'
+import {doBinding} from "./utilities";
 
 export {Rectangle, Ellipse, TriangleTurtle, Line}
 
@@ -59,6 +60,7 @@ const Ellipse = PixiComponent('Ellipse', {
 const tw = 11;
 const th = 15;
 const turtleColor = 0x008000;
+
 
 const TriangleTurtle = PixiComponent('TriangleTurtle', {
   create: props => new Graphics(),
