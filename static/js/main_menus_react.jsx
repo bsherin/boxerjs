@@ -104,7 +104,7 @@ class ProjectMenu extends React.Component {
             //let console_node = cleanse_bokeh(document.getElementById("console"));
             const result_dict = {
                 "project_name": new_name,
-                "world_state": self.props.getMainState()
+                "world_state": self.props.getStateForSave()
             };
 
             postAjax("save_new_project", result_dict, save_as_success);
@@ -136,7 +136,7 @@ class ProjectMenu extends React.Component {
         let self = this;
         const result_dict = {
             project_name: window.world_name,
-            world_state: self.props.getMainState()
+            world_state: self.props.getStateForSave()
         };
         this.props.startSpinner();
         postAjax("update_project", result_dict, updateSuccess);

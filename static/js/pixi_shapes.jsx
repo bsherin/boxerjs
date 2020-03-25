@@ -1,10 +1,11 @@
-import {PixiComponent} from "@inlet/react-pixi";
-import {Graphics, Point} from "pixi.js";
+// import {PixiComponent} from "@inlet/react-pixi";
+import {Graphics, Point, Sprite} from "pixi.js";
+import * as PIXI from "pixi.js";
+import {CustomPIXIComponent} from "react-pixi-fiber";
+import React from "react";
 
-import { useApp } from '@inlet/react-pixi'
-import {doBinding} from "./utilities";
+export {Rectangle, Ellipse, Line, shape_classes, SimpleLine, Triangle}
 
-export {Rectangle, Ellipse, TriangleTurtle, Line}
 
 function _cX(x, fw) {
     let xcenter = fw / 2;
@@ -20,11 +21,10 @@ function _c(x, y, fw, fh) {
     return [_cX(x, fw), _cY(y, fh)]
 }
 
-const Rectangle = PixiComponent('Rectangle', {
-  create: props => new Graphics(),
-  applyProps: (instance, _, props) => {
-    const { x, y, width, height, fill, fw, fh, penWidth, penColor} = props;
-    let [tx, ty] = _c(x, y, fw, fh);
+const Rectangle = CustomPIXIComponent({
+  customDisplayObject: props => new Graphics(),
+  customApplyProps: (instance, oldProps, newProps) => {
+    const { x, y, width, height, fill, fw, fh, penWidth, penColor} = newProps;
     instance.clear();
     if (fill != null) {
         instance.beginFill(fill);
@@ -33,17 +33,17 @@ const Rectangle = PixiComponent('Rectangle', {
     else {
         instance.lineStyle(penWidth, penColor);
     }
-    instance.drawRect(tx - width / 2, ty - height / 2, width, height);
+    instance.drawRect(x - width / 2, y - height / 2, width, height);
     if (fill != null) {
         instance.endFill();
     }
   },
-});
+}, 'Rectangle');
 
-const Ellipse = PixiComponent('Ellipse', {
-  create: props => new Graphics(),
-  applyProps: (instance, _, props) => {
-    const { x, y, width, height, fill, penWidth, penColor } = props;
+const Ellipse = CustomPIXIComponent({
+  customDisplayObject: props => new Graphics(),
+  customApplyProps: (instance, oldProps, newProps) => {
+    const { x, y, width, height, fill, penWidth, penColor } = newProps;
     instance.clear();
     if (fill != null) {
         instance.beginFill(fill);
@@ -55,46 +55,75 @@ const Ellipse = PixiComponent('Ellipse', {
     instance.drawEllipse(x, y, width / 2, height / 2);
     instance.endFill();
   },
-});
+}, 'Ellipse');
 
 const tw = 11;
 const th = 15;
 const turtleColor = 0x008000;
 
-
-const TriangleTurtle = PixiComponent('TriangleTurtle', {
-  create: props => new Graphics(),
-  applyProps: (instance, _, props) => {
-    const { x, y, heading, sf } = props;
-    instance.clear();
-    instance.position.x = 0;
-    instance.position.y = 0;
-    instance.beginFill(turtleColor);
-    instance.drawPolygon(
-        new Point(x - sf * tw / 2, y + sf * th / 2),
-        new Point(x, y - sf * th / 2),
-        new Point(x + sf * tw / 2, y + sf * th / 2)
-    );
-    instance.endFill();
-    instance.position.x = x;
-    instance.position.y = y;
-    instance.pivot.x = x;
-    instance.pivot.y = y;
-    instance.angle = heading;
-
-  },
-});
-
-
-const Line = PixiComponent('Line', {
-  create: props => new Graphics(),
-  applyProps: (instance, _, props) => {
-    const { x, y, xend, yend, fw, fh, penwidth, pencolor} = props;
-    let [rx, ry] = _c(x, y, fw, fh);
-    let [rxend, ryend] = _c(xend, yend, fw, fh);
+const Line = CustomPIXIComponent({
+  customDisplayObject: props => new PIXI.Graphics(),
+  customApplyProps: function(instance, oldProps, newProps) {
+    const {x, y, xend, yend, fw, fh, penwidth, pencolor} = newProps;
     instance.clear();
     instance.lineStyle(penwidth, pencolor)
-       .moveTo(rx, ry)
-       .lineTo(rxend, ryend);
+        .moveTo(x, y)
+        .lineTo(xend, yend);
+  }
+}, "Line");
+
+const SimpleLine = CustomPIXIComponent({
+  customDisplayObject: props => new PIXI.Graphics(),
+  customApplyProps: function(instance, oldProps, newProps) {
+    const {xstart, ystart, xend, yend, penwidth, pencolor} = newProps;
+    instance.clear();
+    instance.lineStyle(1, 0)
+          .moveTo(xstart, ystart)
+          .lineTo(xend, yend);
+  }
+}, "SimpleLine");
+
+const Triangle = CustomPIXIComponent({
+  customDisplayObject: props => new Graphics(),
+  customApplyProps: (instance, _, props) => {
+    const {tw, th, tcolor} = props;
+    instance.clear();
+    instance.beginFill(tcolor);
+    instance.drawPolygon(
+        new Point(0 - tw / 2, - th / 2),
+        new Point(0, th / 2),
+        new Point(tw / 2, - th / 2)
+    );
+    instance.endFill();
+    instance.pivot.x = 0;
+    instance.pivot.y = 0;
   },
-});
+}, 'Triangle');
+
+
+const shape_classes = {
+  Rectangle: Rectangle,
+  Ellipse: Ellipse,
+  Line: Line,
+  Triangle: Triangle
+};
+
+// texture creation experiments
+// must be rendered into a container I think
+//
+// Look also at TriangleTurtle and generateTexture
+
+
+// let _turtleTexture = null;
+//
+// function _setTurtleTexture(ttext) {
+//     _turtleTexture = ttext
+// }
+//
+// const tt = (
+//     <AppContext.Consumer >
+//                     {app =>
+//                         <TriangleTurtle x={150} y={150} heading={0} sf={13} app={app} setTexture={_setTurtleTexture}/>
+//                     }
+//     </AppContext.Consumer>);
+// )

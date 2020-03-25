@@ -12,18 +12,19 @@ import {ReactCodemirror} from "./react-codemirror.js";
 import {doExecution} from "./eval_space.js";
 import {DragHandle} from "./resizing_layouts.js"
 
-import {TriangleTurtle, Line, Rectangle, Ellipse} from "./pixi_shapes.js";
-import {Sprite, Stage, Text, AppConsumer} from "@inlet/react-pixi";
+import {Line, Rectangle, Ellipse, } from "./pixi_shapes.js";
+// noinspection ES6CheckImport
+import { Sprite, Stage, withApp, Container} from "react-pixi-fiber";
+// import {Sprite, Stage, Text, AppConsumer} from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 
 import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
 import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
 import {extractText} from "./utilities";
 
-export {DataBox, EditableTag}
+export {DataBox, EditableTag, loader}
 
 let currentlyDeleting = false;
-
 const resizeTolerance = 2;
 
 const sprite_params =[
@@ -39,8 +40,16 @@ const sprite_params =[
             "fontSize",
             "fontStyle"
     ];
+PIXI.settings.RESOLUTION = 1;
+const loader = PIXI.Loader.shared;
+loader.add('turtle', "/static/assets/turtle_image.png");
 
 const base_scale = .125;
+
+const tw = 11;
+const th = 15;
+const turtleColor = 0x008000;
+
 class TurtleTurtle extends React.Component {
     constructor(props) {
         super(props);
@@ -135,6 +144,9 @@ class SpriteBox extends React.Component {
                 if (sprite_params.includes(nd.name)) {
                     pdict[nd.name]  = this._extractValue(nd)
                 }
+                if (nd.name == "shape") {
+                    pdict["shape_components"] = nd.drawn_components
+                }
             }
         }
         for (let nd of mnode.closetLine.node_list) {
@@ -154,20 +166,21 @@ class SpriteBox extends React.Component {
     }
 
     _clear() {
-        this.props.clearComponents();
-        this._setMyParams({
-            xPosition: 0,
-            yPosition: 0,
-            pen: true,
-            shown: true,
-            heading: 0,
-            "spriteSize": 1,
-            "penColor": defaultPenColor,
-            "penWidth": defaultPenWidth,
-            "fontFamily": defaultFontFamily,
-            "fontSize": defaultFontSize,
-            "fontStyle": defaultFontStyle
-        })
+        this.props.clearComponents(()=>{
+            this._setMyParams({
+                xPosition: 0,
+                yPosition: 0,
+                pen: true,
+                shown: true,
+                heading: 0,
+                "spriteSize": 1,
+                "penColor": defaultPenColor,
+                "penWidth": defaultPenWidth,
+                "fontFamily": defaultFontFamily,
+                "fontSize": defaultFontSize,
+                "fontStyle": defaultFontStyle
+            })
+        });
     }
 
     _setHeading(deg) {
@@ -200,7 +213,7 @@ class SpriteBox extends React.Component {
 
     _stampRectangle(w, h, hollow=false) {
         let sparams = this._getAllParams();
-        let new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]}
+        let new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
                                    width={w} height={h} fill={hollow ? null : sparams["penColor"]}
                                    fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_width}
                                    penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}
@@ -216,7 +229,7 @@ class SpriteBox extends React.Component {
     _stampEllipse(w, h, hollow=false) {
         let sparams = this._getAllParams();
         let [tx, ty] = this._c(sparams.xPosition, sparams.yPosition);
-        let new_comp = (<Ellipse x={tx} y={ty} width={w} height={h} fill={hollow ? null : sparams.penColor}
+        let new_comp = (<Ellipse x={tx} y={ty} key={guid()} width={w} height={h} fill={hollow ? null : sparams.penColor}
                                  penWidth={sparams.penWidth} penColor={sparams.penColor}
         />);
         this.props.addComponent(new_comp)
@@ -280,8 +293,7 @@ class SpriteBox extends React.Component {
           fontSize: sparams.fontSize,
           fontStyle: sparams.fontStyle,
         });
-        let [x, y] = this._c(sparams.xPosition, sparams.yPosition);
-        let new_comp =  (<Text x={x} y={y} align="center" text={the_text}/>);
+        let new_comp =  (<Text x={sparams.xPosition} y={sparams.yPosition} align="center" text={the_text}/>);
         this.props.addComponent(new_comp)
     }
 
@@ -307,13 +319,19 @@ class SpriteBox extends React.Component {
             if (pdown) {
                 new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
                                   xend={newX} yend={newY}
+                                  key={guid()}
                                   fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_height}
                                   penwidth={sparams.penWidth} pencolor={sparams.penColor}
 
                 />);
-                this.props.addComponent(new_comp);
+                this.props.addComponent(new_comp, ()=>{
+                    this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+                });
             }
-            this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+            else {
+                this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+            }
+
 
         }
     }
@@ -385,15 +403,21 @@ class SpriteBox extends React.Component {
 
     render() {
         let sparams = this._getAllParams();
-        let [tx, ty] = this._c(sparams["xPosition"], sparams["yPosition"]);
-        // let tt = <TriangleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
-        let tt = <TurtleTurtle x={tx} y={ty} heading={sparams["heading"]} sf={sparams["spriteSize"]}/>;
+        let the_sprite = (
+            <Sprite x={sparams["xPosition"]}
+                    y={sparams["yPosition"]}
+                    scale={sparams["spriteSize"]}
+                    angle={-1 * sparams["heading"]}
+                    anchor={[0.5, 0.5]}>
+                {sparams.shape_components}
+            </Sprite>
+        );
+
         if (this.props.showGraphics) {
             if (sparams.shown) {
-                return tt
+                return the_sprite
             }
             return null
-
         }
         else {
             return (
@@ -404,9 +428,7 @@ class SpriteBox extends React.Component {
     }
 }
 
-
-
-class GraphicsBox extends React.Component {
+class GraphicsBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
@@ -483,13 +505,14 @@ class GraphicsBox extends React.Component {
         this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
     }
 
-    _addComponent(new_comp) {
-        // this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp);
-        this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
+    _addComponent(new_comp, callback=null) {
+        this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp, callback);
+        //this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
     }
 
-    _clearComponents() {
-        this.setState({drawnComponents: []})
+    _clearComponents(callback=null) {
+        // this.setState({drawnComponents: []})
+        this.props.funcs.changeNode(this.props.unique_id, "drawn_components", [], callback)
     }
 
     _setWrap(wrap) {
@@ -530,6 +553,10 @@ class GraphicsBox extends React.Component {
 
     }
 
+    _snapTexture() {
+        return this.props.app.renderer.generateTexture(this.props.app.stage)
+    }
+
     render() {
         let type_label = "Data";
         let dbclass;
@@ -555,23 +582,19 @@ class GraphicsBox extends React.Component {
                     if (nd.kind == "sprite") {
                         this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
                         let new_comp = (
-                            <AppConsumer key={"ac" + String(acindex)}>
-                                {app =>
-                                    <SpriteBox {...nd}
-                                               key={nd.unique_id}
-                                               app={app}
-                                               ref={window.turtle_box_refs[nd.unique_id]}
-                                               funcs={this.props.funcs}
-                                               graphics_fixed_width={this.props.graphics_fixed_width}
-                                               graphics_fixed_height={this.props.graphics_fixed_height}
-                                               addComponent={this._addComponent}
-                                               do_wrap={this.do_wrap}
-                                               setWrap={this._setWrap}
-                                               setBgColor={this._setBgColor}
-                                               clearComponents={this._clearComponents}
-                                               showGraphics={this.props.showGraphics}/>
-                                }
-                            </AppConsumer>
+                            <SpriteBox {...nd}
+                                       key={nd.unique_id}
+                                       app={this.props.app}
+                                       ref={window.turtle_box_refs[nd.unique_id]}
+                                       funcs={this.props.funcs}
+                                       graphics_fixed_width={this.props.graphics_fixed_width}
+                                       graphics_fixed_height={this.props.graphics_fixed_height}
+                                       addComponent={this._addComponent}
+                                       do_wrap={this.do_wrap}
+                                       setWrap={this._setWrap}
+                                       setBgColor={this._setBgColor}
+                                       clearComponents={this._clearComponents}
+                                       showGraphics={this.props.showGraphics}/>
                         );
                         acindex += 1;
                         if (new_comp) {
@@ -605,7 +628,8 @@ class GraphicsBox extends React.Component {
             if (this.props.name == null && !this.state.focusingName) {
                 outer_class += " empty-name"
             }
-
+            let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
+            let scalePoint = [-1, 1];
             return (
                 <div className={outer_class}>
                     <EditableTag the_name={this.props.name}
@@ -617,17 +641,17 @@ class GraphicsBox extends React.Component {
                              boxId={this.props.unique_id}/>
                     <div className={dbclass} ref={this.boxRef}>
                         <CloseButton handleClick={this._closeMe}/>
-                      <Stage width={gwidth}
-                             height={gheight}
-                      >
+                      <Stage options={{width: gwidth, height:gheight, antialias: true}}>
                           <Sprite width={gwidth} height={gheight} key="bgsprite"
                                   texture={PIXI.Texture.WHITE}
                                   tint={this.state.bgColor} />
-                          {sprite_components.length > 0 &&
-                              sprite_components}
-                          {(this.state.drawnComponents.length > 0) &&
-                            this.state.drawnComponents}
+                          <Container position={offsetPoint} angle={180} scale={scalePoint}>
+                              {sprite_components.length > 0 && sprite_components}
+                              {(this.props.drawn_components.length > 0) &&
+                                this.props.drawn_components}
+                          </Container>
                       </Stage>
+
                         <DragHandle position_dict={draghandle_position_dict}
                                 dragStart={this._startResize}
                                 onDrag={this._onResize}
@@ -647,13 +671,16 @@ class GraphicsBox extends React.Component {
     }
 }
 
-GraphicsBox.propTypes = {
+GraphicsBoxRaw.propTypes = {
     unique_id: PropTypes.string,
     graphics_fixed_width: PropTypes.number,
     graphics_fixed_height: PropTypes.number,
     showGraphics: PropTypes.bool,
-    funcs: PropTypes.object
+    funcs: PropTypes.object,
+    app: PropTypes.object
 };
+
+const GraphicsBox = withApp(GraphicsBoxRaw);
 
 
 class TextNode extends React.Component {
@@ -665,7 +692,8 @@ class TextNode extends React.Component {
     }
 
     trimSpaces(string) {
-      return string
+      // noinspection RegExpRedundantEscape
+        return string
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&gt;/g, '>')
@@ -732,7 +760,7 @@ class TextNode extends React.Component {
         }
         if (event.key == "F9") {
             event.preventDefault();
-            this.props.funcs.toggleCloset(this.props.unique_id)
+            this.props.funcs.toggleCloset(this.props.unique_id);
             return
         }
         if (event.key == "k") {
@@ -747,7 +775,6 @@ class TextNode extends React.Component {
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
                 this._runMe();
-                return false
             }
             else {
                 currentlyDeleting = false;
@@ -1737,7 +1764,7 @@ class ZoomButton extends React.Component {
                       intent="none"
                       onMouseDown={(e)=>{e.preventDefault()}}
                       onClick={this.props.handleClick}
-                      icon="zoom-to-fit">
+                      icon="fullscreen">
             </Button>
         )
     }

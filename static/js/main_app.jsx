@@ -9,7 +9,7 @@ import _ from 'lodash';
 import "../css/boxer.scss";
 
 import {doBinding, guid} from "./utilities.js";
-import {DataBox} from "./nodes.js";
+import {DataBox, loader} from "./nodes.js";
 import {BoxerNavbar} from "./blueprint_navbar.js";
 import {ProjectMenu, BoxMenu, MakeMenu, EditMenu, ViewMenu} from "./main_menus_react.js";
 import {postAjax} from "./communication_react.js"
@@ -20,6 +20,7 @@ import {getCaretPosition, propsAreEqual} from "./utilities";
 import {withStatus} from "./toaster.js";
 import {withErrorDrawer} from "./error_drawer.js";
 import {container_kinds} from "./shared_consts.js";
+import {shape_classes, Triangle} from "./pixi_shapes.js";
 
 let tsocket = null;
 
@@ -45,8 +46,9 @@ function _main_main() {
 
     let domContainer = document.querySelector('#main-root');
     if (window.world_name == "") {
-        ReactDOM.render(<MainAppPlus data={null}/>,
-                domContainer)
+        loader.load(()=>{
+            ReactDOM.render(<MainAppPlus data={null}/>, domContainer)
+        })
     }
     else {
         postAjax("get_data", {world_name: window.world_name}, got_data);
@@ -54,13 +56,37 @@ function _main_main() {
     function got_data(result) {
         if (result.success) {
             let world_state = result.project_dict.world_state;
-
-            ReactDOM.render(<MainAppPlus world_state={world_state}/>,
-                domContainer)
+            _rehydrateComponents(world_state.base_node);
+            loader.load(()=>{
+                 ReactDOM.render(<MainAppPlus world_state={world_state}/>, domContainer)
+            })
         }
     }
 }
 
+function _rehydrateComponents(nd) {
+    if (nd.kind == "graphics") {
+        nd.drawn_components = [];
+        if (nd.hasOwnProperty("component_specs")) {
+            for (let comp of nd.component_specs) {
+                let Dcomp = shape_classes[comp.type];
+                let new_comp = <Dcomp {...comp.props}/>;
+                nd.drawn_components.push(new_comp)
+            }
+            nd.component_specs = [];
+        }
+    }
+    if (container_kinds.includes(nd.kind)) {
+        for (let lin of nd.line_list) {
+            _rehydrateComponents(lin)
+        }
+    }
+    else if (nd.kind == "line") {
+        for (let cnode of nd.node_list) {
+            _rehydrateComponents(cnode)
+        }
+    }
+}
 
 class MainApp extends React.Component {
     constructor (props) {
@@ -152,6 +178,33 @@ class MainApp extends React.Component {
 
     _getMainState() {
         return this.state
+    }
+
+    _getStateForSave() {
+        let new_state = _.cloneDeep(this.state);
+        this._dehydrateComponents(new_state.base_node);
+        return new_state
+    }
+
+    _dehydrateComponents(nd) {
+        if (nd.kind == "graphics") {
+            nd.component_specs = [];
+            for (let comp of nd.drawn_components) {
+                let new_spec = {type: comp.type, props: comp.props};
+                nd.component_specs.push(new_spec)
+            }
+            nd.drawn_components = [];
+        }
+        if (container_kinds.includes(nd.kind)) {
+            for (let lin of nd.line_list) {
+                this._dehydrateComponents(lin)
+            }
+        }
+        else if (nd.kind == "line") {
+            for (let cnode of nd.node_list) {
+                this._dehydrateComponents(cnode)
+            }
+        }
     }
 
     _getMatchingNode(uid, node) {
@@ -771,10 +824,10 @@ class MainApp extends React.Component {
             focusName: false,
             am_zoomed: false,
             transparent: false,
-            position: 0,
             selected: false,
             line_list: line_list,
             closed: false,
+            drawn_components: [],
             showCloset: false,
             closetLine: null,
             unique_id: uid,
@@ -785,11 +838,11 @@ class MainApp extends React.Component {
         return new_node
     }
 
-    _addGraphicsComponent(uid, the_comp) {
+    _addGraphicsComponent(uid, the_comp, callback=null) {
         let new_base = _.cloneDeep(this.state.base_node);
         let mnode = this._getMatchingNode(uid, new_base);
         mnode.drawn_components = [...mnode.drawn_components, the_comp];
-        this.setState({base_node: new_base})
+        this.setState({base_node: new_base}, callback)
     }
 
     _newValueBox(name, value) {
@@ -816,6 +869,9 @@ class MainApp extends React.Component {
             "fontSize": defaultFontSize,
             "fontStyle": defaultFontStyle
         };
+        const tw = 11;
+        const th = 15;
+        const turtleColor = 0x008000;
 
         let main_params = ["xPosition", "yPosition", "pen", "shown", "heading"];
         let closet_params = ["spriteSize", "penColor", "penWidth", "fontFamily", "fontSize", "fontStyle"];
@@ -825,6 +881,14 @@ class MainApp extends React.Component {
             main_node_list.push(this._newValueBox(param, param_dict[param]));
             main_node_list.push(this._newTextNode(" "))
         }
+        let shape_box = this._newGraphicsBox();
+        shape_box.name = "shape";
+        shape_box.graphics_fixed_width = 50;
+        shape_box.graphics_fixed_height = 50;
+        let tshape = <Triangle tw={tw} th={th} tcolor={turtleColor}/>;
+        shape_box.drawn_components = [tshape];
+        main_node_list.push(shape_box);
+
         let main_line = this._newLineNode(main_node_list);
 
         let closet_node_list = [this._newTextNode(" ")];
@@ -977,6 +1041,43 @@ class MainApp extends React.Component {
             if (!start_node.hasOwnProperty(param)) {
                 start_node[param] = model_node[param]
             }
+        }
+        if (start_node.kind == "sprite") {
+            let model_main_line = model_node.line_list[0];
+            let current_main_line = start_node.line_list[0];
+            let new_main_nodes = [];
+            for (let mnd of model_main_line.node_list) {
+                let found = false;
+                for (let nd of current_main_line.node_list) {
+                    if (nd.name == mnd.name) {
+                        found = true;
+                        break
+                    }
+                }
+                if (!found) {
+                    let new_node = _.cloneDeep(mnd);
+                    new_main_nodes.push(new_node)
+                }
+            }
+            current_main_line.node_list = current_main_line.node_list.concat(new_main_nodes);
+            this._renumberNodes(current_main_line.node_list);
+            let model_closet_line = model_node.closetLine;
+            let current_closet_line = start_node.closetLine;
+            let new_closet_nodes = [];
+            for (let mnd of model_closet_line.node_list) {
+                let found = false;
+                for (let nd of current_closet_line.node_list) {
+                    if (nd.name == mnd.name) {
+                        found = true;
+                        break
+                    }
+                }
+                if (!found) {
+                    let new_node = _.cloneDeep(mnd);
+                    new_closet_nodes.push(new_node)
+                }
+            }
+            current_closet_line.node_list = current_closet_line.node_list.concat(new_closet_nodes);
         }
     }
 
@@ -1689,7 +1790,8 @@ class MainApp extends React.Component {
             addGraphicsComponent: this._addGraphicsComponent,
             toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus,
             toggleClosetLastFocus: this._toggleClosetLastFocus,
-            toggleCloset: this._toggleCloset
+            toggleCloset: this._toggleCloset,
+            getStateForSave: this._getStateForSave
         };
         return funcs
     }
