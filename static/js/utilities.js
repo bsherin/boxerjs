@@ -1,11 +1,15 @@
 
 import _ from "lodash";
 
-export {doBinding, doSignOut, isString, guid, getCaretPosition, propsAreEqual, rgbToHex,
-    arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians, selectedAcrossBoxes}
+import {data_kinds} from "./shared_consts.js";
 
+export {doBinding, doSignOut, isString, guid, isKind,
+    getCaretPosition, propsAreEqual, rgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians, selectedAcrossBoxes}
 
-const container_kinds = ["doitbox", "databox", "sprite", "graphics"];
+function isKind(item, kind) {
+    return typeof(item) == "object" && item.hasOwnProperty("kind") && item.kind == kind
+}
+
 function doBinding(obj, seq = "_") {
     const proto = Object.getPrototypeOf(obj);
     for (const key of Object.getOwnPropertyNames(proto)) {
@@ -20,16 +24,19 @@ function degreesToRadians(deg) {
 }
 
 function extractText(abox) {
-    if (typeof(abox) != "object" || abox.kind != "databox") {
+    if (typeof(abox) != "object" || !data_kinds.includes(abox.kind)) {
         return null
     }
     return abox.line_list[0].node_list[0].the_text
 }
 
 function propsAreEqual(p1, p2, skipProps = []) {
+    if (skipProps.length == 0) {
+        return _.isEqual(p1, p2)
+    }
 
-    if (!_.isEqual(Object.keys(p1), Object.keys(p2))) {
-        return false;
+    if (_.isEqual(p1, p2)) {
+        return true;
     }
 
     for (let option in p1) {

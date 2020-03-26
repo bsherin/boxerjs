@@ -16,10 +16,10 @@ import {postAjax} from "./communication_react.js"
 
 import {BoxerSocket} from "./boxer_socket.js"
 import {KeyTrap} from "./key_trap";
-import {getCaretPosition, propsAreEqual} from "./utilities";
+import {getCaretPosition} from "./utilities";
 import {withStatus} from "./toaster.js";
 import {withErrorDrawer} from "./error_drawer.js";
-import {container_kinds} from "./shared_consts.js";
+import {container_kinds, defaultBgColor} from "./shared_consts.js";
 import {shape_classes, Triangle} from "./pixi_shapes.js";
 
 let tsocket = null;
@@ -33,6 +33,7 @@ $(document).on('mousedown', "button",
 
 import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
 import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
+import {repairCopiedDrawnComponents} from "./eval_space";
 
 const MAX_UNDO_SAVES = 20;
 
@@ -124,6 +125,9 @@ class MainApp extends React.Component {
         window.newLineNode = this._newLineNode;
         window.newTextNode = this._newTextNode;
         window.newDoitNode = this._newDoitBoxNode;
+        window.newColorBox = this._newColorBox;
+        window.newGraphicsBox = this._newGraphicsBox;
+        window.newTurtleShape = this._newTurtleShape;
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
@@ -831,8 +835,46 @@ class MainApp extends React.Component {
             showCloset: false,
             closetLine: null,
             unique_id: uid,
+            bgColor: defaultBgColor,
             graphics_fixed_width: 303,
             graphics_fixed_height: 303,
+            showGraphics: true,
+        };
+        return new_node
+    }
+
+    _newColorBox(color_string=null) {
+        let uid = guid();
+        if (!color_string) {
+            color_string = "0 0 0"
+        }
+        let node_list = [this._newTextNode(color_string)];
+        let new_line = this._newLineNode(node_list);
+        let line_list = [new_line];
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        this._renumberNodes(line_list);
+        let new_node = {
+            kind: "color",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            transparent: false,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            drawn_components: [],
+            showCloset: false,
+            closetLine: null,
+            unique_id: uid,
+            graphics_fixed_width: 25,
+            graphics_fixed_height: 25,
             showGraphics: true,
         };
         return new_node
@@ -854,6 +896,19 @@ class MainApp extends React.Component {
         return vbox
     }
 
+    _newTurtleShape() {
+        const tw = 11;
+        const th = 15;
+        const turtleColor = 0x008000;
+        let shape_box = this._newGraphicsBox();
+        shape_box.name = "shape";
+        shape_box.graphics_fixed_width = 50;
+        shape_box.graphics_fixed_height = 50;
+        let tshape = <Triangle tw={tw} th={th} tcolor={turtleColor}/>;
+        shape_box.drawn_components = [tshape];
+        return shape_box
+    }
+
     _newSpriteBox() {
         let uid = guid();
         let param_dict = {
@@ -869,25 +924,16 @@ class MainApp extends React.Component {
             "fontSize": defaultFontSize,
             "fontStyle": defaultFontStyle
         };
-        const tw = 11;
-        const th = 15;
-        const turtleColor = 0x008000;
 
         let main_params = ["xPosition", "yPosition", "pen", "shown", "heading"];
-        let closet_params = ["spriteSize", "penColor", "penWidth", "fontFamily", "fontSize", "fontStyle"];
+        let closet_params = ["spriteSize", "penWidth", "fontFamily", "fontSize", "fontStyle"];
 
         let main_node_list = [this._newTextNode(" ")];
         for (let param of main_params) {
             main_node_list.push(this._newValueBox(param, param_dict[param]));
             main_node_list.push(this._newTextNode(" "))
         }
-        let shape_box = this._newGraphicsBox();
-        shape_box.name = "shape";
-        shape_box.graphics_fixed_width = 50;
-        shape_box.graphics_fixed_height = 50;
-        let tshape = <Triangle tw={tw} th={th} tcolor={turtleColor}/>;
-        shape_box.drawn_components = [tshape];
-        main_node_list.push(shape_box);
+        main_node_list.push(this._newTurtleShape());
 
         let main_line = this._newLineNode(main_node_list);
 
@@ -896,6 +942,10 @@ class MainApp extends React.Component {
             closet_node_list.push(this._newValueBox(param, param_dict[param]));
             closet_node_list.push(this._newTextNode(" "))
         }
+        let penColorBox = this._newColorBox("0 0 0");
+        penColorBox.name = "penColor";
+        closet_node_list.push(penColorBox);
+
         let closet_line = this._newLineNode(closet_node_list);
 
         let line_list = [main_line];
@@ -990,7 +1040,8 @@ class MainApp extends React.Component {
             databox: this._newDataBoxNode,
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
-            line: this._newLineNode
+            line: this._newLineNode,
+            color: this._newColorBox,
         }
     }
 
@@ -1002,6 +1053,7 @@ class MainApp extends React.Component {
             databox: this._newDataBoxNode,
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
+            color: this._newColorBox,
             line: this._healLine
         }
     }
@@ -1169,6 +1221,7 @@ class MainApp extends React.Component {
          let new_base = _.cloneDeep(this.state.base_node);
          let mnode = this._getMatchingNode(uid, new_base);
          if (mnode) {
+             repairCopiedDrawnComponents(new_val, true);
              mnode[param_name] = new_val;
              this.setState({base_node: new_base}, callback)
          }

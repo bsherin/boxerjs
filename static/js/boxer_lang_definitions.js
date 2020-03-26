@@ -212,6 +212,94 @@ let boxer_statements = {
         }
     },
 
+    "make-color": {
+        args:[
+            ["red", "number"],
+            ["green", "number"],
+            ["blue", "number"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `await makeColor(${arglist[0]}, ${arglist[1]}, ${arglist[2]})`
+        }
+    },
+    snap: {
+        args:[
+            ["gbox", "graphics"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `await snap(${arglist[0]})`
+        }
+    },
+
+
+    red: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(255, 0, 0)"
+        }
+    },
+    green: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(0, 255, 0)"
+        }
+    },
+    blue: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(0, 0, 255)"
+        }
+    },
+    black: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(0, 0, 0)"
+        }
+    },
+    white: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(255, 255, 255)"
+        }
+    },
+
+    orange: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(255, 166, 0)"
+        }
+    },
+    yellow: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(255, 255, 0)"
+        }
+    },
+    gray: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(127, 127, 127)"
+        }
+    },
+    purple: {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await makeColor(161, 33, 240)"
+        }
+    },
+
+
     reset: {
         args: [],
         converter: (arglist) => {
@@ -239,6 +327,33 @@ let boxer_statements = {
         ],
         converter: (arglist) => {
             return `await change("${arglist[0]}", ${arglist[1]}, my_node_id, eval_in_place)`
+        }
+    },
+
+    "change-graphics": {
+        args: [
+            ["boxname", "raw_string"],
+            ["newval", "expression"]
+        ],
+        converter: (arglist) => {
+            return `await changeGraphics("${arglist[0]}", ${arglist[1]}, my_node_id, eval_in_place)`
+        }
+    },
+
+    setshape: {
+        args: [
+            ["newval", "expression"]
+        ],
+        converter: (arglist) => {
+            return `await changeGraphics("shape", ${arglist[0]}, my_node_id, eval_in_place)`
+        }
+    },
+
+    "turtle-shape": {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await turtleShape()"
         }
     },
 
@@ -318,7 +433,8 @@ let operators = {
     "<": "<",
     ">": ">",
     "<=": "<=",
-    ">=": ">+"
+    ">=": ">=",
+    "/": "/"
 };
 
 function isOperator(token) {

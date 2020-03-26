@@ -2,7 +2,7 @@
 import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
 import {guid} from "./utilities.js";
-import {container_kinds} from "./shared_consts.js";
+import {container_kinds, data_kinds, graphics_kinds} from "./shared_consts.js";
 
 export {_convertNamedDoit, insertVirtualNode, _createLocalizedFunctionCall,
     _getMatchingNode, findNamedBoxesInScope}
@@ -26,11 +26,15 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
     let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(_start_node, _virtualNodeTree);
     let global_declarations_string = "";
     for (let _node of _named_nodes) {
+        if (_node.name == "world") continue;
         if (_node.kind == "databox") {
             global_declarations_string += "\n" + dataBoxToString(_node)
         }
-        if (_node.kind == "jsbox") {
+        else if (_node.kind == "jsbox") {
             global_declarations_string += "\n" + jsBoxToString(_node)
+        }
+        else if (_node.kind != "doitbox") {
+            global_declarations_string += "\n" + boxObjectToString(_node)
         }
     }
     if (current_turtle_id) {
@@ -127,7 +131,7 @@ function preprocessNamedBoxes(namedNodes) {
     let graphics_boxes = {};
     let sprite_boxes = {};
     for (let node of namedNodes) {
-        if (node.kind == "databox") {
+        if (data_kinds.includes(node.kind)) {
             data_boxes[node.name] = node;
         }
         else if (node.kind == "doitbox") {
@@ -147,12 +151,6 @@ function preprocessNamedBoxes(namedNodes) {
                 node: node,
                 args: args
             }
-        }
-        else if (node.kind == "graphics") {
-            data_boxes[node.name] = node
-        }
-        else if (node.kind == "sprite") {
-            data_boxes[node.name] = node
         }
         else {
             let re = /(\w+?)\((.*)\)/g;
@@ -451,7 +449,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
             let fstring = convertStatementList(first_node.line_list, virtualNodeTree, context, true);
             first_token = `await (async ()=>{${fstring}})()\n`
         }
-        else if (first_node.line_list.length == 1) {
+        else if (first_node.kind == "databox" && first_node.line_list.length == 1) {
             let first_line = first_node.line_list[0];
             if (first_line.node_list.length == 1) {
                 let the_text = first_line.node_list[0].the_text.trim();
@@ -575,6 +573,11 @@ function jsBoxToString(jsbox) {
     `
 }
 
+function boxObjectToString(dbox) {
+    let dbstring = JSON.stringify(dbox);
+    return `var ${dbox.name} = ${dbstring}`
+}
+
 function dataBoxToString(dbox) {
     if (dbox.line_list.length == 1){
         let the_line = dbox.line_list[0];
@@ -591,13 +594,11 @@ function dataBoxToString(dbox) {
             }
         }
         else {
-            let dbstring = JSON.stringify(dbox);
-            return `var ${dbox.name} = ${dbstring}`
+            return boxObjectToString(dbox)
         }
     }
     else {
-        let dbstring = JSON.stringify(dbox);
-        return `var ${dbox.name} = ${dbstring}`
+        return boxObjectToString(dbox)
     }
 }
 
@@ -710,8 +711,10 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
     if (consuming_line.length > 0) {
         result_string += "\n" + convertStatementLine(consuming_line, virtualNodeTree, context)
     }
-    else if (is_last_line && statement_type != "boxer_statement") {
-        result_string = "return " + result_string + ";"
+    else if (is_last_line) {
+        if (statement_type != "boxer_statement" || boxer_statements[statement_name].allow_return) {
+            result_string = "return " + result_string + ";"
+        }
     }
     return result_string
 }

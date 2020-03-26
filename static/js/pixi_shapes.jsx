@@ -1,30 +1,16 @@
-// import {PixiComponent} from "@inlet/react-pixi";
-import {Graphics, Point, Sprite} from "pixi.js";
+
+import {Graphics, Point} from "pixi.js";
 import * as PIXI from "pixi.js";
+// noinspection ES6CheckImport
 import {CustomPIXIComponent} from "react-pixi-fiber";
 import React from "react";
 
-export {Rectangle, Ellipse, Line, shape_classes, SimpleLine, Triangle}
-
-
-function _cX(x, fw) {
-    let xcenter = fw / 2;
-    return xcenter + x
-}
-
-function _cY(y, fh) {
-    let ycenter = fh / 2;
-    return ycenter - y
-}
-
-function _c(x, y, fw, fh) {
-    return [_cX(x, fw), _cY(y, fh)]
-}
+export {Rectangle, Ellipse, Line, shape_classes, Triangle}
 
 const Rectangle = CustomPIXIComponent({
   customDisplayObject: props => new Graphics(),
   customApplyProps: (instance, oldProps, newProps) => {
-    const { x, y, width, height, fill, fw, fh, penWidth, penColor} = newProps;
+    const { x, y, width, height, fill, penWidth, penColor} = newProps;
     instance.clear();
     if (fill != null) {
         instance.beginFill(fill);
@@ -57,31 +43,16 @@ const Ellipse = CustomPIXIComponent({
   },
 }, 'Ellipse');
 
-const tw = 11;
-const th = 15;
-const turtleColor = 0x008000;
-
 const Line = CustomPIXIComponent({
   customDisplayObject: props => new PIXI.Graphics(),
   customApplyProps: function(instance, oldProps, newProps) {
-    const {x, y, xend, yend, fw, fh, penwidth, pencolor} = newProps;
+    const {x, y, xend, yend, penwidth, pencolor} = newProps;
     instance.clear();
     instance.lineStyle(penwidth, pencolor)
         .moveTo(x, y)
         .lineTo(xend, yend);
   }
 }, "Line");
-
-const SimpleLine = CustomPIXIComponent({
-  customDisplayObject: props => new PIXI.Graphics(),
-  customApplyProps: function(instance, oldProps, newProps) {
-    const {xstart, ystart, xend, yend, penwidth, pencolor} = newProps;
-    instance.clear();
-    instance.lineStyle(1, 0)
-          .moveTo(xstart, ystart)
-          .lineTo(xend, yend);
-  }
-}, "SimpleLine");
 
 const Triangle = CustomPIXIComponent({
   customDisplayObject: props => new Graphics(),
@@ -108,22 +79,3 @@ const shape_classes = {
   Triangle: Triangle
 };
 
-// texture creation experiments
-// must be rendered into a container I think
-//
-// Look also at TriangleTurtle and generateTexture
-
-
-// let _turtleTexture = null;
-//
-// function _setTurtleTexture(ttext) {
-//     _turtleTexture = ttext
-// }
-//
-// const tt = (
-//     <AppContext.Consumer >
-//                     {app =>
-//                         <TriangleTurtle x={150} y={150} heading={0} sf={13} app={app} setTexture={_setTurtleTexture}/>
-//                     }
-//     </AppContext.Consumer>);
-// )

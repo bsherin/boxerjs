@@ -4,23 +4,23 @@ import PropTypes from "prop-types";
 
 import { Button } from "@blueprintjs/core";
 
-import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, degreesToRadians, propsAreEqual} from "./utilities.js";
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, rgbToHex,
+    degreesToRadians, propsAreEqual} from "./utilities.js";
 import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
 import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
 
-import {doExecution} from "./eval_space.js";
+import {doExecution, repairCopiedDrawnComponents} from "./eval_space.js";
 import {DragHandle} from "./resizing_layouts.js"
 
 import {Line, Rectangle, Ellipse, } from "./pixi_shapes.js";
 // noinspection ES6CheckImport
-import { Sprite, Stage, withApp, Container} from "react-pixi-fiber";
-// import {Sprite, Stage, Text, AppConsumer} from "@inlet/react-pixi";
+import { Sprite, Stage, withApp, Container, Text} from "react-pixi-fiber";
 import * as PIXI from "pixi.js";
 
 import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
-import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
-import {extractText} from "./utilities";
+import {defaultFontSize, defaultFontStyle, data_kinds} from "./shared_consts.js";
+import {extractText, isNormalInteger} from "./utilities";
 
 export {DataBox, EditableTag, loader}
 
@@ -34,38 +34,36 @@ const sprite_params =[
             "shown",
             "heading",
             "spriteSize",
-            "penColor",
             "penWidth",
             "fontFamily",
             "fontSize",
             "fontStyle"
     ];
+
 PIXI.settings.RESOLUTION = 1;
 const loader = PIXI.Loader.shared;
 loader.add('turtle', "/static/assets/turtle_image.png");
 
-const base_scale = .125;
-
-const tw = 11;
-const th = 15;
-const turtleColor = 0x008000;
-
-class TurtleTurtle extends React.Component {
-    constructor(props) {
-        super(props);
-        doBinding(this);
+function _convertColorArg(the_color_strings) {
+        let bgcolor;
+        if (the_color_strings.length == 1) {
+            let the_str = the_color_strings[0];
+            if (isNormalInteger(the_str)) {
+                bgcolor = parseInt(the_str);
+            }
+            else {
+                bgcolor = the_str;
+            }
+        }
+        else {
+            let cnums = [];
+            for (let c of the_color_strings) {
+                cnums.push(parseInt(c))
+            }
+            bgcolor = rgbToHex(cnums[0], cnums[1], cnums[2]);
+        }
+        return bgcolor
     }
-
-    render () {
-        return (<Sprite image="/static/assets/turtle_image.png"
-                        x={this.props.x}
-                        y={this.props.y}
-                        scale={base_scale * this.props.sf}
-                        angle={this.props.heading}
-                        anchor={[0.5, 0.5]}/>
-        )
-    }
-}
 
 class SpriteBox extends React.Component {
     constructor(props) {
@@ -73,18 +71,8 @@ class SpriteBox extends React.Component {
         doBinding(this);
     }
 
-    _cX(x) {
-        let xcenter = this.props.graphics_fixed_width / 2;
-        return xcenter + x
-    }
-
-    _cY(y) {
-        let ycenter = this.props.graphics_fixed_height / 2;
-        return ycenter - y
-    }
-
-    _c(x, y) {
-        return [this._cX(x), this._cY(y)]
+    shouldComponentUpdate(nextProps, nextState, nextContext) {
+        return !propsAreEqual(nextProps, this.props)
     }
 
     _turtleX() {
@@ -93,10 +81,6 @@ class SpriteBox extends React.Component {
 
     _turtleY() {
         return this._getParam("yPosition")
-    }
-
-    _cxy() {
-        return [this._cX(this._turtleX()), this._cY(this._turtleY())]
     }
 
     _myNode() {
@@ -153,6 +137,11 @@ class SpriteBox extends React.Component {
             if (sprite_params.includes(nd.name)) {
                 pdict[nd.name] = this._extractValue(nd)
             }
+            if (nd.name == "penColor") {
+                let color_string = nd.line_list[0].node_list[0].the_text;
+                let the_color_strings = color_string.trim().split(" ");
+                pdict.penColor = _convertColorArg(the_color_strings)
+            }
         }
         return pdict
     }
@@ -184,7 +173,11 @@ class SpriteBox extends React.Component {
     }
 
     _setHeading(deg) {
-        this._setMyParams({"heading": deg})
+        let mdeg = deg % 360;
+        if (mdeg < 0) {
+            mdeg = 360 + mdeg
+        }
+        this._setMyParams({"heading": mdeg})
     }
 
     _right(deg) {
@@ -215,7 +208,6 @@ class SpriteBox extends React.Component {
         let sparams = this._getAllParams();
         let new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
                                    width={w} height={h} fill={hollow ? null : sparams["penColor"]}
-                                   fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_width}
                                    penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}
         />);
         this.props.addComponent(new_comp)
@@ -228,8 +220,8 @@ class SpriteBox extends React.Component {
 
     _stampEllipse(w, h, hollow=false) {
         let sparams = this._getAllParams();
-        let [tx, ty] = this._c(sparams.xPosition, sparams.yPosition);
-        let new_comp = (<Ellipse x={tx} y={ty} key={guid()} width={w} height={h} fill={hollow ? null : sparams.penColor}
+        let new_comp = (<Ellipse x={sparams.xPosition} y={sparams.yPosition} key={guid()}
+                                 width={w} height={h} fill={hollow ? null : sparams.penColor}
                                  penWidth={sparams.penWidth} penColor={sparams.penColor}
         />);
         this.props.addComponent(new_comp)
@@ -238,7 +230,7 @@ class SpriteBox extends React.Component {
     _getText(aboxorstring) {
         let the_text = null;
         if (typeof(aboxorstring) == "object") {
-            the_text = extractText(abox);
+            the_text = extractText(aboxorstring);
         }
         else if (typeof(aboxorstring) == "string") {
             the_text = aboxorstring
@@ -267,20 +259,24 @@ class SpriteBox extends React.Component {
         this._setMyParams({fontFamily: fname, fontStyle: fstyle, fontsize: parseInt(fsize)})
     }
 
+    _isColor(aboxorstring) {
+        return typeof(aboxorstring) == "object" && aboxorstring.hasOwnProperty("kind") &&  aboxorstring.kind == "color"
+    }
+
 
     _setPenColor(aboxorstring) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
         let the_color_strings = the_text.trim().split(" ");
-        let pcolor = convertColorArg(the_color_strings);
-        this._setMyParams({penColor: pcolor});
+        let pcolor = _convertColorArg(the_color_strings);
+        this._setMyParams({penColor: the_text});
     }
 
     _setBackgroundColor(aboxorstring) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
         let the_color_strings = the_text.trim().split(" ");
-        let bgcolor = convertColorArg(the_color_strings);
+        let bgcolor = _convertColorArg(the_color_strings);
         this.props.setBgColor(bgcolor)
     }
 
@@ -293,7 +289,11 @@ class SpriteBox extends React.Component {
           fontSize: sparams.fontSize,
           fontStyle: sparams.fontStyle,
         });
-        let new_comp =  (<Text x={sparams.xPosition} y={sparams.yPosition} align="center" text={the_text}/>);
+        let new_comp =  (
+            <Container scale={[1, -1]}>
+                <Text x={sparams.xPosition} y={sparams.yPosition} align="center" text={the_text}/>
+            </Container>
+        );
         this.props.addComponent(new_comp)
     }
 
@@ -320,7 +320,6 @@ class SpriteBox extends React.Component {
                 new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
                                   xend={newX} yend={newY}
                                   key={guid()}
-                                  fw={this.props.graphics_fixed_width} fh={this.props.graphics_fixed_height}
                                   penwidth={sparams.penWidth} pencolor={sparams.penColor}
 
                 />);
@@ -331,8 +330,6 @@ class SpriteBox extends React.Component {
             else {
                 this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
             }
-
-
         }
     }
 
@@ -364,7 +361,6 @@ class SpriteBox extends React.Component {
                             self._moveForward(distance)
                         }});
                 });
-
             }
             function yWrap(cutBound, otherBound) {
                 var distanceToEdge = Math.abs((cutBound - y) / cosAngle);
@@ -435,7 +431,6 @@ class GraphicsBoxRaw extends React.Component {
         this.do_wrap = true;
         this.boxRef = React.createRef();
         this.state = {
-            drawnComponents:[],
             focusingName: false,
             boxWidth: null,
             resizing: false,
@@ -444,6 +439,10 @@ class GraphicsBoxRaw extends React.Component {
             startingWidth: null,
             startingHeight: null
         }
+    }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
     }
 
     _closeMe() {
@@ -469,7 +468,7 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     componentDidMount() {
-        if (this.boxRef) {
+        if (this.boxRef && this.boxRef.current) {
             if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
@@ -520,7 +519,7 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     _setBgColor(color) {
-        this.setState({bgColor: color})
+        this.props.funcs.changeNode(this.props.unique_id, "bgColor", color);
     }
 
     _startResize(e, ui, startX, startY) {
@@ -557,6 +556,13 @@ class GraphicsBoxRaw extends React.Component {
         return this.props.app.renderer.generateTexture(this.props.app.stage)
     }
 
+    _getColorBoxColor() {
+        let mynode = this.props.funcs.getNode(this.props.unique_id);
+        let color_string = mynode.line_list[0].node_list[0].the_text;
+        let the_color_strings = color_string.trim().split(" ");
+        return _convertColorArg(the_color_strings)
+    }
+
     render() {
         let type_label = "Data";
         let dbclass;
@@ -571,38 +577,6 @@ class GraphicsBoxRaw extends React.Component {
             )
         }
         else {
-            let sprite_components = [];
-            let acindex = 0;
-            let temp_ll = _.cloneDeep(this.props.line_list);
-            if (this.props.closetLine) {
-                temp_ll.push(this.props.closetLine)
-            }
-            for (let lin of temp_ll) {
-                for (let nd of lin.node_list) {
-                    if (nd.kind == "sprite") {
-                        this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
-                        let new_comp = (
-                            <SpriteBox {...nd}
-                                       key={nd.unique_id}
-                                       app={this.props.app}
-                                       ref={window.turtle_box_refs[nd.unique_id]}
-                                       funcs={this.props.funcs}
-                                       graphics_fixed_width={this.props.graphics_fixed_width}
-                                       graphics_fixed_height={this.props.graphics_fixed_height}
-                                       addComponent={this._addComponent}
-                                       do_wrap={this.do_wrap}
-                                       setWrap={this._setWrap}
-                                       setBgColor={this._setBgColor}
-                                       clearComponents={this._clearComponents}
-                                       showGraphics={this.props.showGraphics}/>
-                        );
-                        acindex += 1;
-                        if (new_comp) {
-                            sprite_components.push(new_comp)
-                        }
-                    }
-                }
-            }
             let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
             let dbclass = "data-box";
             if (this.props.transparent) {
@@ -611,9 +585,7 @@ class GraphicsBoxRaw extends React.Component {
             if (this.props.selected) {
                 dbclass += " selected"
             }
-            // if ((this.props.name != null) || this.state.focusingName) {
-                dbclass += " data-box-with-name";
-            // }
+            dbclass += " data-box-with-name";
             let gwidth;
             let gheight;
             if (this.state.resizing) {
@@ -628,44 +600,128 @@ class GraphicsBoxRaw extends React.Component {
             if (this.props.name == null && !this.state.focusingName) {
                 outer_class += " empty-name"
             }
-            let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
-            let scalePoint = [-1, 1];
-            return (
-                <div className={outer_class}>
-                    <EditableTag the_name={this.props.name}
-                             focusingMe={this.state.focusingName}
-                             boxWidth={this.state.boxWidth}
-                             funcs={this.props.funcs}
-                             doneEditingName={this._doneEditingName}
-                             submitRef={this._submitNameRef}
-                             boxId={this.props.unique_id}/>
-                    <div className={dbclass} ref={this.boxRef}>
-                        <CloseButton handleClick={this._closeMe}/>
-                      <Stage options={{width: gwidth, height:gheight, antialias: true}}>
-                          <Sprite width={gwidth} height={gheight} key="bgsprite"
-                                  texture={PIXI.Texture.WHITE}
-                                  tint={this.state.bgColor} />
-                          <Container position={offsetPoint} angle={180} scale={scalePoint}>
-                              {sprite_components.length > 0 && sprite_components}
-                              {(this.props.drawn_components.length > 0) &&
-                                this.props.drawn_components}
-                          </Container>
-                      </Stage>
 
-                        <DragHandle position_dict={draghandle_position_dict}
-                                dragStart={this._startResize}
-                                onDrag={this._onResize}
-                                dragEnd={this._stopResize}
-                                direction="both"
-                                iconSize={15}/>
+            if (this.props.kind == "color") {
+                let bgcolor = this._getColorBoxColor();
+                return (
+                    <div className={outer_class}>
+                        <EditableTag the_name={this.props.name}
+                                     focusingMe={this.state.focusingName}
+                                     boxWidth={this.state.boxWidth}
+                                     funcs={this.props.funcs}
+                                     doneEditingName={this._doneEditingName}
+                                     submitRef={this._submitNameRef}
+                                     boxId={this.props.unique_id}/>
+                        <div className={dbclass} ref={this.boxRef}>
+                            <CloseButton handleClick={this._closeMe}/>
+                            <Stage options={{width: gwidth, height:gheight, antialias: true}}>
+                                <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                        texture={PIXI.Texture.WHITE}
+                                        tint={bgcolor} />
+                            </Stage>
+
+                            <DragHandle position_dict={draghandle_position_dict}
+                                        dragStart={this._startResize}
+                                        onDrag={this._onResize}
+                                        dragEnd={this._stopResize}
+                                        direction="both"
+                                        iconSize={15}/>
+                        </div>
+                        {!this.props.am_zoomed && <TypeLabel clickable={true} clickFunc={this._flipMe} the_label={type_label}/>}
                     </div>
-                    {!this.props.am_zoomed &&
-                        <TypeLabel clickable={true}
-                                   clickFunc={this._flipMe}
-                                   the_label={type_label}/>
+                )
+            }
+            else {
+                let sprite_components = [];
+                let acindex = 0;
+                let temp_ll = _.cloneDeep(this.props.line_list);
+                if (this.props.closetLine) {
+                    temp_ll.push(this.props.closetLine)
+                }
+                for (let lin of temp_ll) {
+                    for (let nd of lin.node_list) {
+                        if (nd.kind == "sprite") {
+                            this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
+                            let new_comp = (
+                                <SpriteBox {...nd}
+                                           key={nd.unique_id}
+                                           app={this.props.app}
+                                           ref={window.turtle_box_refs[nd.unique_id]}
+                                           funcs={this.props.funcs}
+                                           graphics_fixed_width={this.props.graphics_fixed_width}
+                                           graphics_fixed_height={this.props.graphics_fixed_height}
+                                           addComponent={this._addComponent}
+                                           do_wrap={this.do_wrap}
+                                           setWrap={this._setWrap}
+                                           setBgColor={this._setBgColor}
+                                           clearComponents={this._clearComponents}
+                                           showGraphics={this.props.showGraphics}/>
+                            );
+                            acindex += 1;
+                            if (new_comp) {
+                                sprite_components.push(new_comp)
+                            }
+                        }
                     }
-                </div>
-            )
+                }
+                let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
+                let dbclass = "data-box";
+                if (this.props.transparent) {
+                    dbclass += " transparent"
+                }
+                if (this.props.selected) {
+                    dbclass += " selected"
+                }
+                dbclass += " data-box-with-name";
+                let gwidth;
+                let gheight;
+                if (this.state.resizing) {
+                    gwidth = this.state.startingWidth + this.state.dwidth;
+                    gheight = this.state.startingHeight + this.state.dheight;
+                }
+                else {
+                    gwidth = this.props.graphics_fixed_width;
+                    gheight = this.props.graphics_fixed_height;
+                }
+                let outer_class = "data-box-outer";
+                if (this.props.name == null && !this.state.focusingName) {
+                    outer_class += " empty-name"
+                }
+                let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
+                let scalePoint = [-1, 1];  // This reflects over y axis
+                return (
+                    <div className={outer_class}>
+                        <EditableTag the_name={this.props.name}
+                                     focusingMe={this.state.focusingName}
+                                     boxWidth={this.state.boxWidth}
+                                     funcs={this.props.funcs}
+                                     doneEditingName={this._doneEditingName}
+                                     submitRef={this._submitNameRef}
+                                     boxId={this.props.unique_id}/>
+                        <div className={dbclass} ref={this.boxRef}>
+                            <CloseButton handleClick={this._closeMe}/>
+                            <Stage options={{width: gwidth, height:gheight, antialias: true}}>
+                                <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                        texture={PIXI.Texture.WHITE}
+                                        tint={this.props.bgColor} />
+                                <Container position={offsetPoint} angle={180} scale={scalePoint}>
+                                    {sprite_components.length > 0 && sprite_components}
+                                    {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                                </Container>
+                            </Stage>
+
+                            <DragHandle position_dict={draghandle_position_dict}
+                                        dragStart={this._startResize}
+                                        onDrag={this._onResize}
+                                        dragEnd={this._stopResize}
+                                        direction="both"
+                                        iconSize={15}/>
+                        </div>
+                        {!this.props.am_zoomed && <TypeLabel clickable={true} clickFunc={this._flipMe} the_label={type_label}/>}
+                    </div>
+                )
+
+            }
 
         }
     }
@@ -689,6 +745,10 @@ class TextNode extends React.Component {
         doBinding(this);
         this.state = {};
         this.iRef = null;
+    }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        return !propsAreEqual(nextProps, this.props)
     }
 
     trimSpaces(string) {
@@ -730,7 +790,7 @@ class TextNode extends React.Component {
         let parent_line = this._myLine();
 
         let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getBaseNode());
-        if (!result) {
+        if (result == null) {
             return
         }
         if (typeof(result) != "object") {
@@ -740,16 +800,16 @@ class TextNode extends React.Component {
             this.props.funcs.insertNode(new_databox, parent_line.unique_id, parent_line.node_list.length)
         }
         else {
-
             let updated_result = _.cloneDeep(result);
             updated_result.unique_id = guid();
-            if (updated_result.kind == "databox") {
+            if (data_kinds.includes(updated_result.kind)) {
+                updated_result.name = null;
                 this.props.funcs.updateIds(updated_result.line_list);
                 if (updated_result.closetLine) {
                     this.props.funcs.updateIds([updated_result.closetLine])
                 }
             }
-
+            repairCopiedDrawnComponents(updated_result, true);
             this.props.funcs.insertNode(updated_result, parent_line.unique_id, parent_line.node_list.length)
         }
     }
@@ -1759,12 +1819,12 @@ class ZoomButton extends React.Component {
         return (
             <Button type="button"
                     className="zoom-button"
-                      minimal={true}
-                      small={true}
-                      intent="none"
-                      onMouseDown={(e)=>{e.preventDefault()}}
-                      onClick={this.props.handleClick}
-                      icon="fullscreen">
+                    minimal={true}
+                    small={true}
+                    intent="none"
+                    onMouseDown={(e)=>{e.preventDefault()}}
+                    onClick={this.props.handleClick}
+                    icon="fullscreen">
             </Button>
         )
     }
@@ -1830,7 +1890,7 @@ class DataboxLine extends React.Component {
                                 showGraphics={this.props.showGraphics}/>
                 )
             }
-            else if (the_node.kind == "graphics") {
+            else if (the_node.kind == "graphics" || the_node.kind == "color") {
                 return (
                     <GraphicsBox {...the_node}
                                  key={the_node.unique_id}
@@ -1845,8 +1905,8 @@ class DataboxLine extends React.Component {
                              kind={the_node.kind}
                              showCloset={the_node.showCloset}
                              closetLine={the_node.closetLine}
-                              selected={the_node.selected}
-                              className="data-box-outer"
+                             selected={the_node.selected}
+                             className="data-box-outer"
                              fixed_size={the_node.fixed_size}
                              fixed_width={the_node.fixed_width}
                              fixed_height={the_node.fixed_height}
@@ -1882,3 +1942,22 @@ DataboxLine.propTypes = {
     node_list: PropTypes.array,
     funcs: PropTypes.object,
 };
+
+// This isn't currently used. it creates a turtle sprite using an image
+class TurtleTurtle extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+    }
+
+    render () {
+        const base_scale = .125;
+        return (<Sprite texture={loader.resources.turtle.texture}
+                        x={this.props.x}
+                        y={this.props.y}
+                        scale={base_scale * this.props.sf}
+                        angle={this.props.heading}
+                        anchor={[0.5, 0.5]}/>
+        )
+    }
+}

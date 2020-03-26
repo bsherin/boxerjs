@@ -1,7 +1,9 @@
 
-export {container_kinds, text_kinds}
+export {container_kinds, text_kinds, data_kinds, graphics_kinds}
 
-const container_kinds = ["doitbox", "databox", "sprite", "graphics"];
+const container_kinds = ["doitbox", "databox", "sprite", "graphics", "color"];
+const graphics_kinds = ["graphics", "color"];
+const data_kinds = ["databox", "sprite", "graphics", "color"];
 const text_kinds = ["text", "jsbox"];
 export {defaultBgColor, defaultPenWidth, defaultPenColor, defaultFontFamily, defaultFontSize, defaultFontStyle}
 

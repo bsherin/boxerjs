@@ -1,8 +1,12 @@
 
 import _ from 'lodash';
-
+import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, _getMatchingNode, current_turtle_id} from "./transpile.js";
-export {doExecution}
+import {shape_classes} from "./pixi_shapes.js";
+import {data_kinds, container_kinds} from "./shared_consts.js";
+import {isKind} from "./utilities.js"
+
+export {doExecution, repairCopiedDrawnComponents}
 
 var _name_index;
 var _base_node;
@@ -53,8 +57,6 @@ async function doExecution(the_code_line, box_id, base_node) {
     }
 }
 
-
-
 function findNamedNode(name, starting_id, my_context_name) {
     let start_node = _getMatchingNode(starting_id, window.virtualNodeTrees[my_context_name]);
     let [named_nodes, tid] = findNamedBoxesInScope(start_node, window.virtualNodeTrees[my_context_name]);
@@ -66,8 +68,83 @@ function findNamedNode(name, starting_id, my_context_name) {
     return null
 }
 
+function repairCopiedDrawnComponents(node, recursive=true) {
+    if (node && typeof(node) == "object" && node.hasOwnProperty("kind")){
+        if (container_kinds.includes(node.kind)) {
+            repairTrueNode(node)
+         }
+        if (node.kind == "line") {
+            for (let nd of node.node_list) {
+                repairTrueNode(nd)
+            }
+        }
+    }
+    else if (Array.isArray(node)) {
+        for (let item of node) {
+            repairCopiedDrawnComponents(item, recursive)
+        }
+    }
+    function repairTrueNode(anode) {
+            if (anode.kind == "graphics") {
+                let new_drawn_components  = [];
+                for (let comp of anode.drawn_components)  {
+                    let Dcomp = shape_classes[comp.type];
+                    let new_comp = <Dcomp {...comp.props}/>;
+                    new_drawn_components.push(new_comp)
+                }
+                anode.drawn_components = new_drawn_components
+            }
+            if (recursive && container_kinds.includes(anode.kind)) {
+                for (let lin of anode.line_list) {
+                    for (let nd of lin.node_list) {
+                        repairCopiedDrawnComponents(nd, true)
+                    }
+                }
+                if (anode.closetLine) {
+                    for (let nd of anode.closetLine.node_list) {
+                        repairCopiedDrawnComponents(nd, true)
+                    }
+                }
+            }
+    }
+
+}
+
+async function changeGraphics(boxname, newval, my_node_id, eval_in_place=null) {
+    if (!isKind(newval, "graphics")) return;
+    let estring;
+    if (!eval_in_place) {
+        eval_in_place = eval
+    }
+    let _my_context_name = await eval_in_place("_context_name");
+    let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
+    if (!mnode || !isKind(mnode, "graphics")) {
+        return new Promise(function (resolve, reject) {
+            resolve()
+        })
+    }
+
+    if (mnode.virtual) {
+        return new Promise(function (resolve, reject) {
+            resolve()
+        })
+    } else {
+        return new Promise(function (resolve, reject) {
+            let new_drawn_components  = [];
+            for (let comp of newval.drawn_components)  {
+                let Dcomp = shape_classes[comp.type];
+                let new_comp = <Dcomp {...comp.props}/>;
+                new_drawn_components.push(new_comp)
+            }
+            window.changeNode(mnode.unique_id, "drawn_components", new_drawn_components, async (data) => {
+                await delay(delay_amount);
+                resolve(data)
+            })
+        })
+    }
+}
+
 async function change(boxname, newval, my_node_id, eval_in_place=null) {
-    let is_local_var;
     let mnode;
     let estring;
     if (!eval_in_place) {
@@ -76,7 +153,7 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
     let _my_context_name = await eval_in_place("_context_name");
     if (typeof(newval) == "object") {
         let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
-        if (!mnode || mnode.kind == "doitbox" || newval.kind == "doitbox") {
+        if (!mnode || !data_kinds.includes(mnode.kind) || !data_kinds.includes(newval.kind)) {
             return new Promise(function (resolve, reject) {
                 resolve()
             })
@@ -137,6 +214,25 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
     }
 }
 
+async function makeColor(r, g, b) {
+    let color_string = `${r} ${g} ${b}`;
+    return window.newColorBox(color_string)
+}
+
+async function snap(gbox) {
+    let newbox = window.newGraphicsBox();
+    if (gbox.kind != "graphics") return;
+    newbox.drawn_components = gbox.drawn_components;
+    newbox.graphics_fixed_height = gbox.graphics_fixed_height;
+    newbox.graphics_fixed_width = gbox.graphics_fixed_width;
+    repairCopiedDrawnComponents(newbox, false);
+    return newbox
+}
+
+async function turtleShape() {
+    return window.newTurtleShape()
+}
+
 async function redisplay() {
     await delay(delay_amount)
 }
@@ -169,6 +265,7 @@ function setGraphicsMode(current_turtle_id, boxorstring) {
 function showTurtle(current_turtle_id) {
     window.turtle_box_refs[current_turtle_id].current._showTurtle()
 }
+
 
 function hideTurtle(current_turtle_id) {
     window.turtle_box_refs[current_turtle_id].current._hideTurtle()
