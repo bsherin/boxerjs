@@ -97,6 +97,19 @@ div[id^='selectableItem'] {
     }
 }
 
+.portal-outer {
+    display: inline-block;
+    vertical-align: top;
+    position: relative;
+        &.empty-name {
+            top: -9px
+        }
+    }
+
+.portal-inner {
+    border: 3px double black;
+}
+
 .closed-data-box {
     margin: 4px 4px;
     display: block;

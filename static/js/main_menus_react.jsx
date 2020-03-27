@@ -219,6 +219,10 @@ class MakeMenu extends React.Component {
         this.props.insertSpriteBoxLastFocus();
     }
 
+    _new_portbox(event) {
+        this.props.insertPortBoxLastFocus();
+    }
+
 
     get option_dict () {
         return {
@@ -229,6 +233,8 @@ class MakeMenu extends React.Component {
             "Turtle Box": this._new_turtlebox,
             "Graphics Box": this._new_graphicsbox,
             "Sprite Box": this._new_spritebox,
+            "divider2": "divider",
+            "Port": this._new_portbox
         }
     }
 

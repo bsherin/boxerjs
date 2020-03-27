@@ -22,7 +22,7 @@ import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_cons
 import {defaultFontSize, defaultFontStyle, data_kinds} from "./shared_consts.js";
 import {extractText, isNormalInteger} from "./utilities";
 
-export {DataBox, EditableTag, loader}
+export {DataBox, EditableTag, PortBox, loader}
 
 let currentlyDeleting = false;
 const resizeTolerance = 2;
@@ -831,6 +831,11 @@ class TextNode extends React.Component {
             }
             return
         }
+        if (event.key == "|") {
+            if (this.props.am_in_portal) {
+                this.props.funcs.focusName(null, this.props.am_in_portal)
+            }
+        }
         if (event.key == "Enter") {
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
@@ -937,6 +942,9 @@ class TextNode extends React.Component {
             let my_line = this._myLine();
             let myDataBox = this._myBox();
             if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
+                if (this.props.am_in_portal) {
+                this.props.funcs.focusName(null, this.props.am_in_portal)
+            }
                 this.props.funcs.focusName()
             }
             else if (my_line.position == 0) {
@@ -1073,10 +1081,12 @@ TextNode.propTypes = {
     unique_id: PropTypes.string,
     selected: PropTypes.bool,
     funcs: PropTypes.object,
+    am_in_portal: PropTypes.string
 };
 
 TextNode.defaultProps = {
-    setFocus: null
+    setFocus: null,
+    am_in_portal: false
 };
 
 class EditableTag extends React.Component {
@@ -1189,6 +1199,167 @@ EditableTag.defaultProps = {
     am_sprite: false
 };
 
+class PortBox extends React.Component {
+    constructor (props) {
+        super(props);
+        doBinding(this);
+        this.state = {};
+        this.nameRef = null;
+        this.boxRef = React.createRef();
+        this.outerRef = React.createRef();
+        this.state = {
+            focusingName: false,
+            boxWidth: null,
+            resizing: false,
+            dwidth: 0,
+            dheight: 0,
+            startingWidth: null,
+            startingHeight: null
+        };
+    }
+
+    componentDidMount() {
+        if (this.nameRef){
+            $(this.nameRef).focus(this._gotNameFocus)
+        }
+    }
+
+    componentDidUpdate () {
+        let self = this;
+        if (this.props.focusName) {
+            if (this.nameRef) {
+                $(this.nameRef).focus();
+                this.setState({focusingName: true},()=>{
+                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                });
+            }
+        }
+        if (this.nameRef){
+            $(this.nameRef).focus(this._gotNameFocus)
+        }
+    }
+
+    _gotNameFocus() {
+        this.setState({focusingName: true})
+    }
+
+    _submitNameRef(the_ref) {
+        this.nameRef = the_ref
+    }
+
+    getUsableDimensions() {
+        return {
+            usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
+            usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
+            usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
+            body_height: window.innerHeight - BOTTOM_MARGIN
+        };
+    }
+
+    _doneEditingName(callback=null) {
+        this.setState({focusingName: false}, callback)
+    }
+
+    _closeMe(have_focus) {
+        if (this.props.am_zoomed) {
+            this._unzoomeMe()
+        }
+        else {
+            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
+                if (have_focus) {
+                    this.props.funcs.positionAfterBox(this.props.unique_id)
+                }
+            })
+        }
+    }
+
+    _openMe() {
+        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
+    }
+
+    _zoomMe() {
+        this.props.funcs.zoomBox(this.props.unique_id)
+    }
+
+    _unzoomMe() {
+        this.props.funcs.unzoomBox(this.props.unique_id)
+    }
+
+    render() {
+        let tnode;
+        let inner_content;
+        if (this.props.target == null) {
+            inner_content = <div>You can now target this port</div>;
+        }
+        else {
+            tnode = _.cloneDeep(this.props.funcs.getNode(this.props.target));
+            tnode.closed = this.props.closed;
+            if (tnode.kind == "databox" || tnode.kind == "doitbox") {
+                inner_content = <DataBox {...tnode} am_in_portal={this.props.unique_id}
+                                         clickable_label={false} funcs={this.props.funcs}
+                />
+            }
+            else if (tnode.kind == "sprite") {
+                inner_content = <SpriteBox {...tnode} funcs={this.props.funcs}/>
+            }
+            else if (tnode.kind == "graphics" || tnode.kind == "color") {
+                inner_content = <GraphicsBox {...tnode} funcs={this.props.funcs}/>
+            }
+
+        }
+        let outer_style;
+        let inner_style;
+        if (this.props.am_zoomed) {
+            let usable_dimensions = this.getUsableDimensions();
+            outer_style = {
+                width: usable_dimensions.usable_width,
+                height: usable_dimensions.usable_height - 10,
+                position: "absolute",
+                top: USUAL_TOOLBAR_HEIGHT + 10,
+                left: SIDE_MARGIN
+            };
+            inner_style = {
+                height: "100%"
+            }
+        }
+        else if (this.state.resizing) {
+            outer_style = {
+            };
+            inner_style = {
+                width: this.state.startingWidth + this.state.dwidth,
+                height: this.state.startingHeight + this.state.dheight,
+                position: "relative"
+            }
+        }
+        else if (this.props.fixed_size) {
+            outer_style = {};
+            inner_style = {
+                width: this.props.fixed_width, height:
+                this.props.fixed_height,
+                position: "relative"
+            }
+        }
+        else {
+            inner_style = {};
+            outer_style = {}
+        }
+        return (
+            <div className="portal-outer" style={outer_style}>
+                <EditableTag the_name={this.props.name}
+                             focusingMe={this.state.focusingName}
+                             boxWidth={this.state.boxWidth}
+                             funcs={this.props.funcs}
+                             submitRef={this._submitNameRef}
+                             doneEditingName={this._doneEditingName}
+                             boxId={this.props.unique_id}/>
+                <div className="portal-inner" style={inner_style}>
+                    {inner_content}
+                </div>
+            </div>
+        )
+    }
+}
+
 class DataBox extends React.Component {
     constructor (props) {
         super(props);
@@ -1219,8 +1390,18 @@ class DataBox extends React.Component {
 
     _closeMe() {
         if (this.props.am_zoomed) {
-            this._unzoomeMe()
+            this._unzoomMe();
+            return
         }
+        if (this.props.am_in_portal) {
+            let have_focus = this.boxRef.current.contains(document.activeElement);
+            this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, ()=>{
+                if (have_focus) {
+                    this.props.funcs.positionAfterBox(this.props.am_in_portal)
+                }
+            });
+        }
+
         else {
             let have_focus = this.boxRef.current.contains(document.activeElement);
             this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
@@ -1232,6 +1413,10 @@ class DataBox extends React.Component {
     }
 
     _openMe() {
+        if (this.props.am_in_portal) {
+            this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
+            return
+        }
         this.props.funcs.changeNode(this.props.unique_id, "closed", false)
     }
 
@@ -1279,11 +1464,23 @@ class DataBox extends React.Component {
     }
 
     _zoomMe() {
-        this.props.funcs.zoomBox(this.props.unique_id)
+        if (this.props.am_in_portal) {
+            this.props.funcs.zoomBox(this.props.am_in_portal)
+        }
+        else {
+            this.props.funcs.zoomBox(this.props.unique_id)
+        }
+
     }
 
-    _unzoomeMe() {
-        this.props.funcs.unzoomBox(this.props.unique_id)
+    _unzoomMe() {
+        if (this.props.am_in_portal) {
+            this.props.funcs.unzoomBox(this.props.am_in_portal)
+        }
+        else {
+            this.props.funcs.unzoomBox(this.props.unique_id)
+        }
+
     }
 
      getUsableDimensions() {
@@ -1379,6 +1576,7 @@ class DataBox extends React.Component {
         let the_content = this.props.line_list.map((the_line, index) => {
                 return (
                     <DataboxLine key={the_line.unique_id}
+                                 am_in_portal={this.props.am_in_portal}
                                  unique_id={the_line.unique_id}
                                  amCloset={the_line.amCloset}
                                  funcs={this.props.funcs}
@@ -1390,6 +1588,7 @@ class DataBox extends React.Component {
             let cline = this.props.closetLine;
             let clinenode = (
                 <DataboxLine key={cline.unique_id}
+                             am_in_portal={this.props.am_in_portal}
                                  unique_id={cline.unique_id}
                                  amCloset={cline.amCloset}
                                  funcs={this.props.funcs}
@@ -1398,7 +1597,7 @@ class DataBox extends React.Component {
             the_content.unshift(clinenode)
         }
 
-        dbclass = "data-box data-box-with-name";
+        dbclass = "data-box data-box-with-name targetable";
         if (this.props.kind == "doitbox") {
             dbclass = dbclass + " doit-box";
         }
@@ -1438,8 +1637,8 @@ class DataBox extends React.Component {
         else if (this.props.fixed_size) {
             outer_style = {};
             inner_style = {
-                width: this.props.fixed_width, height:
-                this.props.fixed_height,
+                width: this.props.fixed_width,
+                height: this.props.fixed_height,
                 position: "relative"
             }
         }
@@ -1463,7 +1662,7 @@ class DataBox extends React.Component {
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                    <div ref={this.boxRef} className={dbclass} style={inner_style} >
+                    <div ref={this.boxRef} className={dbclass} id={this.props.unique_id} style={inner_style} >
                         <CloseButton handleClick={this._closeMe}/>
                         {the_content}
                         <ZoomButton handleClick={this._zoomMe}/>
@@ -1497,6 +1696,9 @@ DataBox.propTypes = {
     selected: PropTypes.bool,
     am_zoomed: PropTypes.bool,
     fixed_size: PropTypes.bool,
+    am_in_portal: PropTypes.string,
+    portal_close_func: PropTypes.func,
+    portal_name_func: PropTypes.func,
     fixed_width: PropTypes.oneOfType([
         PropTypes.bool,
         PropTypes.number]),
@@ -1511,7 +1713,8 @@ DataBox.defaultProps = {
     clickable_label: false,
     am_zoomed: false,
     innerWidth: 0,
-    innerHeight: 0
+    innerHeight: 0,
+    am_in_portal: false,
 };
 
 class JsBox extends React.Component {
@@ -1856,6 +2059,7 @@ class DataboxLine extends React.Component {
             if (the_node.kind == "text") {
                 return (
                     <TextNode key={the_node.unique_id}
+                              am_in_portal={this.props.am_in_portal}
                                selected={the_node.selected}
                                className="editable"
                               funcs={this.props.funcs}
@@ -1896,6 +2100,12 @@ class DataboxLine extends React.Component {
                                  key={the_node.unique_id}
                                  funcs={this.props.funcs}
                                  ref={window.turtle_box_refs[the_node.unique_id]}/>
+                )
+            }
+            else if (the_node.kind == "port") {
+                return (<PortBox {...the_node}
+                            key={the_node.unique_id}
+                            funcs={this.props.funcs}/>
                 )
             }
 

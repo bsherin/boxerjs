@@ -9,7 +9,7 @@ import _ from 'lodash';
 import "../css/boxer.scss";
 
 import { doBinding, guid } from "./utilities.js";
-import { DataBox, loader } from "./nodes.js";
+import { DataBox, PortBox, loader } from "./nodes.js";
 import { BoxerNavbar } from "./blueprint_navbar.js";
 import { ProjectMenu, BoxMenu, MakeMenu, EditMenu, ViewMenu } from "./main_menus_react.js";
 import { postAjax } from "./communication_react.js";
@@ -421,6 +421,40 @@ class MainApp extends React.Component {
         }
     }
 
+    _setPortTarget(port_id, target_id) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(port_id, new_base);
+        mnode.target = target_id;
+        this.setState({ base_node: new_base });
+    }
+
+    _enterPortTargetMode(port_id) {
+        let self = this;
+        document.addEventListener("click", gotClick);
+
+        function gotClick(event) {
+            let target = event.target.closest(".targetable");
+            if (!target) return;
+            self._setPortTarget(port_id, target.id);
+            document.removeEventListener("click", gotClick);
+        }
+    }
+
+    _insertPortBoxinText(text_id, cursor_position, new_base = null, update = true, callback) {
+        if (new_base == null) {
+            new_base = _.cloneDeep(this.state.base_node);
+        }
+        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
+        let mnode = this._getMatchingNode(text_id, new_base);
+        let new_node = this._newPort();
+        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
+        if (update) {
+            this.setState({ base_node: new_base }, () => {
+                this._enterPortTargetMode(new_node.unique_id);
+            });
+        }
+    }
+
     _insertTurtleBoxLastFocus() {
         this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos);
     }
@@ -464,6 +498,10 @@ class MainApp extends React.Component {
 
     _insertSpriteBoxLastFocus() {
         this._insertSpriteBoxinText(this.last_focus_id, this.last_focus_pos);
+    }
+
+    _insertPortBoxLastFocus() {
+        this._insertPortBoxinText(this.last_focus_id, this.last_focus_pos);
     }
 
     _insertDataBoxLastFocus() {
@@ -524,6 +562,15 @@ class MainApp extends React.Component {
         }
     }
 
+    _comparePortboxes(db1, db2) {
+        let fields = ["name", "am_zoomed", "closed", "target"];
+        for (let field of fields) {
+            if (db1[field] != db2[field]) {
+                return false;
+            }
+        }
+        return true;
+    }
     _compareDataboxes(db1, db2) {
         let fields = ["name", "am_zoomed", "closed"];
         for (let field of fields) {
@@ -579,8 +626,8 @@ class MainApp extends React.Component {
         if (obj2.kind == "jsbox") {
             return this._compareJsBoxes(obj1, obj2);
         }
-        if (obj2.kind.includes("turtlebox")) {
-            return this._compareTurtleBoxes(obj1, obj2);
+        if (obj2.kind == "port") {
+            return this._comparePortboxes(obj1, obj2);
         } else {
             return this._compareLines(obj1, obj2);
         }
@@ -773,6 +820,26 @@ class MainApp extends React.Component {
             closed: false,
             showCloset: false,
             closetLine: null,
+            unique_id: uid };
+        return new_box;
+    }
+
+    _newPort(target = null) {
+        let uid = guid();
+        let new_box = {
+            kind: "port",
+            key: uid,
+            target: target,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            position: 0,
+            selected: false,
+            closed: false,
             unique_id: uid };
         return new_box;
     }
@@ -1011,7 +1078,8 @@ class MainApp extends React.Component {
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
             line: this._newLineNode,
-            color: this._newColorBox
+            color: this._newColorBox,
+            port: this._newPort
         };
     }
 
@@ -1024,6 +1092,7 @@ class MainApp extends React.Component {
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
             color: this._newColorBox,
+            port: this._newPort,
             line: this._healLine
         };
     }
@@ -1290,17 +1359,18 @@ class MainApp extends React.Component {
         this._focusName(this.last_focus_id);
     }
 
-    _focusName(uid = null) {
-        if (uid == null) {
-            uid = document.activeElement.id;
-        }
-        let mnode = this._getMatchingNode(uid, this.state.base_node);
-        let box_id;
-        if (mnode.kind == "jsbox") {
-            box_id = mnode.unique_id;
-        } else {
-            let line_id = mnode.parent;
-            box_id = this._getParentId(line_id);
+    _focusName(uid = null, box_id = null) {
+        if (box_id == null) {
+            if (uid == null) {
+                uid = document.activeElement.id;
+            }
+            let mnode = this._getMatchingNode(uid, this.state.base_node);
+            if (mnode.kind == "jsbox") {
+                box_id = mnode.unique_id;
+            } else {
+                let line_id = mnode.parent;
+                box_id = this._getParentId(line_id);
+            }
         }
 
         let currentName = this._getNode(box_id).name;
@@ -1760,6 +1830,7 @@ class MainApp extends React.Component {
             insertTurtleBoxLastFocus: this._insertTurtleBoxLastFocus,
             insertGraphicsBoxLastFocus: this._insertGraphicsBoxLastFocus,
             insertSpriteBoxLastFocus: this._insertSpriteBoxLastFocus,
+            insertPortBoxLastFocus: this._insertPortBoxLastFocus,
             getBaseNode: this._getBaseNode,
             insertNode: this._insertNode,
             registerTurtleBox: this._registerTurtleBox,
@@ -1823,6 +1894,27 @@ class MainApp extends React.Component {
             e.preventDefault();
             this._undo();
         }]];
+        if (zoomed_node.kind == "port") {
+            return React.createElement(
+                React.Fragment,
+                null,
+                React.createElement(BoxerNavbar, { is_authenticated: window.is_authenticated,
+                    user_name: window.username,
+                    menus: menus
+                }),
+                React.createElement(PortBox, { name: zoomed_node.name,
+                    target: zoomed_node.target,
+                    focusName: false,
+                    am_zoomed: true,
+                    closed: false,
+                    selected: false,
+                    innerHeight: this.state.innerHeight,
+                    innerWidth: this.state.innerWidth,
+                    unique_id: this.state.zoomed_node_id,
+                    funcs: this.funcs }),
+                React.createElement(KeyTrap, { global: true, bindings: key_bindings })
+            );
+        }
         return React.createElement(
             React.Fragment,
             null,
