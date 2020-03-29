@@ -4,7 +4,7 @@ import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, _getMatchingNode, current_turtle_id} from "./transpile.js";
 import {shape_classes} from "./pixi_shapes.js";
 import {data_kinds, container_kinds} from "./shared_consts.js";
-import {isKind} from "./utilities.js"
+import {isKind, degreesToRadians, radiansToDegrees} from "./utilities.js"
 
 export {doExecution, repairCopiedDrawnComponents}
 
@@ -118,42 +118,69 @@ async function changeGraphics(boxname, newval, my_node_id, eval_in_place=null) {
     }
     let _my_context_name = await eval_in_place("_context_name");
     let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
-    if (!mnode || !isKind(mnode, "graphics")) {
+    if (mnode.kind == "port") {
+        mnode = _getMatchingNode(mnode.target, window.getBaseNode())
+    }
+    if (!mnode || mnode.virtual || !isKind(mnode, "graphics")) {
         return new Promise(function (resolve, reject) {
             resolve()
         })
     }
+    return new Promise(function (resolve, reject) {
+        let new_drawn_components  = [];
+        for (let comp of newval.drawn_components)  {
+            let Dcomp = shape_classes[comp.type];
+            let new_comp = <Dcomp {...comp.props}/>;
+            new_drawn_components.push(new_comp)
+        }
+        window.changeNode(mnode.unique_id, "drawn_components", new_drawn_components, async (data) => {
+            await delay(delay_amount);
+            resolve(data)
+        })
+    })
+}
 
-    if (mnode.virtual) {
-        return new Promise(function (resolve, reject) {
-            resolve()
-        })
-    } else {
-        return new Promise(function (resolve, reject) {
-            let new_drawn_components  = [];
-            for (let comp of newval.drawn_components)  {
-                let Dcomp = shape_classes[comp.type];
-                let new_comp = <Dcomp {...comp.props}/>;
-                new_drawn_components.push(new_comp)
-            }
-            window.changeNode(mnode.unique_id, "drawn_components", new_drawn_components, async (data) => {
-                await delay(delay_amount);
-                resolve(data)
-            })
-        })
-    }
+async function sin(angle) {
+    return Math.sin(degreesToRadians(angle))
+}
+
+async function asin(y, x) {
+    return radiansToDegrees(Math.asin(y, x))
+}
+
+async function cos(angle) {
+    return Math.cos(degreesToRadians(angle))
+}
+
+async function acos(y, x) {
+    return radiansToDegrees(Math.acos(y, x))
+}
+
+async function tan(angle) {
+    return Math.tan(degreesToRadians(angle))
+}
+
+async function atan(y, x) {
+    return radiansToDegrees(Math.atan2(y, x))
 }
 
 async function change(boxname, newval, my_node_id, eval_in_place=null) {
-    let mnode;
     let estring;
     if (!eval_in_place) {
         eval_in_place = eval
     }
     let _my_context_name = await eval_in_place("_context_name");
+    let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
+    if (mnode.kind == "port") {
+        mnode = _getMatchingNode(mnode.target, window.getBaseNode())
+    }
+    if (!mnode) {
+        return new Promise(function(resolve, reject) {
+                resolve()
+        })
+    }
     if (typeof(newval) == "object") {
-        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
-        if (!mnode || !data_kinds.includes(mnode.kind) || !data_kinds.includes(newval.kind)) {
+        if (!data_kinds.includes(mnode.kind) || !data_kinds.includes(newval.kind)) {
             return new Promise(function (resolve, reject) {
                 resolve()
             })
@@ -193,22 +220,21 @@ async function change(boxname, newval, my_node_id, eval_in_place=null) {
             estring = boxname + " = " + newval
         }
         eval_in_place(estring);
-        let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
-        if (!mnode || mnode.virtual) {
-            return new Promise(function(resolve, reject) {
-                    resolve()
+        if (mnode.virtual) {
+            return new Promise(function (resolve, reject) {
+                resolve()
             })
-        }
-        else {
+        } else {
+
             let newtext = window.newTextNode(String(newval));
             let newline = window.newLineNode([newtext]);
             newline.parent = mnode.unique_id;
-            return new Promise(function(resolve, reject) {
+            return new Promise(function (resolve, reject) {
                 window.changeNode(mnode.unique_id, "line_list",
-                    [newline], async (data)=>{
-                    await delay(delay_amount);
-                    resolve(data)
-                })
+                    [newline], async (data) => {
+                        await delay(delay_amount);
+                        resolve(data)
+                    })
             })
         }
     }
@@ -237,50 +263,70 @@ async function redisplay() {
     await delay(delay_amount)
 }
 
-async function forward(current_turtle_id, steps) {
-    window.turtle_box_refs[current_turtle_id].current._moveForward(steps);
+async function forward(current_turtle_id, steps, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._moveForward(steps, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
-async function back(current_turtle_id, steps) {
-    window.turtle_box_refs[current_turtle_id].current._moveForward(-1 * steps);
+async function back(current_turtle_id, steps, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._moveForward(-1 * steps, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
-function clear(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._clear()
+function clear(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._clear(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
-function clean(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._clean()
+function clean(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._clean(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
 
-function reset(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._clear()
+function reset(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._clear(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
 function setGraphicsMode(current_turtle_id, boxorstring) {
-    window.turtle_box_refs[current_turtle_id].current._setGraphicsMode(boxorstring)
+    window.turtle_box_refs[current_turtle_id].current._setGraphicsMode(boxorstring,)
 }
 
-function showTurtle(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._showTurtle()
+function showTurtle(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._showTurtle(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
 
-function hideTurtle(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._hideTurtle()
+function hideTurtle(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._hideTurtle(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
-function penup(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._penup();
+function penup(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._penup(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
-function pendown(current_turtle_id) {
-    window.turtle_box_refs[current_turtle_id].current._pendown();
+function pendown(current_turtle_id, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._pendown(async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
-function setPenWidth(current_turtle_id, w) {
-    window.turtle_box_refs[current_turtle_id].current._setPenWidth(w);
+function setPenWidth(current_turtle_id, w, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._setPenWidth(w, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
 function stampRectangle(current_turtle_id, w, h) {
@@ -315,43 +361,74 @@ function type(current_turtle_id, boxortext) {
     window.turtle_box_refs[current_turtle_id].current._type(boxortext);
 }
 
-function setTypeFont(current_turtle_id, boxortext) {
-    window.turtle_box_refs[current_turtle_id].current._setTypeFont(boxortext);
+function setTypeFont(current_turtle_id, boxortext, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._setTypeFont(boxortext, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    });
 }
 
-function right(current_turtle_id, degrees) {
-    // current_turtle_ref.current.right(degrees)
-    window.turtle_box_refs[current_turtle_id].current._right(degrees)
+async function right(current_turtle_id, degrees, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._right(degrees, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
-function left(current_turtle_id, degrees) {
-    window.turtle_box_refs[current_turtle_id].current._left(degrees)
+function left(current_turtle_id, degrees, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._left(degrees, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
-function setxy(current_turtle_id, x, y) {
-    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y)
+function setxy(current_turtle_id, x, y, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y, null, async (newX, newY)=>{
+        if (eval_in_place) {
+            let estring = `xPosition =${newX};\nyPosition=${newY}`;
+            eval_in_place(estring);
+        }
+    })
 }
 
-function setheading(current_turtle_id, degrees) {
-    window.turtle_box_refs[current_turtle_id].current._setHeading(degrees)
+async function update_sprite_params(param_dict, eval_in_place=null) {
+    if (eval_in_place) {
+        let estring = "";
+        for (let param in param_dict) {
+            let val = param_dict[param];
+            if (typeof(val) != "object" && isNaN(val)) {
+                estring += `${param} = "${param_dict[param]}"`
+            }
+            else {
+                estring += `${param} = ${param_dict[param]}`
+            }
+        }
+        eval_in_place(estring);
+    }
+
+    return new Promise(async function (resolve, reject) {
+        await delay(delay_amount);
+        resolve();
+    });
 }
 
-function setPenColor(current_turtle_id, the_text) {
-    window.turtle_box_refs[current_turtle_id].current._setPenColor(the_text)
+async function setheading(current_turtle_id, degrees, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._setHeading(degrees, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
+}
+
+function setPenColor(current_turtle_id, the_text, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._setPenColor(the_text, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
 function setBackgroundColor(current_turtle_id, the_text) {
     window.turtle_box_refs[current_turtle_id].current._setBackgroundColor(the_text)
 }
 
-function setSpriteSize(current_turtle_id, the_size) {
-    window.turtle_box_refs[current_turtle_id].current._setSpriteSize(the_size)
-}
-
-
-function setfont(font) {
-
-    window.turtle_box_refs[current_turtle_id].current.setfont(font)
+function setSpriteSize(current_turtle_id, the_size, eval_in_place=null) {
+    window.turtle_box_refs[current_turtle_id].current._setSpriteSize(the_size, async (param_dict)=>{
+        return await update_sprite_params(param_dict, eval_in_place);
+    })
 }
 
 

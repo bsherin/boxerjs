@@ -9,7 +9,7 @@ import _ from 'lodash';
 import "../css/boxer.scss";
 
 import {doBinding, guid} from "./utilities.js";
-import {DataBox, PortBox, loader} from "./nodes.js";
+import {DataBox, PortBox, JsBox, loader} from "./nodes.js";
 import {BoxerNavbar} from "./blueprint_navbar.js";
 import {ProjectMenu, BoxMenu, MakeMenu, EditMenu, ViewMenu} from "./main_menus_react.js";
 import {postAjax} from "./communication_react.js"
@@ -21,10 +21,11 @@ import {withStatus} from "./toaster.js";
 import {withErrorDrawer} from "./error_drawer.js";
 import {container_kinds, defaultBgColor} from "./shared_consts.js";
 import {shape_classes, Triangle} from "./pixi_shapes.js";
+import {NamedBox} from "./named_box.js";
 
 let tsocket = null;
 
-// Prevent capturing focus by the button.
+// Prevent capturing focus by a button.
 $(document).on('mousedown', "button",
     function(event) {
         event.preventDefault();
@@ -112,6 +113,7 @@ class MainApp extends React.Component {
         this.state.select_range = null;
         this.last_focus_id = null;
         this.last_focus_pos = null;
+        this.last_focus_portal_root = null;
         this.state.innerWidth = window.innerWidth;
         this.state.innerHeight = window.innerHeight;
         this.clipboard = [];
@@ -136,7 +138,7 @@ class MainApp extends React.Component {
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];
         let new_base = _.cloneDeep(this.state.base_node);
-        new_base.line_list[0].node_list[0].setFocus = true;
+        new_base.line_list[0].node_list[0].setFocus = ["root", 0];
         this.setState({base_node: new_base})
 
 
@@ -336,7 +338,8 @@ class MainApp extends React.Component {
         }
     }
 
-    _splitLineAtTextPosition(text_id, cursor_position, new_base=null, update=true) {
+    _splitLineAtTextPosition(text_id, cursor_position, portal_root="root",
+                             new_base=null, update=true) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -348,28 +351,28 @@ class MainApp extends React.Component {
         let parent_line_pos = parent_line.position;
         let dbox = this._getMatchingNode(parent_line.parent, new_base);
         this._splitLine(linid, pos + 1, new_base, false);
-        dbox.line_list[parent_line_pos + 1].node_list[0].setFocus = 0;
+        dbox.line_list[parent_line_pos + 1].node_list[0].setFocus = [portal_root, 0];
 
         if (update) {
             this.setState({base_node: new_base})
         }
     }
 
-    _insertJsBoxinText(text_id, cursor_position, new_base=null, update=true) {
+    _insertJsBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
         this._splitTextAtPosition(text_id, cursor_position, new_base, false);
         let mnode = this._getMatchingNode(text_id, new_base);
         let new_node = this._newJsBoxNode();
-        new_node.setFocus = 0;
+        new_node.setFocus = [portal_root, 0];
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         if (update) {
             this.setState({base_node: new_base})
         }
     }
 
-    _insertDataBoxinText(text_id, cursor_position, new_base=null, update=true, is_doit=false) {
+    _insertDataBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true, is_doit=false) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -382,7 +385,7 @@ class MainApp extends React.Component {
         else {
             new_node = this._newDataBoxNode([]);
         }
-        new_node.line_list[0].node_list[0].setFocus = 0;
+        new_node.line_list[0].node_list[0].setFocus = [portal_root, 0];
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         let self = this;
         if (update) {
@@ -392,11 +395,11 @@ class MainApp extends React.Component {
         }
     }
     
-    _insertDoitBoxinText(text_id, cursor_position, new_base=null, update=true) {
-        this._insertDataBoxinText(text_id, cursor_position, new_base, update, true)
+    _insertDoitBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true) {
+        this._insertDataBoxinText(text_id, cursor_position, portal_root, new_base, update, true)
     }
 
-    _insertTurtleBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
+    _insertTurtleBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -409,7 +412,7 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertGraphicsBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
+    _insertGraphicsBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -422,7 +425,7 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertSpriteBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
+    _insertSpriteBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -454,7 +457,7 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertPortBoxinText(text_id, cursor_position, new_base=null, update=true, callback) {
+    _insertPortBoxinText(text_id, cursor_position, portal_root, new_base=null, update=true, callback) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
@@ -470,7 +473,7 @@ class MainApp extends React.Component {
     }
 
     _insertTurtleBoxLastFocus() {
-        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
     _toggleBoxTransparency(boxId) {
@@ -499,6 +502,28 @@ class MainApp extends React.Component {
         this.setState({base_node: new_base})
     }
 
+    _containsPort(boxId) {
+        let mnode = this._getMatchingNode(boxId, this.state.base_node);
+        return checkNode(mnode);
+
+        function checkNode(the_node) {
+            if (container_kinds.includes(the_node.kind)) {
+                for (let lin of the_node.line_list) {
+                    for (let nd of lin.node_list) {
+                        if (nd.kind == "port") {
+                            return true
+                        }
+                        if (checkNode(nd)) {
+                            return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
+
+    }
+
     _toggleBoxTransparencyLastFocus() {
         this._toggleBoxTransparency(this.last_focus_id)
     }
@@ -508,29 +533,42 @@ class MainApp extends React.Component {
     }
 
     _insertGraphicsBoxLastFocus() {
-        this._insertGraphicsBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertGraphicsBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
     _insertSpriteBoxLastFocus() {
-        this._insertSpriteBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertSpriteBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
     _insertPortBoxLastFocus() {
-        this._insertPortBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertPortBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
 
     _insertDataBoxLastFocus() {
-        this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
     _insertDoitBoxLastFocus() {
-        this._insertDoitBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertDoitBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
 
     _insertJsBoxLastFocus() {
-        this._insertJsBoxinText(this.last_focus_id, this.last_focus_pos)
+        this._insertJsBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
+    }
+
+    _retargetPortLastFocus() {
+        this._retargetPort(this.last_focus_portal_root)
+    }
+
+    _retargetPort(port_id) {
+        let new_base = _.cloneDeep(this.state.base_node);
+        let mnode = this._getMatchingNode(port_id, new_base);
+        mnode.target = null;
+        this.setState({base_node: new_base}, ()=>{
+            this._enterPortTargetMode(port_id)
+        })
     }
 
     _mergeTextNodes(n1, n2, node_list) {
@@ -683,7 +721,7 @@ class MainApp extends React.Component {
         })
     }
 
-    _deletePrecedingBox(text_id, clearClipboard=true) {
+    _deletePrecedingBox(text_id, clearClipboard=true, portal_root) {
         let mnode = this._getMatchingNode(text_id, this.state.base_node);
         let parent_line = this._getMatchingNode(mnode.parent, this.state.base_node);
         let focus_node;
@@ -732,15 +770,15 @@ class MainApp extends React.Component {
         }
 
         function positionCursor(){
-            self._changeNode(focus_node, "setFocus", focus_pos)
+            self._changeNode(focus_node, "setFocus", [portal_root, focus_pos])
         }
     }
 
-    _positionAfterBox(databox_id) {
+    _positionAfterBox(databox_id, portal_root) {
         let mnode = this._getMatchingNode(databox_id, this.state.base_node);
         let parent_node = this._getMatchingNode(mnode.parent, this.state.base_node);
         let target_id = parent_node.node_list[mnode.position + 1].unique_id;
-        this._changeNode(target_id, "setFocus", 0)
+        this._changeNode(target_id, "setFocus", [portal_root, 0])
     }
 
     _newTextNode(the_text=null) {
@@ -1371,28 +1409,30 @@ class MainApp extends React.Component {
         this.setState({base_node: new_base, zoomed_node_id: mnode.unique_id});
     }
 
-    _storeFocus(uid, position) {
+    _storeFocus(uid, position, portal_root) {
         this.last_focus_id = uid;
-        this.last_focus_pos = position
+        this.last_focus_pos = position;
+        this.last_focus_portal_root = portal_root;
+
     }
 
     _insertDataBoxFromKey() {
-        this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
+        this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
     }
 
     _insertDoitBoxFromKey() {
-        this._insertDoitBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
+        this._insertDoitBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
     }
 
     _insertJsBoxFromKey() {
-        this._insertJsBoxinText(document.activeElement.id, getCaretPosition(document.activeElement))
+        this._insertJsBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.props.last_focus_portal_root)
     }
 
     _focusNameLastFocus() {
         this._focusName(this.last_focus_id)
     }
 
-    _focusName(uid=null, box_id=null) {
+    _focusName(uid=null, box_id=null, portal_root="root") {
         if (box_id == null) {
             if (uid == null) {
                 uid = document.activeElement.id
@@ -1417,7 +1457,7 @@ class MainApp extends React.Component {
         }
 
         function doFocus() {
-            self._changeNode(box_id, "focusName", true)
+            self._changeNode(box_id, "focusName", portal_root)
         }
     }
 
@@ -1555,7 +1595,7 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertClipboard(text_id, cursor_position, new_base=null, update=true) {
+    _insertClipboard(text_id, cursor_position, portal_root, new_base=null, update=true) {
         if (!this.clipboard || this.clipboard.length == 0) {
             return
         }
@@ -1641,7 +1681,7 @@ class MainApp extends React.Component {
 
         function positionCursor(){
             if (focus_type == "text") {
-                self._changeNode(focus_node_id, "setFocus", focus_text_pos)
+                self._changeNode(focus_node_id, "setFocus", [portal_root, focus_text_pos])
             }
             else  {
                 self._positionAfterBox(focus_node_id)
@@ -1651,11 +1691,11 @@ class MainApp extends React.Component {
     }
 
      _insertClipboardFromKey() {
-        this._insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement))
+        this._insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
     }
 
     _insertClipboardLastFocus() {
-        this._insertClipboard(this.last_focus_id, this.last_focus_pos)
+        this._insertClipboard(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
     }
 
     _unfixSizeLastFocus() {
@@ -1731,7 +1771,7 @@ class MainApp extends React.Component {
             num = sel.anchorOffset - start
         }
         tnode.the_text = tnode.the_text.slice(0, start) + tnode.the_text.slice(start + num,);
-        tnode.setFocus = start;
+        tnode.setFocus = [this.last_focus_portal_root, start];
         this.setState({base_node: base_node})
     }
 
@@ -1768,16 +1808,16 @@ class MainApp extends React.Component {
             let focus_node;
             if (start_spot >= select_parent_node.node_list.length) {
                 focus_node = select_parent_node.node_list[select_parent_node.node_list.length - 1];
-                focus_node.setFocus = focus_node.the_text.length
+                focus_node.setFocus = [this.last_focus_portal_root, focus_node.the_text.length]
             }
             else if (select_parent_node.node_list[start_spot].kind != "text") {
                 focus_node = select_parent_node.node_list[start_spot + 1];
-                focus_node.setFocus = 0
+                focus_node.setFocus = [this.last_focus_portal_root, 0]
                 
             }
             else {
                 focus_node = select_parent_node.node_list[start_spot];
-                focus_node.setFocus = focus_node.the_text.length
+                focus_node.setFocus = [this.last_focus_portal_root, focus_node.the_text.length]
             }
 
         }
@@ -1792,17 +1832,17 @@ class MainApp extends React.Component {
                 new_line.position = 0;
                 select_parent_node.line_list = [new_line];
                 let focus_node = new_line.node_list[0];
-                focus_node.setFocus = 0
+                focus_node.setFocus = [this.last_focus_portal_root, 0];
             }
             if (this.state.select_range[0] >= select_parent_node.line_list.length) {
                 focus_line = select_parent_node.line_list[this.state.select_range[0] - 1];
                 focus_node = focus_line.node_list[focus_line.node_list.length - 1];
-                focus_node.setFocus = focus_node.the_text.length
+                focus_node.setFocus = [this.last_focus_portal_root, focus_node.the_text.length]
             }
             else {
                 focus_line = select_parent_node.line_list[this.state.select_range[0]];
                 focus_node = focus_line.node_list[0];
-                focus_node.setFocus = 0
+                focus_node.setFocus = [this.last_focus_portal_root, 0]
             }
 
         }
@@ -1913,7 +1953,9 @@ class MainApp extends React.Component {
             toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus,
             toggleClosetLastFocus: this._toggleClosetLastFocus,
             toggleCloset: this._toggleCloset,
-            getStateForSave: this._getStateForSave
+            getStateForSave: this._getStateForSave,
+            containsPort: this._containsPort,
+            retargetPortLastFocus: this._retargetPortLastFocus
         };
         return funcs
     }
@@ -1948,10 +1990,6 @@ class MainApp extends React.Component {
                 e.preventDefault();
                 this._insertDoitBoxFromKey();
             }],
-            [["|"], (e)=>{
-                e.preventDefault();
-                this._focusName()
-            }],
             [["esc"], (e)=> {
                 this._clearSelected()
             }],
@@ -1979,12 +2017,15 @@ class MainApp extends React.Component {
                                   user_name={window.username}
                                   menus={menus}
                     />
-                    <PortBox name={zoomed_node.name}
+                    <NamedBox WrappedComponent={PortBox}
+                             name={zoomed_node.name}
                              target={zoomed_node.target}
                              focusName={false}
                              am_zoomed={true}
                              closed={false}
                              selected={false}
+                              portal_root="root"
+                              portal_parent={null}
                              innerHeight={this.state.innerHeight}
                              innerWidth={this.state.innerWidth}
                              unique_id={this.state.zoomed_node_id}
@@ -1993,13 +2034,42 @@ class MainApp extends React.Component {
              </React.Fragment>
             )
         }
+        else if (zoomed_node.kind == "jsbox") {
+            return (
+                <React.Fragment>
+                    <BoxerNavbar is_authenticated={window.is_authenticated}
+                                  user_name={window.username}
+                                  menus={menus}
+                    />
+                    <NamedBox WrappedComponent={JsBox}
+                              name={zoomed_node.name}
+                             focusName={false}
+                             am_zoomed={true}
+                             closed={false}
+                             selected={false}
+                              kind={zoomed_node.kind}
+                              the_code={zoomed_node.the_code}
+                              className="data-box-outer"
+                              portal_root="root"
+                              portal_parent={null}
+                             innerHeight={this.state.innerHeight}
+                             innerWidth={this.state.innerWidth}
+                             unique_id={this.state.zoomed_node_id}
+                              clickable_label={false}
+                             funcs={this.funcs}/>
+                     <KeyTrap global={true}  bindings={key_bindings} />
+             </React.Fragment>
+            )
+
+        }
         return (
             <React.Fragment>
                 <BoxerNavbar is_authenticated={window.is_authenticated}
                               user_name={window.username}
                               menus={menus}
                 />
-                <DataBox name={zoomed_node.name}
+                <NamedBox WrappedComponent={DataBox}
+                         name={zoomed_node.name}
                          funcs={this.funcs}
                          showCloset={zoomed_node.showCloset}
                          closetLine={zoomed_node.closetLine}
@@ -2009,6 +2079,8 @@ class MainApp extends React.Component {
                          focusName={false}
                          am_zoomed={true}
                          closed={false}
+                          portal_root="root"
+                              portal_parent={null}
                          innerHeight={this.state.innerHeight}
                          innerWidth={this.state.innerWidth}
                          unique_id={this.state.zoomed_node_id}

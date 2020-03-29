@@ -23,7 +23,7 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `await right(current_turtle_id, ${arglist[0]})`
+            return `await right(current_turtle_id, ${arglist[0]}, eval_in_place)`
         }
     },
     left: {
@@ -64,7 +64,7 @@ let boxer_statements = {
             ["ycoord", "number"]
         ],
         converter: (arglist) => {
-            return `await setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]})`
+            return `await setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]}, eval_in_place)`
         }
     },
     setheading: {
@@ -72,7 +72,7 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `await setheading(current_turtle_id, ${arglist[0]})`
+            return `await setheading(current_turtle_id, ${arglist[0]}, eval_in_place)`
         }
     },
     showturtle: {
@@ -396,7 +396,72 @@ let boxer_statements = {
                 }
               `
         }
-    }
+    },
+
+    sin:  {
+        args:[
+            ["angle", "number"],
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `sin(${arglist[0]})`
+        }
+    },
+
+    asin:  {
+        args:[
+            ["x", "number"],
+            ["y", "number"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `asin(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+
+    cos:  {
+        args:[
+            ["angle", "number"],
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `cos(${arglist[0]})`
+        }
+    },
+
+    acos:  {
+        args:[
+            ["x", "number"],
+            ["y", "number"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `acos(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+
+
+    tan:  {
+        args:[
+            ["angle", "number"],
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `tan(${arglist[0]})`
+        }
+    },
+
+    atan:  {
+        args:[
+            ["x", "number"],
+            ["y", "number"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `atan(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+
 };
 
 let synonyms = {

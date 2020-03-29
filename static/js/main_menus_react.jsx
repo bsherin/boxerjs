@@ -200,7 +200,7 @@ class MakeMenu extends React.Component {
     }
 
     _new_doitbox(event) {
-        this.props.insertDoitaBoxLastFocus();
+        this.props.insertDoitBoxLastFocus();
     }
 
     _new_jsbox(event) {
@@ -246,6 +246,7 @@ class MakeMenu extends React.Component {
             "Turtle Box": "media",
             "Graphics Box": "media",
             "Sprite Box": "symbol-triangle-up",
+            "Port": "feed"
         }
     }
 
@@ -287,7 +288,8 @@ class BoxMenu extends React.Component {
             "Name": this._name_box,
             "Unfix Box Size": this.props.unfixSizeLastFocus,
             "Toggle Closet": this.props.toggleClosetLastFocus,
-            "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus
+            "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus,
+            "Retarget Port": this.props.retargetPortLastFocus
         }
     }
 
@@ -296,7 +298,8 @@ class BoxMenu extends React.Component {
             "Name": "label",
             "Unfix Size":"undo",
             "Toggle Closet": "one-column",
-            "Toggle Transparency": "eye-open"
+            "Toggle Transparency": "eye-open",
+            "Retarget Port": "feed-subscribed"
         }
     }
 

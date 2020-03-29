@@ -2,16 +2,11 @@ import React from "react";
 import ContentEditable from "react-contenteditable";
 import PropTypes from "prop-types";
 
-import { Button } from "@blueprintjs/core";
-
 import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, rgbToHex,
     degreesToRadians, propsAreEqual} from "./utilities.js";
-import {USUAL_TOOLBAR_HEIGHT, SIDE_MARGIN} from "./sizing_tools.js";
-import {BOTTOM_MARGIN} from "./sizing_tools";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution, repairCopiedDrawnComponents} from "./eval_space.js";
-import {DragHandle} from "./resizing_layouts.js"
 
 import {Line, Rectangle, Ellipse, } from "./pixi_shapes.js";
 // noinspection ES6CheckImport
@@ -22,10 +17,12 @@ import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_cons
 import {defaultFontSize, defaultFontStyle, data_kinds} from "./shared_consts.js";
 import {extractText, isNormalInteger} from "./utilities";
 
-export {DataBox, EditableTag, PortBox, loader}
+import {NamedBox} from "./named_box.js";
+import {_getMatchingNode} from "./transpile";
+
+export {DataBox, PortBox, JsBox, loader}
 
 let currentlyDeleting = false;
-const resizeTolerance = 2;
 
 const sprite_params =[
             "xPosition",
@@ -146,15 +143,23 @@ class SpriteBox extends React.Component {
         return pdict
     }
 
-    _setMyParams(param_dict, callback) {
-        this.props.funcs.setSpriteParams(this.props.unique_id, param_dict, callback)
+    _setMyParams(param_dict, callback=null) {
+        this.props.funcs.setSpriteParams(this.props.unique_id, param_dict, ()=>{
+            if (callback) {
+                callback(param_dict)
+            }
+        })
     }
 
-    _clean() {
-        this.props.clearComponents();
+    _clean(callback=null) {
+        this.props.clearComponents(()=>{
+            if (callback) {
+                callback(param_dict)
+            }
+        });
     }
 
-    _clear() {
+    _clear(callback=null) {
         this.props.clearComponents(()=>{
             this._setMyParams({
                 xPosition: 0,
@@ -168,40 +173,40 @@ class SpriteBox extends React.Component {
                 "fontFamily": defaultFontFamily,
                 "fontSize": defaultFontSize,
                 "fontStyle": defaultFontStyle
-            })
+            }, callback)
         });
     }
 
-    _setHeading(deg) {
+    _setHeading(deg, callback=null) {
         let mdeg = deg % 360;
         if (mdeg < 0) {
             mdeg = 360 + mdeg
         }
-        this._setMyParams({"heading": mdeg})
+        this._setMyParams({"heading": mdeg}, callback)
     }
 
-    _right(deg) {
-        this._setHeading(this._getParam("heading") + deg)
+    _right(deg, callback=null) {
+        this._setHeading(this._getParam("heading") + deg, callback)
     }
 
     _left(deg) {
         this._setHeading(this._getParam("heading") - deg)
     }
 
-    _penup() {
+    _penup(callback=null) {
         this._setMyParams({pen: false})
     }
 
-    _pendown() {
-        this._setMyParams({pen: true})
+    _pendown(callback=null) {
+        this._setMyParams({pen: true}, callback)
     }
 
-    _showTurtle() {
-        this._setMyParams({shown: true})
+    _showTurtle(callback=null) {
+        this._setMyParams({shown: true}, callback)
     }
 
-    _hideTurtle() {
-        this._setMyParams({shown: false})
+    _hideTurtle(callback=null) {
+        this._setMyParams({shown: false}, callback)
     }
 
     _stampRectangle(w, h, hollow=false) {
@@ -252,11 +257,11 @@ class SpriteBox extends React.Component {
         }
     }
 
-    _setTypeFont(aboxorstring) {
+    _setTypeFont(aboxorstring, callback=null) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
         let [fname, fstyle, fsize] = the_text.trim().split(" ");
-        this._setMyParams({fontFamily: fname, fontStyle: fstyle, fontsize: parseInt(fsize)})
+        this._setMyParams({fontFamily: fname, fontStyle: fstyle, fontsize: parseInt(fsize)}, callback)
     }
 
     _isColor(aboxorstring) {
@@ -264,12 +269,12 @@ class SpriteBox extends React.Component {
     }
 
 
-    _setPenColor(aboxorstring) {
+    _setPenColor(aboxorstring, callback=null) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
         let the_color_strings = the_text.trim().split(" ");
         let pcolor = _convertColorArg(the_color_strings);
-        this._setMyParams({penColor: the_text});
+        this._setMyParams({penColor: the_text}, callback);
     }
 
     _setBackgroundColor(aboxorstring) {
@@ -297,16 +302,16 @@ class SpriteBox extends React.Component {
         this.props.addComponent(new_comp)
     }
 
-    _setPenWidth(w) {
-        this._setMyParams({penWidth: w});
+    _setPenWidth(w, callback=null) {
+        this._setMyParams({penWidth: w}, callback);
     }
 
-    _setSpriteSize(aboxorstring) {
+    _setSpriteSize(aboxorstring, callback=null) {
         let the_arg = this._getText(aboxorstring);
         if (typeof(the_arg) == "string") {
             the_arg = parseInt(the_arg)
         }
-        this._setMyParams({spriteSize: the_arg});
+        this._setMyParams({spriteSize: the_arg}, callback);
     }
 
     _moveTo(newX, newY, pdown=null, callback=null) {
@@ -324,16 +329,24 @@ class SpriteBox extends React.Component {
 
                 />);
                 this.props.addComponent(new_comp, ()=>{
-                    this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+                    this._setMyParams ({"xPosition": newX, "yPosition": newY}, ()=>{
+                        if (callback) {
+                            callback(newX, newY)
+                        }
+                    });
                 });
             }
             else {
-                this._setMyParams ({"xPosition": newX, "yPosition": newY}, callback);
+                this._setMyParams ({"xPosition": newX, "yPosition": newY}, ()=>{
+                    if (callback) {
+                        callback(newX, newY)
+                    }
+                });
             }
         }
     }
 
-    _moveForward(distance) {
+    _moveForward(distance, callback=null) {
         let sparams = this._getAllParams();
         let maxX = this.props.graphics_fixed_width / 2;
         let minX = -1 * maxX;
@@ -358,7 +371,7 @@ class SpriteBox extends React.Component {
                     y = edgeY;
                     self._moveTo(x, y, false, ()=>{
                         if (distance > 0) {
-                            self._moveForward(distance)
+                            self._moveForward(distance, callback)
                         }});
                 });
             }
@@ -371,13 +384,13 @@ class SpriteBox extends React.Component {
                     y = otherBound;
                     self._moveTo(x, y, false, ()=>{
                         if (distance > 0) {
-                            self._moveForward(distance)
+                            self._moveForward(distance, callback)
                         }
                     });
                 });
             }
             function noWrap() {
-                self._moveTo(newX, newY, sparams["pen"]);
+                self._moveTo(newX, newY, sparams["pen"], callback);
             }
             if (self.props.do_wrap) {
                 if (newX > maxX)
@@ -417,7 +430,7 @@ class SpriteBox extends React.Component {
         }
         else {
             return (
-                <DataBox {...this.props} clickable_label={false}/>
+                <DataBox {...this.props}/>
             )
         }
 
@@ -429,79 +442,6 @@ class GraphicsBoxRaw extends React.Component {
         super(props);
         doBinding(this);
         this.do_wrap = true;
-        this.boxRef = React.createRef();
-        this.state = {
-            focusingName: false,
-            boxWidth: null,
-            resizing: false,
-            dwidth: 0,
-            dheight: 0,
-            startingWidth: null,
-            startingHeight: null
-        }
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
-    }
-
-    _closeMe() {
-        if (this.props.am_zoomed) {
-            this._unzoomeMe()
-        }
-        else {
-            let have_focus = this.boxRef.current.contains(document.activeElement);
-            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
-                if (have_focus) {
-                    this.props.funcs.positionAfterBox(this.props.unique_id)
-                }
-            })
-        }
-    }
-
-    _submitNameRef(the_ref) {
-        this.nameRef = the_ref
-    }
-
-    _doneEditingName(callback=null) {
-        this.setState({focusingName: false}, callback)
-    }
-
-    componentDidMount() {
-        if (this.boxRef && this.boxRef.current) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _gotNameFocus() {
-        this.setState({focusingName: true})
-    }
-
-    componentDidUpdate () {
-        let self = this;
-        if (this.props.focusName) {
-            if (this.nameRef) {
-                $(this.nameRef).focus();
-                this.setState({focusingName: true},()=>{
-                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
-                });
-            }
-        }
-        if (!this.props.closed && this.boxRef.current) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-    }
-
-    _flipMe() {
-        this.boxRef = React.createRef();
-        this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
     }
 
     _addComponent(new_comp, callback=null) {
@@ -522,36 +462,6 @@ class GraphicsBoxRaw extends React.Component {
         this.props.funcs.changeNode(this.props.unique_id, "bgColor", color);
     }
 
-    _startResize(e, ui, startX, startY) {
-        let bounding_rect = this.boxRef.current.getBoundingClientRect();
-
-        let start_width = bounding_rect.width;
-        let start_height = bounding_rect.height;
-        this.setState({ resizing: true, dwidth: 0, dheight: 0,
-            startingWidth: start_width, startingHeight: start_height });
-    }
-
-    _onResize(e, ui, x, y, dx, dy) {
-        this.setState({dwidth: dx, dheight: dy})
-    }
-
-    _setSize(new_width, new_height) {
-        this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
-    }
-
-    _stopResize(e, ui, x, y, dx, dy) {
-        let self = this;
-        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-            if (Math.abs(dx) < resizeTolerance && Math.abs(dy) < resizeTolerance) {
-                self._setSize(false, false)
-            }
-            else {
-                self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
-            }
-        )
-
-    }
-
     _snapTexture() {
         return this.props.app.renderer.generateTexture(this.props.app.stage)
     }
@@ -564,72 +474,27 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     render() {
-        let type_label = "Data";
-        let dbclass;
-        if (this.props.closed) {
+        if (this.props.closed || !this.props.showGraphics) {
             return (
-                <DataBox {...this.props} clickable_label={false}/>
-            )
-        }
-        else if (!this.props.showGraphics) {
-            return (
-                <DataBox {...this.props} clickable_label={true} label_function={this._flipMe}/>
+                <DataBox {...this.props} addComponent={this._addComponent}
+                                         do_wrap={this.do_wrap}
+                                         setWrap={this._setWrap}
+                                         setBgColor={this._setBgColor}
+                                         clearComponents={this._clearComponents}/>
             )
         }
         else {
-            let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
-            let dbclass = "data-box";
-            if (this.props.transparent) {
-                dbclass += " transparent"
-            }
-            if (this.props.selected) {
-                dbclass += " selected"
-            }
-            dbclass += " data-box-with-name";
-            let gwidth;
-            let gheight;
-            if (this.state.resizing) {
-                gwidth = this.state.startingWidth + this.state.dwidth;
-                gheight = this.state.startingHeight + this.state.dheight;
-            }
-            else {
-                gwidth = this.props.graphics_fixed_width;
-                gheight = this.props.graphics_fixed_height;
-            }
-            let outer_class = "data-box-outer";
-            if (this.props.name == null && !this.state.focusingName) {
-                outer_class += " empty-name"
-            }
-
+            let gwidth = this.props.inner_width;
+            let gheight = this.props.inner_height;
             if (this.props.kind == "color") {
                 let bgcolor = this._getColorBoxColor();
                 return (
-                    <div className={outer_class}>
-                        <EditableTag the_name={this.props.name}
-                                     focusingMe={this.state.focusingName}
-                                     boxWidth={this.state.boxWidth}
-                                     funcs={this.props.funcs}
-                                     doneEditingName={this._doneEditingName}
-                                     submitRef={this._submitNameRef}
-                                     boxId={this.props.unique_id}/>
-                        <div className={dbclass} ref={this.boxRef}>
-                            <CloseButton handleClick={this._closeMe}/>
-                            <Stage options={{width: gwidth, height:gheight, antialias: true}}>
-                                <Sprite width={gwidth} height={gheight} key="bgsprite"
-                                        texture={PIXI.Texture.WHITE}
-                                        tint={bgcolor} />
-                            </Stage>
-
-                            <DragHandle position_dict={draghandle_position_dict}
-                                        dragStart={this._startResize}
-                                        onDrag={this._onResize}
-                                        dragEnd={this._stopResize}
-                                        direction="both"
-                                        iconSize={15}/>
-                        </div>
-                        {!this.props.am_zoomed && <TypeLabel clickable={true} clickFunc={this._flipMe} the_label={type_label}/>}
-                    </div>
-                )
+                    <Stage options={{width: gwidth, height: gheight, antialias: true}}>
+                        <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                texture={PIXI.Texture.WHITE}
+                                tint={bgcolor} />
+                    </Stage>
+                );
             }
             else {
                 let sprite_components = [];
@@ -648,8 +513,8 @@ class GraphicsBoxRaw extends React.Component {
                                            app={this.props.app}
                                            ref={window.turtle_box_refs[nd.unique_id]}
                                            funcs={this.props.funcs}
-                                           graphics_fixed_width={this.props.graphics_fixed_width}
-                                           graphics_fixed_height={this.props.graphics_fixed_height}
+                                           graphics_fixed_width={gwidth}
+                                           graphics_fixed_height={gheight}
                                            addComponent={this._addComponent}
                                            do_wrap={this.do_wrap}
                                            setWrap={this._setWrap}
@@ -664,61 +529,18 @@ class GraphicsBoxRaw extends React.Component {
                         }
                     }
                 }
-                let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
-                let dbclass = "data-box";
-                if (this.props.transparent) {
-                    dbclass += " transparent"
-                }
-                if (this.props.selected) {
-                    dbclass += " selected"
-                }
-                dbclass += " data-box-with-name";
-                let gwidth;
-                let gheight;
-                if (this.state.resizing) {
-                    gwidth = this.state.startingWidth + this.state.dwidth;
-                    gheight = this.state.startingHeight + this.state.dheight;
-                }
-                else {
-                    gwidth = this.props.graphics_fixed_width;
-                    gheight = this.props.graphics_fixed_height;
-                }
-                let outer_class = "data-box-outer";
-                if (this.props.name == null && !this.state.focusingName) {
-                    outer_class += " empty-name"
-                }
                 let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
                 let scalePoint = [-1, 1];  // This reflects over y axis
                 return (
-                    <div className={outer_class}>
-                        <EditableTag the_name={this.props.name}
-                                     focusingMe={this.state.focusingName}
-                                     boxWidth={this.state.boxWidth}
-                                     funcs={this.props.funcs}
-                                     doneEditingName={this._doneEditingName}
-                                     submitRef={this._submitNameRef}
-                                     boxId={this.props.unique_id}/>
-                        <div className={dbclass} ref={this.boxRef}>
-                            <CloseButton handleClick={this._closeMe}/>
-                            <Stage options={{width: gwidth, height:gheight, antialias: true}}>
-                                <Sprite width={gwidth} height={gheight} key="bgsprite"
-                                        texture={PIXI.Texture.WHITE}
-                                        tint={this.props.bgColor} />
-                                <Container position={offsetPoint} angle={180} scale={scalePoint}>
-                                    {sprite_components.length > 0 && sprite_components}
-                                    {(this.props.drawn_components.length > 0) && this.props.drawn_components}
-                                </Container>
-                            </Stage>
-
-                            <DragHandle position_dict={draghandle_position_dict}
-                                        dragStart={this._startResize}
-                                        onDrag={this._onResize}
-                                        dragEnd={this._stopResize}
-                                        direction="both"
-                                        iconSize={15}/>
-                        </div>
-                        {!this.props.am_zoomed && <TypeLabel clickable={true} clickFunc={this._flipMe} the_label={type_label}/>}
-                    </div>
+                    <Stage options={{width: gwidth, height:gheight, antialias: true}}>
+                        <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                texture={PIXI.Texture.WHITE}
+                                tint={this.props.bgColor} />
+                        <Container position={offsetPoint} angle={180} scale={scalePoint}>
+                            {sprite_components.length > 0 && sprite_components}
+                            {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                        </Container>
+                    </Stage>
                 )
 
             }
@@ -748,7 +570,7 @@ class TextNode extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextProps, this.props)
+        return !propsAreEqual(nextProps, this.props) || this.props.setFocus
     }
 
     trimSpaces(string) {
@@ -783,7 +605,7 @@ class TextNode extends React.Component {
     _onBlur() {
         currentlyDeleting = false;
         let pos = getCaretPosition(this.iRef);
-        this.props.funcs.storeFocus(this.props.unique_id, pos)
+        this.props.funcs.storeFocus(this.props.unique_id, pos, this.props.portal_root)
     }
 
     async _runMe() {
@@ -832,8 +654,12 @@ class TextNode extends React.Component {
             return
         }
         if (event.key == "|") {
+            event.preventDefault();
             if (this.props.am_in_portal) {
                 this.props.funcs.focusName(null, this.props.am_in_portal)
+            }
+            else {
+                this.props.funcs.focusName(this.props.unique_id, null, this.props.portal_root)
             }
         }
         if (event.key == "Enter") {
@@ -843,7 +669,7 @@ class TextNode extends React.Component {
             }
             else {
                 currentlyDeleting = false;
-                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef));
+                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef), this.props.portal_root);
             }
             // this.props.funcs.clearSelected();
 
@@ -867,7 +693,7 @@ class TextNode extends React.Component {
             let caret_pos = getCaretPosition(this.iRef);
             if (caret_pos == 0){
                 event.preventDefault();
-                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting);
+                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting, this.props.portal_root);
             }
             else {
                 let the_text = window.getSelection().toString();
@@ -889,11 +715,11 @@ class TextNode extends React.Component {
             let myDataBox = this._myBox();
             if (my_line.amCloset) {
                 let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             if (my_line.position < (myDataBox.line_list.length - 1)) {
                 let firstTextNodeId = myDataBox.line_list[my_line.position + 1].node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             return
         }
@@ -907,7 +733,8 @@ class TextNode extends React.Component {
             for (let pos = myNode.position - 1; pos >=0; --pos) {
                 let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
                 if (candidate.kind == "text") {
-                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", candidate.the_text.length);
+                    this.props.funcs.changeNode(candidate.unique_id, "setFocus",
+                        [this.props.portal_root, candidate.the_text.length]);
                     return
                 }
             }
@@ -924,7 +751,7 @@ class TextNode extends React.Component {
             for (let pos = myNode.position + 1; pos < nnodes; ++pos) {
                 let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
                 if (candidate.kind == "text") {
-                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", 0);
+                    this.props.funcs.changeNode(candidate.unique_id, "setFocus", [this.props.portal_root, 0]);
                     return
                 }
             }
@@ -934,7 +761,12 @@ class TextNode extends React.Component {
 
         if (event.key =="]") {
             event.preventDefault();
-            this.props.funcs.positionAfterBox(this._myLine().parent);
+            if (this.props.am_in_portal) {
+                this.props.funcs.positionAfterBox(this.props.portal_root, this.props.portal_parent);
+            }
+            else {
+                this.props.funcs.positionAfterBox(this._myLine().parent, this.props.portal_root);
+            }
             return
         }
         if (event.key == "ArrowUp") {
@@ -943,17 +775,19 @@ class TextNode extends React.Component {
             let myDataBox = this._myBox();
             if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
                 if (this.props.am_in_portal) {
-                this.props.funcs.focusName(null, this.props.am_in_portal)
-            }
-                this.props.funcs.focusName()
+                    this.props.funcs.focusName(null, this.props.am_in_portal, this.props.portal_parent)
+                }
+                else {
+                    this.props.funcs.focusName(null, null, this.props.portal_root)
+                }
             }
             else if (my_line.position == 0) {
                 let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             else {
                 let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
+                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
         }
 
@@ -1031,11 +865,11 @@ class TextNode extends React.Component {
     }
 
     _setFocusIfRequired () {
-        if (this.props.setFocus != null) {
+        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
             if (this.iRef) {
                 $(this.iRef).focus();
-                if (this.props.setFocus != 0) {
-                    this._positionCursor(this.props.setFocus)
+                if (this.props.setFocus[1] != 0) {
+                    this._positionCursor(this.props.setFocus[1])
                 }
                 this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
             }
@@ -1065,6 +899,7 @@ class TextNode extends React.Component {
                                  onChange={this._handleChange}
                                  onKeyDown={this._handleKeyDown}
                                  onBlur={this._onBlur}
+                                 onFocus={this._onBlur}
                                  html={this.unTrimSpaces(this.props.the_text)}
                                  />
              </React.Fragment>
@@ -1089,200 +924,11 @@ TextNode.defaultProps = {
     am_in_portal: false
 };
 
-class EditableTag extends React.Component {
-    constructor (props) {
-        super(props);
-        doBinding(this);
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        return this.props.focusingMe || !propsAreEqual(nextProps, this.props)
-    }
-
-    _handleChange(event) {
-        this.props.funcs.changeNode(this.props.boxId, "name", event.target.value)
-    }
-
-    _handleKeyDown(event) {
-        if ((event.key == "Enter") || (event.key == "ArrowDown")) {
-            event.preventDefault();
-            let myDataBox = this.props.funcs.getNode(this.props.boxId);
-            if (myDataBox.kind == "jsbox") {
-                this.props.funcs.changeNode(this.props.boxId, "setFocus", 0);
-            }
-            else if (myDataBox.showCloset) {
-                let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
-            }
-            else {
-                let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", 0);
-            }
-
-        }
-        if (event.key =="]") {
-            event.preventDefault();
-            this.props.funcs.positionAfterBox(this.props.boxId);
-        }
-    }
-
-    _onBlur(event) {
-        this.props.doneEditingName(()=>{
-            if (this.props.the_name == "") {
-                this.props.funcs.changeNode(this.props.boxId, "name", null);
-
-            }
-        })
-    }
-
-    render() {
-        let istyle;
-        let html;
-        if (this.props.the_name == null) {
-            html = ""
-        }
-        else {
-            html = this.props.the_name
-        }
-
-        istyle = {};
-
-        if (this.props.boxWidth != null && !this.props.focusingMe) {
-            istyle.maxWidth = this.props.boxWidth - 20;
-        }
-        let cname = "bp3-tag data-box-name";
-        if (this.props.am_sprite) {
-            cname += " sprite-name"
-        }
-        if (this.props.the_name == null && !this.props.focusingMe) {
-            cname += " empty-tag"
-        }
-        let ceclass;
-        if (this.props.focusingMe) {
-            ceclass = "bp3-fill"
-        }
-        else {
-            ceclass="bp3-text-overflow-ellipsis bp3-fill";
-        }
-
-        return (
-            <span className={cname} style={istyle}>
-                <span> </span>
-                <ContentEditable className={ceclass}
-                                 tagName="span"
-                                 style={{}}
-                                 onBlur={this._onBlur}
-                                 innerRef={this.props.submitRef}
-                                 disabled={false}
-                                 onChange={this._handleChange}
-                                 onKeyDown={this._handleKeyDown}
-                                 html={html}
-                                 />
-            </span>
-        )
-    }
-}
-
-EditableTag.propTypes = {
-    the_name: PropTypes.string,
-    funcs: PropTypes.object,
-    boxId: PropTypes.string,
-    submitRef: PropTypes.func,
-    doneEditingName: PropTypes.func,
-    focusingMe: PropTypes.bool,
-    selected: PropTypes.bool,
-    boxWidth: PropTypes.number,
-    am_sprite: PropTypes.bool,
-};
-
-EditableTag.defaultProps = {
-    am_sprite: false
-};
-
 class PortBox extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
         this.state = {};
-        this.nameRef = null;
-        this.boxRef = React.createRef();
-        this.outerRef = React.createRef();
-        this.state = {
-            focusingName: false,
-            boxWidth: null,
-            resizing: false,
-            dwidth: 0,
-            dheight: 0,
-            startingWidth: null,
-            startingHeight: null
-        };
-    }
-
-    componentDidMount() {
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    componentDidUpdate () {
-        let self = this;
-        if (this.props.focusName) {
-            if (this.nameRef) {
-                $(this.nameRef).focus();
-                this.setState({focusingName: true},()=>{
-                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
-                });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _gotNameFocus() {
-        this.setState({focusingName: true})
-    }
-
-    _submitNameRef(the_ref) {
-        this.nameRef = the_ref
-    }
-
-    getUsableDimensions() {
-        return {
-            usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
-            usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
-            usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
-            body_height: window.innerHeight - BOTTOM_MARGIN
-        };
-    }
-
-    _doneEditingName(callback=null) {
-        this.setState({focusingName: false}, callback)
-    }
-
-    _closeMe(have_focus) {
-        if (this.props.am_zoomed) {
-            this._unzoomeMe()
-        }
-        else {
-            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
-                if (have_focus) {
-                    this.props.funcs.positionAfterBox(this.props.unique_id)
-                }
-            })
-        }
-    }
-
-    _openMe() {
-        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
-    }
-
-    _zoomMe() {
-        this.props.funcs.zoomBox(this.props.unique_id)
-    }
-
-    _unzoomMe() {
-        this.props.funcs.unzoomBox(this.props.unique_id)
     }
 
     render() {
@@ -1293,69 +939,43 @@ class PortBox extends React.Component {
         }
         else {
             tnode = _.cloneDeep(this.props.funcs.getNode(this.props.target));
-            tnode.closed = this.props.closed;
-            if (tnode.kind == "databox" || tnode.kind == "doitbox") {
-                inner_content = <DataBox {...tnode} am_in_portal={this.props.unique_id}
-                                         clickable_label={false} funcs={this.props.funcs}
-                />
+            if (!tnode) {
+                inner_content = <div>Target is missing</div>;
             }
-            else if (tnode.kind == "sprite") {
-                inner_content = <SpriteBox {...tnode} funcs={this.props.funcs}/>
+            else {
+                tnode.closed = this.props.closed;
+                if (tnode.kind == "databox" || tnode.kind == "doitbox" || tnode.closed) {
+                    inner_content = <NamedBox WrappedComponent={DataBox}
+                                              portal_root={this.props.unique_id}
+                                              {...tnode} am_in_portal={this.props.unique_id}
+                                              portal_parent={this.props.portal_root}
+                                              portal_is_zoomed={this.props.am_zoomed}
+                                              clickable_label={false} funcs={this.props.funcs}
+                    />
+                }
+                else if (tnode.kind == "sprite") {
+                    inner_content = <NamedBox WrappedComponent={SpriteBox}
+                                              portal_root={this.props.unique_id}
+                                              am_in_portal={this.props.unique_id}
+                                              portal_parent={this.props.portal_root}
+                                              portal_is_zoomed={this.props.am_zoomed}
+                                              {...tnode} funcs={this.props.funcs}/>
+                }
+                else if (tnode.kind == "graphics" || tnode.kind == "color") {
+                    inner_content = <NamedBox WrappedComponent={GraphicsBox}
+                                              portal_root={this.props.unique_id}
+                                              portal_parent={this.props.portal_root}
+                                              am_in_portal={this.props.unique_id}
+                                              portal_is_zoomed={this.props.am_zoomed}
+                                              {...tnode} funcs={this.props.funcs}/>
+                }
             }
-            else if (tnode.kind == "graphics" || tnode.kind == "color") {
-                inner_content = <GraphicsBox {...tnode} funcs={this.props.funcs}/>
-            }
+        }
 
-        }
-        let outer_style;
-        let inner_style;
-        if (this.props.am_zoomed) {
-            let usable_dimensions = this.getUsableDimensions();
-            outer_style = {
-                width: usable_dimensions.usable_width,
-                height: usable_dimensions.usable_height - 10,
-                position: "absolute",
-                top: USUAL_TOOLBAR_HEIGHT + 10,
-                left: SIDE_MARGIN
-            };
-            inner_style = {
-                height: "100%"
-            }
-        }
-        else if (this.state.resizing) {
-            outer_style = {
-            };
-            inner_style = {
-                width: this.state.startingWidth + this.state.dwidth,
-                height: this.state.startingHeight + this.state.dheight,
-                position: "relative"
-            }
-        }
-        else if (this.props.fixed_size) {
-            outer_style = {};
-            inner_style = {
-                width: this.props.fixed_width, height:
-                this.props.fixed_height,
-                position: "relative"
-            }
-        }
-        else {
-            inner_style = {};
-            outer_style = {}
-        }
         return (
-            <div className="portal-outer" style={outer_style}>
-                <EditableTag the_name={this.props.name}
-                             focusingMe={this.state.focusingName}
-                             boxWidth={this.state.boxWidth}
-                             funcs={this.props.funcs}
-                             submitRef={this._submitNameRef}
-                             doneEditingName={this._doneEditingName}
-                             boxId={this.props.unique_id}/>
-                <div className="portal-inner" style={inner_style}>
-                    {inner_content}
-                </div>
-            </div>
+            <React.Fragment>
+                {inner_content}
+            </React.Fragment>
         )
     }
 }
@@ -1364,224 +984,31 @@ class DataBox extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
-        this.state = {};
-        this.nameRef = null;
-        this.boxRef = React.createRef();
-        this.outerRef = React.createRef();
-        this.state = {
-            focusingName: false,
-            boxWidth: null,
-            resizing: false,
-            dwidth: 0,
-            dheight: 0,
-            startingWidth: null,
-            startingHeight: null
-        };
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
-    }
-
-    _handleChange(evt) {
-        let the_html = evt.target.value;
-        console.log(the_html)
-    }
-
-    _closeMe() {
-        if (this.props.am_zoomed) {
-            this._unzoomMe();
-            return
-        }
-        if (this.props.am_in_portal) {
-            let have_focus = this.boxRef.current.contains(document.activeElement);
-            this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, ()=>{
-                if (have_focus) {
-                    this.props.funcs.positionAfterBox(this.props.am_in_portal)
-                }
-            });
-        }
-
-        else {
-            let have_focus = this.boxRef.current.contains(document.activeElement);
-            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
-                if (have_focus) {
-                    this.props.funcs.positionAfterBox(this.props.unique_id)
-                }
-            })
-        }
-    }
-
-    _openMe() {
-        if (this.props.am_in_portal) {
-            this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
-            return
-        }
-        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
-    }
-
-    _submitNameRef(the_ref) {
-        this.nameRef = the_ref
-    }
-
-    _doneEditingName(callback=null) {
-        this.setState({focusingName: false}, callback)
-    }
-
-    componentDidMount() {
-        if (this.boxRef) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _gotNameFocus() {
-        this.setState({focusingName: true})
-    }
-
-    componentDidUpdate () {
-        let self = this;
-        if (this.props.focusName) {
-            if (this.nameRef) {
-                $(this.nameRef).focus();
-                this.setState({focusingName: true},()=>{
-                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
-                });
-            }
-        }
-        if (!this.props.closed && this.boxRef) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _zoomMe() {
-        if (this.props.am_in_portal) {
-            this.props.funcs.zoomBox(this.props.am_in_portal)
-        }
-        else {
-            this.props.funcs.zoomBox(this.props.unique_id)
-        }
-
-    }
-
-    _unzoomMe() {
-        if (this.props.am_in_portal) {
-            this.props.funcs.unzoomBox(this.props.am_in_portal)
-        }
-        else {
-            this.props.funcs.unzoomBox(this.props.unique_id)
-        }
-
-    }
-
-     getUsableDimensions() {
-        return {
-            usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
-            usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
-            usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
-            body_height: window.innerHeight - BOTTOM_MARGIN
-        };
-    }
-
-    _startResize(e, ui, startX, startY) {
-        let bounding_rect = this.boxRef.current.getBoundingClientRect();
-
-        let start_width = bounding_rect.width;
-        let start_height = bounding_rect.height;
-        this.setState({resizing: true, dwidth: 0, dheight: 0,
-            startingWidth: start_width, startingHeight: start_height})
-    }
-
-    _onResize(e, ui, x, y, dx, dy) {
-        this.setState({dwidth: dx, dheight: dy})
-    }
-
-    _setSize(new_width, new_height) {
-        this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
-    }
-
-    _stopResize(e, ui, x, y, dx, dy) {
-        let self = this;
-        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-            if (dx < resizeTolerance && dy < resizeTolerance) {
-                self._setSize(false, false)
-            }
-            else {
-                self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
-            }
-        )
-
     }
 
     render() {
-        let type_label;
-        if (this.props.kind == "doitbox") {
-            type_label = "Doit"
-        }
-        else {
-            type_label = "Data"
-        }
         let dbclass;
         if (this.props.closed) {
-            if ((this.props.name != null) || this.state.focusingName) {
-                dbclass = "closed-data-box data-box-with-name"
-            }
-            else {
-                dbclass = "closed-data-box"
-            }
-            if (this.props.kind == "doitbox") {
-                dbclass = dbclass + " doit-box";
-            }
-            if (this.props.selected) {
-                dbclass = dbclass + " selected"
-            }
-            if (this.props.transparent) {
-                dbclass += " transparent"
-            }
-            return (
-                <div className="data-box-outer">
-                    {(this.props.name || this.state.focusingName) &&
-                        <EditableTag the_name={this.props.name}
-                                     funcs={this.props.funcs}
-                                     boxWidth={75}
-                                     submitRef={this._submitNameRef}
-                                     doneEditingName={this._doneEditingName}
-                                     boxId={this.props.unique_id}/>
-                    }
-                    <Button type="button"
-                            className={dbclass}
-                            minimal={false}
-                            ref={this.boxRef}
-                            onMouseDown={(e)=>{e.preventDefault()}}
-                            onClick={this._openMe}
-                            icon={null}>
-                        <div className="closed-button-inner"></div>
-                    </Button>
-                    <TypeLabel clickable={this.props.clickable_label}
-                               clickFunc={this.props.label_function}
-                               the_label={type_label}/>
-                </div>
-            )
+            return null;
+            // return <NamedBox {...this.props} type_label={type_label} wrapped_content={null}/>
         }
 
         let the_content = this.props.line_list.map((the_line, index) => {
-                return (
-                    <DataboxLine key={the_line.unique_id}
-                                 am_in_portal={this.props.am_in_portal}
-                                 unique_id={the_line.unique_id}
-                                 amCloset={the_line.amCloset}
-                                 funcs={this.props.funcs}
-                                 node_list={the_line.node_list}/>
-                )
+            return (
+                <DataboxLine key={the_line.unique_id}
+                             am_in_portal={this.props.am_in_portal}
+                             portal_parent={this.props.portal_parent}
+                             portal_root={this.props.portal_root}
+                             unique_id={the_line.unique_id}
+                             amCloset={the_line.amCloset}
+                             funcs={this.props.funcs}
+                             do_wrap={this.props.do_wrap}
+                             setWrap={this.props.setWrap}
+                             setBgColor={this.props.setBgColor}
+                             clearComponents={this.props.clearComponents}
+                             showGraphics={this.props.showGraphics}
+                             node_list={the_line.node_list}/>
+            )
         });
 
         if (this.props.showCloset) {
@@ -1589,133 +1016,50 @@ class DataBox extends React.Component {
             let clinenode = (
                 <DataboxLine key={cline.unique_id}
                              am_in_portal={this.props.am_in_portal}
-                                 unique_id={cline.unique_id}
-                                 amCloset={cline.amCloset}
-                                 funcs={this.props.funcs}
-                                 node_list={cline.node_list}/>
+                             portal_parent={this.props.portal_parent}
+                             portal_root={this.props.portal_root}
+                             unique_id={cline.unique_id}
+                             amCloset={cline.amCloset}
+                             funcs={this.props.funcs}
+                             do_wrap={this.props.do_wrap}
+                             setWrap={this.props.setWrap}
+                             setBgColor={this.props.setBgColor}
+                             clearComponents={this.props.clearComponents}
+                             showGraphics={this.props.showGraphics}
+                             node_list={cline.node_list}/>
             );
             the_content.unshift(clinenode)
         }
-
-        dbclass = "data-box data-box-with-name targetable";
-        if (this.props.kind == "doitbox") {
-            dbclass = dbclass + " doit-box";
-        }
-        else if (this.props.kind == "sprite") {
-            dbclass = dbclass + " sprite-box";
-        }
-        if (this.props.selected) {
-            dbclass = dbclass + " selected";
-        }
-        if (this.props.transparent) {
-            dbclass += " transparent"
-        }
-        let outer_style;
-        let inner_style;
-        if (this.props.am_zoomed) {
-            let usable_dimensions = this.getUsableDimensions();
-            outer_style = {
-                width: usable_dimensions.usable_width,
-                height: usable_dimensions.usable_height - 10,
-                position: "absolute",
-                top: USUAL_TOOLBAR_HEIGHT + 10,
-                left: SIDE_MARGIN
-            };
-            inner_style = {
-                height: "100%"
-            }
-        }
-        else if (this.state.resizing) {
-            outer_style = {
-            };
-            inner_style = {
-                width: this.state.startingWidth + this.state.dwidth,
-                height: this.state.startingHeight + this.state.dheight,
-                position: "relative"
-            }
-        }
-        else if (this.props.fixed_size) {
-            outer_style = {};
-            inner_style = {
-                width: this.props.fixed_width,
-                height: this.props.fixed_height,
-                position: "relative"
-            }
-        }
-        else {
-            inner_style = {};
-            outer_style = {}
-        }
-        let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
-        let outer_class = "data-box-outer";
-        if (this.props.name == null && !this.state.focusingName) {
-            outer_class += " empty-name"
-        }
+        //return <NamedBox {...this.props} type_label={type_label} wrapped_content={the_content}/>
         return (
             <React.Fragment>
-                <div className={outer_class} style={outer_style} ref={this.outerRef}>
-                    <EditableTag the_name={this.props.name}
-                                 focusingMe={this.state.focusingName}
-                                 boxWidth={this.state.boxWidth}
-                                 funcs={this.props.funcs}
-                                 am_sprite={this.props.kind == "sprite"}
-                                 doneEditingName={this._doneEditingName}
-                                 submitRef={this._submitNameRef}
-                                 boxId={this.props.unique_id}/>
-                    <div ref={this.boxRef} className={dbclass} id={this.props.unique_id} style={inner_style} >
-                        <CloseButton handleClick={this._closeMe}/>
-                        {the_content}
-                        <ZoomButton handleClick={this._zoomMe}/>
-                        <DragHandle position_dict={draghandle_position_dict}
-                            dragStart={this._startResize}
-                            onDrag={this._onResize}
-                            dragEnd={this._stopResize}
-                            direction="both"
-                            iconSize={15}/>
-                    </div>
-                    {!this.props.am_zoomed &&
-                        <TypeLabel clickable={this.props.clickable_label}
-                                   clickFunc={this.props.label_function}
-                                   the_label={type_label}/>
-                    }
-                </div>
-            </React.Fragment>
-        )
+                {the_content}
+        </React.Fragment>)
     }
 }
 
 DataBox.propTypes = {
-    name: PropTypes.string,
-    kind: PropTypes.string,
-    closed: PropTypes.bool,
-    clickable_label: PropTypes.bool,
-    label_function: PropTypes.func,
+    am_in_portal: PropTypes.bool,
+    portal_parent: PropTypes.string,
+    portal_root: PropTypes.string,
     unique_id: PropTypes.string,
-    line_list: PropTypes.array,
+    amCloset: PropTypes.bool,
     funcs: PropTypes.object,
-    selected: PropTypes.bool,
-    am_zoomed: PropTypes.bool,
-    fixed_size: PropTypes.bool,
-    am_in_portal: PropTypes.string,
-    portal_close_func: PropTypes.func,
-    portal_name_func: PropTypes.func,
-    fixed_width: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number]),
-    fixed_height: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number])
-};
+    do_wrap: PropTypes.bool,
+    setWrap: PropTypes.func,
+    setBgColor: PropTypes.func,
+    clearComponents: PropTypes.func,
+    showGraphics: PropTypes.bool
+}
 
 DataBox.defaultProps = {
-    kind: "databox",
-    closed: false,
-    clickable_label: false,
-    am_zoomed: false,
-    innerWidth: 0,
-    innerHeight: 0,
-    am_in_portal: false,
+    do_wrap: null,
+    setWrap: null,
+    setBgColor: null,
+     clearComponents: null,
+    showGraphics: false
 };
+
 
 class JsBox extends React.Component {
     constructor(props) {
@@ -1729,41 +1073,17 @@ class JsBox extends React.Component {
         this.cmobject = null;
     }
 
-    shouldComponentUpdate(nextProps, nextState) {
-        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props)
-    }
 
     _handleCodeChange(new_code) {
         this.props.funcs.handleCodeChange(this.props.unique_id, new_code)
     }
 
     _handleBlur() {
-        this.props.funcs.storeFocus(this.props.unique_id, 0);
+        this.props.funcs.storeFocus(this.props.unique_id, 0, this.props.portal_root);
     }
 
     _runMe() {
         doExecution(this.props.the_code, this.props.unique_id, this.props.funcs.getBaseNode(), this.props.funcs)
-    }
-
-    _closeMe() {
-        let have_focus = this.boxRef.current.contains(document.activeElement);
-        this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
-            if (have_focus) {
-                this.props.funcs.positionAfterBox(this.props.unique_id)
-            }
-        })
-    }
-
-    _openMe() {
-        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
-    }
-
-    _submitNameRef(the_ref) {
-        this.nameRef = the_ref
-    }
-
-    _doneEditingName(callback=null) {
-        this.setState({focusingName: false}, callback)
     }
 
     _setCMObject(cmobject) {
@@ -1771,34 +1091,15 @@ class JsBox extends React.Component {
     }
 
     componentDidMount() {
-        if (this.boxRef) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
         this._setFocusIfRequired()
     }
 
     componentDidUpdate () {
-        let self = this;
-        if (this.props.focusName) {
-            if (this.nameRef) {
-                $(this.nameRef).focus();
-                this.setState({focusingName: true},()=>{
-                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
-                });
-            }
-        }
-        if (!this.props.closed && this.boxRef) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
         this._setFocusIfRequired()
     }
 
     _setFocusIfRequired () {
-        if (this.props.setFocus != null) {
+        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
             if (this.cmobject) {
                 this.cmobject.focus();
                 this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
@@ -1806,18 +1107,14 @@ class JsBox extends React.Component {
         }
     }
 
-    _nameMe() {
-        this.props.funcs.focusName(this.props.unique_id)
-    }
-
     _upArrow() {
-        let head = this.cmobject.getCursor();
-        if (head.line == 0) {
-            this._nameMe()
-        }
-        else {
-            this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
-        }
+        // let head = this.cmobject.getCursor();
+        // if (head.line == 0) {
+        //     this._nameMe()
+        // }
+        // else {
+        //     this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        // }
     }
 
     _extraKeys() {
@@ -1834,93 +1131,21 @@ class JsBox extends React.Component {
     render() {
         let dbclass;
         if (this.props.closed) {
-            if ((this.props.name != null) || this.state.focusingName) {
-                dbclass = "closed-data-box data-box-with-name doit-box"
-            }
-            else {
-                dbclass = "closed-data-box doit-box"
-            }
-            if (this.props.selected) {
-                dbclass = dbclass + " selected"
-            }
-            return (
-                <div className="data-box-outer">
-                    {(this.props.name || this.state.focusingName) &&
-                        <EditableTag the_name={this.props.name}
-                                     funcs={this.props.funcs}
-                                     boxWidth={75}
-                                     submitRef={this._submitNameRef}
-                                     doneEditingName={this._doneEditingName}
-                                     boxId={this.props.unique_id}/>
-                    }
-                    <Button type="button"
-                            className={dbclass}
-                            minimal={false}
-                            ref={this.boxRef}
-                            onMouseDown={(e)=>{e.preventDefault()}}
-                            onClick={this._openMe}
-                            icon={null}>
-                        <div className="closed-button-inner"></div>
-                    </Button>
-                    <TypeLabel the_label="JSbox" clickable_label={false}/>
-                </div>
-            )
-        }
-
-        if ((this.props.name != null) || this.state.focusingName) {
-            dbclass = "data-box js-box data-box-with-name"
-        }
-        else {
-            dbclass = "data-box js-box"
-        }
-        if (this.props.selected) {
-            dbclass = dbclass + " selected"
-        }
-        let outer_style;
-        let inner_style;
-        if (this.props.am_zoomed) {
-            let usable_dimensions = this.getUsableDimensions();
-            outer_style = {
-                width: usable_dimensions.usable_width,
-                height: usable_dimensions.usable_height - 10,
-                position: "absolute",
-                top: USUAL_TOOLBAR_HEIGHT + 10,
-                left: SIDE_MARGIN
-            };
-            inner_style = {
-                height: "100%"
-            }
-        }
-        else {
-            inner_style = {};
-            outer_style = {}
+            return null
         }
 
         return (
             <React.Fragment>
-                <div className="data-box-outer" style={outer_style}>
-                    <EditableTag the_name={this.props.name}
-                                 focusingMe={this.state.focusingName}
-                                 boxWidth={this.state.boxWidth}
-                                 funcs={this.props.funcs}
-                                 doneEditingName={this._doneEditingName}
-                                 submitRef={this._submitNameRef}
-                                 boxId={this.props.unique_id}/>
-                        <div ref={this.boxRef} className={dbclass} style={inner_style} >
-                            <CloseButton handleClick={this._closeMe}/>
-                            <ReactCodemirror code_content={this.props.the_code}
-                                             mode="javascript"
-                                             handleChange={this._handleCodeChange}
-                                             handleBlur={this._handleBlur}
-                                             saveMe={null}
-                                             setCMObject={this._setCMObject}
-                                             readOnly={false}
-                                             extraKeys={this._extraKeys()}
-                                             first_line_number={null}
-                            />
-                        </div>
-                        <TypeLabel the_label="JSbox" clickable_label={false}/>
-                </div>
+                <ReactCodemirror code_content={this.props.the_code}
+                                 mode="javascript"
+                                 handleChange={this._handleCodeChange}
+                                 handleBlur={this._handleBlur}
+                                 saveMe={null}
+                                 setCMObject={this._setCMObject}
+                                 readOnly={false}
+                                 extraKeys={this._extraKeys()}
+                                 first_line_number={null}
+                />
             </React.Fragment>
         )
     }
@@ -1940,101 +1165,6 @@ JsBox.defaultProps = {
     am_zoomed: false,
     innerWidth: 0,
     innerHeight: 0
-};
-
-class CloseButton extends React.Component {
-    constructor (props) {
-        super(props);
-        doBinding(this);
-    }
-
-    shouldComponentUpdate(nextProps, nextState, nextContext) {
-        return false
-    }
-
-    render () {
-        return (
-            <Button type="button"
-                    className="close-button"
-                      minimal={true}
-                      small={true}
-                      intent="none"
-                      onMouseDown={(e)=>{e.preventDefault()}}
-                      onClick={this.props.handleClick}
-                      icon="small-cross">
-            </Button>
-        )
-    }
-}
-
-CloseButton.propTypes = {
-    handlClick: PropTypes.func
-};
-
-class TypeLabel extends React.Component {
-    constructor (props) {
-        super(props);
-        doBinding(this);
-    }
-
-    shouldComponentUpdate(nextProps, nextState, nextContext) {
-        return false
-    }
-    
-    _handleClick() {
-        this.props.clickFunc();
-    }
-
-    render() {
-        if (this.props.clickable) {
-            return (
-                <button onClick={this._handleClick} className="type-label clickable">{this.props.the_label}</button>
-            )
-        }
-        return (
-            <span className="type-label">{this.props.the_label}</span>
-        )
-    }
-}
-
-TypeLabel.propTypes = {
-    the_label: PropTypes.string,
-    clickable: PropTypes.bool,
-    clickFunc: PropTypes.func
-};
-
-TypeLabel.defaultProps = {
-    clickable: false
-};
-
-
-class ZoomButton extends React.Component {
-    constructor (props) {
-        super(props);
-        doBinding(this);
-    }
-
-    shouldComponentUpdate(nextProps, nextState, nextContext) {
-        return false
-    }
-
-    render () {
-        return (
-            <Button type="button"
-                    className="zoom-button"
-                    minimal={true}
-                    small={true}
-                    intent="none"
-                    onMouseDown={(e)=>{e.preventDefault()}}
-                    onClick={this.props.handleClick}
-                    icon="fullscreen">
-            </Button>
-        )
-    }
-}
-
-ZoomButton.propTypes = {
-    handlClick: PropTypes.func
 };
 
 class DataboxLine extends React.Component {
@@ -2060,6 +1190,8 @@ class DataboxLine extends React.Component {
                 return (
                     <TextNode key={the_node.unique_id}
                               am_in_portal={this.props.am_in_portal}
+                              portal_parent={this.props.portal_parent}
+                              portal_root={this.props.portal_root}
                                selected={the_node.selected}
                                className="editable"
                               funcs={this.props.funcs}
@@ -2071,47 +1203,71 @@ class DataboxLine extends React.Component {
             }
             else if (the_node.kind == "jsbox") {
                 return (
-                    <JsBox key={the_node.unique_id}
-                           selected={the_node.selected}
-                           name={the_node.name}
-                           className="data-box-outer"
-                           funcs={this.props.funcs}
-                           unique_id={the_node.unique_id}
-                           setFocus={the_node.setFocus}
-                           closed={the_node.closed}
-                           focusName={the_node.focusName}
-                           the_code={the_node.the_code}/>
+                    <NamedBox WrappedComponent={JsBox}
+                              portal_root={this.props.portal_root}
+                              {...the_node}
+                                key={the_node.unique_id}
+                                funcs={this.props.funcs}/>
                 )
             }
 
             else if (the_node.kind == "sprite") {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
                 return (
-                    <SpriteBox {...the_node}
+                    <NamedBox WrappedComponent={SpriteBox}
+                              portal_root={this.props.portal_root}
+                              {...the_node}
                                 key={the_node.unique_id}
-                                ref={window.turtle_box_refs[the_node.unique_id]}
+                                inner_ref={window.turtle_box_refs[the_node.unique_id]}
                                 funcs={this.props.funcs}
-                                showGraphics={this.props.showGraphics}/>
+                              do_wrap={this.props.do_wrap}
+                              setWrap={this.props.setWrap}
+                              setBgColor={this.props.setBgColor}
+                              clearComponents={this.props.clearComponents}
+                              showGraphics={this.props.showGraphics}/>
                 )
             }
             else if (the_node.kind == "graphics" || the_node.kind == "color") {
                 return (
-                    <GraphicsBox {...the_node}
-                                 key={the_node.unique_id}
-                                 funcs={this.props.funcs}
-                                 ref={window.turtle_box_refs[the_node.unique_id]}/>
+                    <NamedBox WrappedComponent={GraphicsBox}
+                              portal_root={this.props.portal_root}
+                              {...the_node}
+                             key={the_node.unique_id}
+                             funcs={this.props.funcs}/>
                 )
             }
             else if (the_node.kind == "port") {
-                return (<PortBox {...the_node}
-                            key={the_node.unique_id}
-                            funcs={this.props.funcs}/>
+                let type_label;
+                if (!the_node.target) {
+                    type_label = "Data"
+                }
+                else {
+                    let target_node = _getMatchingNode(the_node.target, this.props.funcs.getBaseNode());
+                    if (data_kinds.includes(target_node.kind)) {
+                        type_label = "Data"
+                    }
+                    else if (target_node.kind == "jsbox") {
+                        type_label = "JSBox"
+                    }
+                    else {
+                        type_label = "Doit"
+                    }
+                }
+
+                return (<NamedBox WrappedComponent={PortBox}
+                                  portal_root={this.props.portal_root}
+                                  {...the_node}
+                                  key={the_node.unique_id}
+                                  type_label={type_label}
+                                  funcs={this.props.funcs}/>
                 )
             }
 
             else  {
                 return (
-                    <DataBox key={the_node.unique_id}
+                    <NamedBox WrappedComponent={DataBox}
+                              portal_root={this.props.portal_root}
+                             key={the_node.unique_id}
                              kind={the_node.kind}
                              showCloset={the_node.showCloset}
                              closetLine={the_node.closetLine}
@@ -2151,7 +1307,21 @@ DataboxLine.propTypes = {
     unique_id: PropTypes.string,
     node_list: PropTypes.array,
     funcs: PropTypes.object,
+    do_wrap: PropTypes.bool,
+    setWrap: PropTypes.func,
+    setBgColor: PropTypes.func,
+    clearComponents: PropTypes.func,
+    showGraphics: PropTypes.bool
 };
+
+DataboxLine.defaultProps = {
+    do_wrap: null,
+    setWrap: null,
+    setBgColor: null,
+    clearComponents: null,
+    showGraphics: false
+};
+
 
 // This isn't currently used. it creates a turtle sprite using an image
 class TurtleTurtle extends React.Component {

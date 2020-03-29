@@ -4,7 +4,8 @@ import _ from "lodash";
 import {data_kinds} from "./shared_consts.js";
 
 export {doBinding, doSignOut, isString, guid, isKind,
-    getCaretPosition, propsAreEqual, rgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger, degreesToRadians, selectedAcrossBoxes}
+    getCaretPosition, propsAreEqual, rgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
+    degreesToRadians, radiansToDegrees, selectedAcrossBoxes}
 
 function isKind(item, kind) {
     return typeof(item) == "object" && item.hasOwnProperty("kind") && item.kind == kind
@@ -21,6 +22,10 @@ function doBinding(obj, seq = "_") {
 
 function degreesToRadians(deg) {
     return deg * Math.PI / 180
+}
+
+function radiansToDegrees(radians) {
+    return radians * 180 / Math.PI
 }
 
 function extractText(abox) {
