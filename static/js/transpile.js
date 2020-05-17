@@ -22,11 +22,14 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
     let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node, _virtualNodeTree);
     let _tempFuncString = _convertNamedDoit(_inserted_start_node, _virtualNodeTree);
     let fname;
+    let context_name;
     if (root) {
-        fname = "_outerFunc";
+        fname = "_rootFunc";
+        context_name = "_outerFunc";
     }
     else {
         fname = "_tellFunc" + String(window.tell_function_counter);
+        context_name = "_tellContextFunc" +  String(window.tell_function_counter);
         window.tell_function_counter += 1;
     }
 
@@ -54,16 +57,16 @@ function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=tru
         global_declarations_string += `\n let current_turtle_id = "${current_turtle_id}"`
     }
 
-    window.virtualNodeTrees[fname] = _virtualNodeTree;
+    window.virtualNodeTrees[context_name] = _virtualNodeTree;
     let func_defn = `
-    async function ${fname}() {
-        let _context_name = "${fname}";
+    function ${context_name}() {
+        let _context_name = "${context_name}";
         ${global_declarations_string}
         ${_tempFuncString}
-        return await _tempFunc()
+        return _tempFunc
     }
     `;
-    window.context_functions[fname] = func_defn;
+    window.context_functions[context_name] = [fname, func_defn];
     return fname
 }
 
@@ -304,6 +307,8 @@ function findCalledDoits(doitNode, virtualNodeTree, context, called_doits = []) 
                 }
             }
             else {
+                if (["tell", "ask"].includes(token))
+                    break;
                 if (Object.keys(context.doit_boxes).includes(token)) {
                     let called_doit = _.cloneDeep(context.doit_boxes[token]);
                     called_doit.node.name = token;  // In portal case these won't be the same
@@ -514,10 +519,10 @@ function convertTell(token_list, virtualNodeTree, context, is_last_line) {
     let _fname = _createLocalizedFunctionCall(the_code_line, box_id, window.getBaseNode(), false);
 
     if (is_last_line) {
-        return `return await ${_fname}()`
+        return `\nreturn await ${_fname}()\n`
     }
     else{
-        return `${_fname}()`
+        return `\nawait ${_fname}()\n`
     }
 }
 

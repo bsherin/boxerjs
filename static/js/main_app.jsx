@@ -393,6 +393,9 @@ class MainApp extends React.Component {
         else if (text_kinds.includes(kind)) {
             new_node.setFocus = [portal_root, 0];
         }
+        else if (kind == "port") {
+            this._enterPortTargetMode(new_node.unique_id)
+        }
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         let self = this;
         if (update) {

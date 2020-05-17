@@ -74,8 +74,9 @@ async function doExecution(the_code_line, box_id, base_node) {
 
     let _full_code = "";
 
-    for (let cfunc in window.context_functions) {
-        _full_code += `${window.context_functions[cfunc]};\n`
+    for (let context_name in window.context_functions) {
+        _full_code += `${window.context_functions[context_name][1]};\n`
+        _full_code += `\nvar ${window.context_functions[context_name][0]} = ${context_name}()`
     }
 
     _full_code += `
