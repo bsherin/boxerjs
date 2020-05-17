@@ -2,6 +2,8 @@ import React from "react";
 import PropTypes from "prop-types";
 import ContentEditable from "react-contenteditable";
 import {Button} from "@blueprintjs/core";
+import {Spring, animated} from 'react-spring/renderprops'
+
 import {DragHandle} from "./resizing_layouts.js";
 
 import {doBinding, propsAreEqual} from "./utilities.js";
@@ -19,6 +21,7 @@ class NamedBox extends React.Component {
         this.state = {};
         this.nameRef = null;
         this.boxRef = React.createRef();
+        this.from_style = null;
         this.state = {
             focusingName: false,
             boxWidth: null,
@@ -38,6 +41,11 @@ class NamedBox extends React.Component {
     _flipMe() {
         this.boxRef = React.createRef();
         this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+    }
+
+    _convertMe() {
+        this.boxRef = React.createRef();
+        this.props.funcs.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
     }
 
     _closeMe() {
@@ -70,6 +78,7 @@ class NamedBox extends React.Component {
     }
 
     _openMe() {
+        this.setState({opening: true});
         if (this.props.am_in_portal) {
             this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
             return
@@ -86,7 +95,7 @@ class NamedBox extends React.Component {
     }
 
     componentDidMount() {
-        if (this.boxRef) {
+        if (this.boxRef && this.boxRef.current) {
             if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
@@ -110,7 +119,7 @@ class NamedBox extends React.Component {
                 });
             }
         }
-        if (!this.props.closed && this.boxRef) {
+        if (!this.props.closed && this.boxRef && this.boxRef.current) {
             if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
                  this.setState({ boxWidth: this.boxRef.current.offsetWidth });
             }
@@ -200,56 +209,89 @@ class NamedBox extends React.Component {
             clickable_label = true;
             label_function = this._flipMe;
         }
+        else if (this.props.kind == "htmlbox") {
+            clickable_label = true;
+            label_function = this._convertMe;
+        }
         else {
             clickable_label = false;
             label_function = null
         }
+        let outer_style;
+        let inner_style;
+        let width;
+        let height;
+        let inner_width;
+        let inner_height;
+        let immediate;
         if (this.props.closed) {
             if ((this.props.name != null) || this.state.focusingName) {
                 dbclass = "closed-data-box data-box-with-name"
             } else {
                 dbclass = "closed-data-box"
             }
-            if (this.props.kind == "doitbox" || this.props.kind == "jsbox") {
-                dbclass = dbclass + " doit-box";
+            outer_style = {};
+            inner_style = {width: 75, height: 36};
+            immediate = false
+        }
+        else {
+            dbclass = "data-box data-box-with-name targetable";
+            if (this.props.am_zoomed) {
+                let usable_dimensions = this.getUsableDimensions();
+                width = usable_dimensions.usable_width;
+                height = usable_dimensions.usable_height - 10;
+                inner_height = "100%";
+                inner_width = "100%";
+                outer_style = {
+                    width: width,
+                    height: height,
+                    position: "absolute",
+                    top: USUAL_TOOLBAR_HEIGHT + 10,
+                    left: SIDE_MARGIN,
+                };
+                inner_style = {
+                    height: inner_height,
+                    width: inner_width
+                };
+                immediate = true;
             }
-            if (this.props.selected) {
-                dbclass = dbclass + " selected"
+            else if (this.state.resizing) {
+                outer_style = {};
+                inner_width = this.state.startingWidth + this.state.dwidth;
+                inner_height = this.state.startingHeight + this.state.dheight;
+                inner_style = {
+                    width: inner_width,
+                    height: inner_height,
+                    position: "relative"
+                };
+                immediate = true;
+            } else if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
+                outer_style = {};
+                inner_style = {
+                    position: "relative",
+                    width: this.props.graphics_fixed_width + 13,
+                    height: this.props.graphics_fixed_height + 16
+                };
+                immediate = false;
             }
-            if (this.props.transparent) {
-                dbclass += " transparent"
+            else if (this.props.fixed_size) {
+                outer_style = {};
+                inner_width = this.props.fixed_width;
+                inner_height = this.props.fixed_height;
+                inner_style = {
+                    width: inner_width,
+                    height: inner_height,
+                    position: "relative"
+                };
+                immediate = false
             }
-            return (
-                <div className="data-box-outer">
-                    {(this.props.name || this.state.focusingName) &&
-                    <EditableTag the_name={this.props.name}
-                                 portal_root={this.props.portal_root}
-                                 portal_parent={this.props.portal_parent}
-                                 funcs={this.props.funcs}
-                                 boxWidth={75}
-                                 submitRef={this._submitNameRef}
-                                 doneEditingName={this._doneEditingName}
-                                 boxId={this.props.unique_id}/>
-                    }
-                    <Button type="button"
-                            className={dbclass}
-                            minimal={false}
-                            ref={this.boxRef}
-                            onMouseDown={(e) => {
-                                e.preventDefault()
-                            }}
-                            onClick={this._openMe}
-                            icon={null}>
-                        <div className="closed-button-inner"></div>
-                    </Button>
-                    <TypeLabel clickable={clickable_label}
-                               clickFunc={null}
-                               the_label={type_label}/>
-                </div>
-            )
+            else {
+                inner_style = {width: "auto", height: "auto"};
+                outer_style = {};
+                immediate = true
+            }
         }
 
-        dbclass = "data-box data-box-with-name targetable";
         if (this.props.kind == "doitbox" || this.props.kind == "jsbox") {
             dbclass = dbclass + " doit-box";
         } else if (this.props.kind == "sprite") {
@@ -263,69 +305,25 @@ class NamedBox extends React.Component {
         if (this.props.transparent) {
             dbclass += " transparent"
         }
-        let outer_style;
-        let inner_style;
-        let width;
-        let height;
-        let inner_width;
-        let inner_height;
-        if (this.props.am_zoomed) {
-            let usable_dimensions = this.getUsableDimensions();
-            width = usable_dimensions.usable_width;
-            height = usable_dimensions.usable_height - 10;
-            inner_height = "100%";
-            inner_width = "100%";
-            outer_style = {
-                width: width,
-                height: height,
-                position: "absolute",
-                top: USUAL_TOOLBAR_HEIGHT + 10,
-                left: SIDE_MARGIN
-            };
-            inner_style = {
-                height: inner_height,
-                width: inner_width
-            }
-        } else if (this.state.resizing) {
-            outer_style = {};
-            inner_width = this.state.startingWidth + this.state.dwidth;
-            inner_height = this.state.startingHeight + this.state.dheight;
-            inner_style = {
-                width: inner_width,
-                height: inner_height,
-                position: "relative"
-            }
-        } else if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
-            outer_style = {};
-            inner_width = this.props.graphics_fixed_width;
-            inner_height = this.props.graphics_fixed_height;
-            inner_style = {
-                position: "relative"
-            }
-        }
-        else if (this.props.fixed_size) {
-                outer_style = {};
-                inner_width = this.props.fixed_width;
-                inner_height = this.props.fixed_height;
-                inner_style = {
-                    width: inner_width,
-                    height: inner_height,
-                    position: "relative"
-                }
-        }
-        else {
-            inner_style = {};
-            outer_style = {}
-        }
+
         let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
         let outer_class = "data-box-outer";
         if (this.props.name == null && !this.state.focusingName) {
             outer_class += " empty-name"
         }
         let WrappedComponent = this.props.WrappedComponent;
+        if (!this.from_style) {
+            this.from_style = inner_style
+        }
+        let wrapper_style;
+        if (this.props.am_zoomed) {
+            wrapper_style = {height: "100%"}
+        }
+        else {
+            wrapper_style = {}
+        }
         return (
-            <React.Fragment>
-                <div className={outer_class} style={outer_style} ref={this.outerRef}>
+            <div className={outer_class} style={outer_style} ref={this.outerRef}>
                     <EditableTag the_name={this.props.name}
                                  portal_root={this.props.portal_root}
                                  portal_parent={this.props.portal_parent}
@@ -336,25 +334,58 @@ class NamedBox extends React.Component {
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                    <div ref={this.boxRef} className={dbclass} id={this.props.unique_id} style={inner_style} >
-                        <CloseButton handleClick={this._closeMe}/>
-                        <WrappedComponent {...this.props} ref={this.props.inner_ref} inner_width={inner_width} inner_height={inner_height}/>
-                        <ZoomButton handleClick={this._zoomMe}/>
-                        <DragHandle position_dict={draghandle_position_dict}
-                            dragStart={this._startResize}
-                            onDrag={this._onResize}
-                            dragEnd={this._stopResize}
-                            direction="both"
-                            iconSize={15}/>
-                    </div>
-                    {!this.props.am_zoomed &&
-                        <TypeLabel clickable={clickable_label}
-                                   clickFunc={label_function}
-                                   the_label={type_label}/>
-                    }
-                </div>
-            </React.Fragment>
+                 <Spring from={this.from_style} to={inner_style} immediate={immediate}>
+                     {inner_props => {
+                         if (this.props.closed) {
+                             return ( <div>
+                                 <div className={dbclass} style={inner_props}
+                                  ref={this.boxRef}
+                                  onMouseDown={(e) => {
+                                      e.preventDefault()
+                                  }}
+                                  onClick={this._openMe}>
+                                 <div className="closed-button-inner"></div>
+
+                             </div>
+                                 <TypeLabel clickable={clickable_label}
+                                            clickFunc={label_function}
+                                            the_label={type_label}/>
+                             </div>
+                             )
+                         }
+                     else {
+                         return(<div style={wrapper_style}>
+                             <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
+                                          style={inner_props}>
+                                         <CloseButton handleClick={this._closeMe}/>
+                                         <WrappedComponent {...this.props} ref={this.props.inner_ref}
+                                                           inner_width={inner_props.width}
+                                                           inner_height={inner_props.height}
+                                                           graphics_width={this.props.graphics_fixed_width}
+                                                           graphics_height={this.props.graphics_fixed_height}
+                                         />
+                                         <ZoomButton handleClick={this._zoomMe}/>
+                                         <DragHandle position_dict={draghandle_position_dict}
+                                                     dragStart={this._startResize}
+                                                     onDrag={this._onResize}
+                                                     dragEnd={this._stopResize}
+                                                     direction="both"
+                                                     iconSize={15}/>
+
+                                     </div>
+                                  {!this.props.am_zoomed &&
+                                         <TypeLabel clickable={clickable_label}
+                                                    clickFunc={label_function}
+                                                    the_label={type_label}/>
+                                 }
+                                 </div>
+                            )
+                        }
+                     }}
+                </Spring>
+            </div>
         )
+
     }
 }
 

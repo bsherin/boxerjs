@@ -349,11 +349,28 @@ let boxer_statements = {
         }
     },
 
+    setposition: {
+        args: [
+            ["pos", "expression"]
+        ],
+        converter: (arglist) => {
+            return `await setPosition(current_turtle_id, ${arglist[0]})`
+        }
+    },
+
     "turtle-shape": {
         args: [],
         allow_return: true,
         converter: (arglist) => {
             return "await turtleShape()"
+        }
+    },
+
+    "mouse-position": {
+        args: [],
+        allow_return: true,
+        converter: (arglist) => {
+            return "await getMousePosition(current_turtle_id)"
         }
     },
 

@@ -19,8 +19,9 @@ import { KeyTrap } from "./key_trap";
 import { getCaretPosition } from "./utilities";
 import { withStatus } from "./toaster.js";
 import { withErrorDrawer } from "./error_drawer.js";
-import { container_kinds, defaultBgColor } from "./shared_consts.js";
+import { container_kinds, text_kinds, defaultBgColor } from "./shared_consts.js";
 import { shape_classes, Triangle } from "./pixi_shapes.js";
+import { svg_shape_classes, SvgTriangle } from "./svg_shapes.js";
 import { NamedBox } from "./named_box.js";
 
 let tsocket = null;
@@ -69,6 +70,16 @@ function _rehydrateComponents(nd) {
         if (nd.hasOwnProperty("component_specs")) {
             for (let comp of nd.component_specs) {
                 let Dcomp = shape_classes[comp.type];
+                let new_comp = React.createElement(Dcomp, comp.props);
+                nd.drawn_components.push(new_comp);
+            }
+            nd.component_specs = [];
+        }
+    } else if (nd.kind == "svggraphics") {
+        nd.drawn_components = [];
+        if (nd.hasOwnProperty("component_specs")) {
+            for (let comp of nd.component_specs) {
+                let Dcomp = svg_shape_classes[comp.type];
                 let new_comp = React.createElement(Dcomp, comp.props);
                 nd.drawn_components.push(new_comp);
             }
@@ -124,7 +135,9 @@ class MainApp extends React.Component {
         window.newDoitNode = this._newDoitBoxNode;
         window.newColorBox = this._newColorBox;
         window.newGraphicsBox = this._newGraphicsBox;
+        window.newSvgGraphicsBox = this._newSvgGraphicsBox;
         window.newTurtleShape = this._newTurtleShape;
+        window.newValueBox = this._newValueBox;
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
@@ -189,6 +202,13 @@ class MainApp extends React.Component {
             nd.component_specs = [];
             for (let comp of nd.drawn_components) {
                 let new_spec = { type: comp.type, props: comp.props };
+                nd.component_specs.push(new_spec);
+            }
+            nd.drawn_components = [];
+        } else if (nd.kind == "svggraphics") {
+            nd.component_specs = [];
+            for (let comp of nd.drawn_components) {
+                let new_spec = { type: comp.type.name, props: comp.props };
                 nd.component_specs.push(new_spec);
             }
             nd.drawn_components = [];
@@ -344,82 +364,24 @@ class MainApp extends React.Component {
         }
     }
 
-    _insertJsBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true) {
+    _insertBoxInText(kind, text_id, cursor_position, portal_root, new_base = null, update = true, is_doit = false) {
         if (new_base == null) {
             new_base = _.cloneDeep(this.state.base_node);
         }
         this._splitTextAtPosition(text_id, cursor_position, new_base, false);
         let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newJsBoxNode();
-        new_node.setFocus = [portal_root, 0];
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({ base_node: new_base });
+        let new_node = this._nodeCreators()[kind]();
+        if (["databox", "doitbox"].includes(kind)) {
+            new_node.line_list[0].node_list[0].setFocus = [portal_root, 0];
+        } else if (text_kinds.includes(kind)) {
+            new_node.setFocus = [portal_root, 0];
         }
-    }
-
-    _insertDataBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true, is_doit = false) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node;
-        if (is_doit) {
-            new_node = this._newDoitBoxNode([]);
-        } else {
-            new_node = this._newDataBoxNode([]);
-        }
-        new_node.line_list[0].node_list[0].setFocus = [portal_root, 0];
         this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
         let self = this;
         if (update) {
             this.setState({ base_node: new_base }, () => {
                 self._clearSelected();
             });
-        }
-    }
-
-    _insertDoitBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true) {
-        this._insertDataBoxinText(text_id, cursor_position, portal_root, new_base, update, true);
-    }
-
-    _insertTurtleBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newTurtleBox();
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({ base_node: new_base });
-        }
-    }
-
-    _insertGraphicsBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newGraphicsBox();
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({ base_node: new_base });
-        }
-    }
-
-    _insertSpriteBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newSpriteBox();
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({ base_node: new_base });
         }
     }
 
@@ -440,25 +402,6 @@ class MainApp extends React.Component {
             self._setPortTarget(port_id, target.id);
             document.removeEventListener("click", gotClick);
         }
-    }
-
-    _insertPortBoxinText(text_id, cursor_position, portal_root, new_base = null, update = true, callback) {
-        if (new_base == null) {
-            new_base = _.cloneDeep(this.state.base_node);
-        }
-        this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._newPort();
-        this._insertNode(new_node, mnode.parent, mnode.position + 1, new_base, false);
-        if (update) {
-            this.setState({ base_node: new_base }, () => {
-                this._enterPortTargetMode(new_node.unique_id);
-            });
-        }
-    }
-
-    _insertTurtleBoxLastFocus() {
-        this._insertTurtleBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
     }
 
     _toggleBoxTransparency(boxId) {
@@ -515,28 +458,8 @@ class MainApp extends React.Component {
         this._toggleCloset(this.last_focus_id);
     }
 
-    _insertGraphicsBoxLastFocus() {
-        this._insertGraphicsBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
-    }
-
-    _insertSpriteBoxLastFocus() {
-        this._insertSpriteBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
-    }
-
-    _insertPortBoxLastFocus() {
-        this._insertPortBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
-    }
-
-    _insertDataBoxLastFocus() {
-        this._insertDataBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
-    }
-
-    _insertDoitBoxLastFocus() {
-        this._insertDoitBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
-    }
-
-    _insertJsBoxLastFocus() {
-        this._insertJsBoxinText(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
+    _insertBoxLastFocus(kind) {
+        this._insertBoxInText(kind, this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root);
     }
 
     _retargetPortLastFocus() {
@@ -659,7 +582,7 @@ class MainApp extends React.Component {
         if (obj2.kind == "text") {
             return this._compareTexts(obj1, obj2);
         }
-        if (obj2.kind == "jsbox") {
+        if (obj2.kind == "jsbox" || obj2.kind == "htmlbox") {
             return this._compareJsBoxes(obj1, obj2);
         }
         if (obj2.kind == "port") {
@@ -880,6 +803,43 @@ class MainApp extends React.Component {
         return new_box;
     }
 
+    _newSvgGraphicsBox(line_list = []) {
+        let uid = guid();
+        if (line_list.length == 0) {
+            let node_list = [this._newTextNode(" ")];
+            let new_line = this._newLineNode(node_list);
+            line_list = [new_line];
+        }
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        this._renumberNodes(line_list);
+        let new_node = {
+            kind: "svggraphics",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            transparent: false,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            drawn_components: [],
+            showCloset: false,
+            closetLine: null,
+            unique_id: uid,
+            bgColor: defaultBgColor,
+            graphics_fixed_width: 303,
+            graphics_fixed_height: 303,
+            showGraphics: true
+        };
+        return new_node;
+    }
+
     _newGraphicsBox(line_list = []) {
         let uid = guid();
         if (line_list.length == 0) {
@@ -983,7 +943,20 @@ class MainApp extends React.Component {
         return shape_box;
     }
 
-    _newSpriteBox() {
+    _newSvgTurtleShape() {
+        const tw = 11;
+        const th = 15;
+        const turtleColor = "#008000";
+        let shape_box = this._newSvgGraphicsBox();
+        shape_box.name = "shape";
+        shape_box.graphics_fixed_width = 50;
+        shape_box.graphics_fixed_height = 50;
+        let tshape = React.createElement(SvgTriangle, { width: tw, height: th, fill: turtleColor });
+        shape_box.drawn_components = [tshape];
+        return shape_box;
+    }
+
+    _newSpriteBox(use_svg = false) {
         let uid = guid();
         let param_dict = {
             "xPosition": 0,
@@ -1007,7 +980,11 @@ class MainApp extends React.Component {
             main_node_list.push(this._newValueBox(param, param_dict[param]));
             main_node_list.push(this._newTextNode(" "));
         }
-        main_node_list.push(this._newTurtleShape());
+        if (use_svg) {
+            main_node_list.push(this._newSvgTurtleShape());
+        } else {
+            main_node_list.push(this._newTurtleShape());
+        }
 
         let main_line = this._newLineNode(main_node_list);
 
@@ -1084,6 +1061,42 @@ class MainApp extends React.Component {
         return new_node;
     }
 
+    _newSvgTurtleBox() {
+        let uid = guid();
+        let sprite = this._newSpriteBox(true);
+        sprite.transparent = true;
+        let node_list = [sprite];
+        let new_line = this._newLineNode(node_list);
+        let line_list = [new_line];
+        for (let lnode of line_list) {
+            lnode.parent = uid;
+        }
+        let new_node = this._newSvgGraphicsBox(line_list);
+        new_node.transparent = true;
+        return new_node;
+    }
+
+    _newHtmlBoxNode(the_code = null) {
+        let uid = guid();
+        if (the_code == null) {
+            the_code = "";
+        }
+        let new_node = {
+            kind: "htmlbox",
+            name: null,
+            key: uid,
+            selected: false,
+            unique_id: uid,
+            position: 0,
+            the_code: the_code,
+            parent: null,
+            focusName: false,
+            closed: false,
+            setFocus: null
+        };
+        return new_node;
+    }
+
     _newJsBoxNode(the_code = null) {
         let uid = guid();
         if (the_code == null) {
@@ -1108,14 +1121,18 @@ class MainApp extends React.Component {
     _nodeCreators() {
         return {
             jsbox: this._newJsBoxNode,
+            htmlbox: this._newHtmlBoxNode,
             text: this._newTextNode,
             doitbox: this._newDoitBoxNode,
             databox: this._newDataBoxNode,
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
+            svggraphics: this._newSvgGraphicsBox,
             line: this._newLineNode,
             color: this._newColorBox,
-            port: this._newPort
+            port: this._newPort,
+            turtlebox: this._newTurtleBox,
+            svgturtlebox: this._newSvgTurtleBox
         };
     }
 
@@ -1123,10 +1140,12 @@ class MainApp extends React.Component {
         return {
             jsbox: null,
             text: null,
+            htmlbox: null,
             doitbox: this._newDoitBoxNode,
             databox: this._newDataBoxNode,
             sprite: this._newSpriteBox,
             graphics: this._newGraphicsBox,
+            svggraphics: this._newSvgGraphicsBox,
             color: this._newColorBox,
             port: this._newPort,
             line: this._healLine
@@ -1260,12 +1279,6 @@ class MainApp extends React.Component {
         if (recursive) {
             for (let node of line_pointer.node_list) {
                 this._healStructure(node, line_pointer);
-                // if (container_kinds.includes(node.kind)) {
-                //     for (let lin of node.line_list) {
-                //         lin.parent = node.unique_id;
-                //         this._healLine(lin)
-                //     }
-                // }
             }
         }
     }
@@ -1295,17 +1308,6 @@ class MainApp extends React.Component {
         if (mnode) {
             repairCopiedDrawnComponents(new_val, true);
             mnode[param_name] = new_val;
-            this.setState({ base_node: new_base }, callback);
-        }
-    }
-
-    _changeNodeFromDict(uid, param_dict, callback = null) {
-        let new_base = _.cloneDeep(this.state.base_node);
-        let mnode = this._getMatchingNode(uid, new_base);
-        if (mnode) {
-            for (let param in param_dict) {
-                mnode[param] = param_dict[param];
-            }
             this.setState({ base_node: new_base }, callback);
         }
     }
@@ -1380,16 +1382,8 @@ class MainApp extends React.Component {
         this.last_focus_portal_root = portal_root;
     }
 
-    _insertDataBoxFromKey() {
-        this._insertDataBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root);
-    }
-
-    _insertDoitBoxFromKey() {
-        this._insertDoitBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root);
-    }
-
-    _insertJsBoxFromKey() {
-        this._insertJsBoxinText(document.activeElement.id, getCaretPosition(document.activeElement), this.props.last_focus_portal_root);
+    _insertBoxFromKey(kind) {
+        this._insertBoxInText(kind, document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root);
     }
 
     _focusNameLastFocus() {
@@ -1834,9 +1828,7 @@ class MainApp extends React.Component {
         let funcs = {
             handleTextChange: this._handleTextChange,
             changeNode: this._changeNode,
-            changeNodeFromDict: this._changeNodeFromDict,
-            insertDataBox: this._insertDataBoxinText,
-            insertDoitBox: this._insertDoitBoxinText,
+            insertBoxInText: this._insertBoxInText,
             deletePrecedingBox: this._deletePrecedingBox,
             deleteToLineEnd: this._deleteToLineEnd,
             splitLineAtTextPosition: this._splitLineAtTextPosition,
@@ -1847,9 +1839,7 @@ class MainApp extends React.Component {
             focusNameLastFocus: this._focusNameLastFocus,
             unzoomBox: this._unzoomBox,
             storeFocus: this._storeFocus,
-            insertDataBoxLastFocus: this._insertDataBoxLastFocus,
-            insertDoitBoxLastFocus: this._insertDoitBoxLastFocus,
-            getMainState: this._getMainState,
+            insertBoxLastFocus: this._insertBoxLastFocus,
             positionAfterBox: this._positionAfterBox,
             clearSelected: this._clearSelected,
             setSelected: this._setSelected,
@@ -1857,20 +1847,12 @@ class MainApp extends React.Component {
             copySelected: this._copySelected,
             newTextNode: this._newTextNode,
             newDataBox: this._newDataBoxNode,
-            newDoitBox: this._newDoitBoxNode,
             newLineNode: this._newLineNode,
-            newClosetLine: this._newClosetLine,
             addToClipboardStart: this._addToClipboardStart,
             insertClipboardLastFocus: this._insertClipboardLastFocus,
             handleCodeChange: this._handleCodeChange,
-            insertJsBoxLastFocus: this._insertJsBoxLastFocus,
-            insertTurtleBoxLastFocus: this._insertTurtleBoxLastFocus,
-            insertGraphicsBoxLastFocus: this._insertGraphicsBoxLastFocus,
-            insertSpriteBoxLastFocus: this._insertSpriteBoxLastFocus,
-            insertPortBoxLastFocus: this._insertPortBoxLastFocus,
             getBaseNode: this._getBaseNode,
             insertNode: this._insertNode,
-            registerTurtleBox: this._registerTurtleBox,
             setTurtleRef: this._setTurtleRef,
             openErrorDrawer: this.props.openErrorDrawer,
             updateIds: this._updateIds,
@@ -1911,10 +1893,10 @@ class MainApp extends React.Component {
         let zoomed_node = this._getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
         let key_bindings = [[["{"], e => {
             e.preventDefault();
-            this._insertDataBoxFromKey();
+            this._insertBoxFromKey("databox");
         }], [["["], e => {
             e.preventDefault();
-            this._insertDoitBoxFromKey();
+            this._insertBoxFromKey("doitbox");
         }], [["esc"], e => {
             this._clearSelected();
         }], [["ctrl+v", "command+v"], e => {

@@ -4,7 +4,7 @@ import _ from "lodash";
 import {data_kinds} from "./shared_consts.js";
 
 export {doBinding, doSignOut, isString, guid, isKind,
-    getCaretPosition, propsAreEqual, rgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
+    getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
     degreesToRadians, radiansToDegrees, selectedAcrossBoxes}
 
 function isKind(item, kind) {
@@ -75,6 +75,10 @@ function componentToHex(c) {
 function rgbToHex(r, g, b) {
     return r * 65536 + g * 256 + b;
   // return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
+function svgRgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
 }
 
 function arraysMatch (arr1, arr2) {

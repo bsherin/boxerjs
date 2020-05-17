@@ -195,46 +195,25 @@ class MakeMenu extends React.Component {
         doBinding(this)
     }
 
-    _new_box(event) {
-        this.props.insertDataBoxLastFocus();
-    }
-
-    _new_doitbox(event) {
-        this.props.insertDoitBoxLastFocus();
-    }
-
-    _new_jsbox(event) {
-        this.props.insertJsBoxLastFocus();
-    }
-
-    _new_turtlebox(event) {
-        this.props.insertTurtleBoxLastFocus();
-    }
-
-    _new_graphicsbox(event) {
-        this.props.insertGraphicsBoxLastFocus();
-    }
-
-    _new_spritebox(event) {
-        this.props.insertSpriteBoxLastFocus();
-    }
-
-    _new_portbox(event) {
-        this.props.insertPortBoxLastFocus();
+    _new_box(kind) {
+        this.props.insertBoxLastFocus(kind);
     }
 
 
     get option_dict () {
         return {
-            "Data Box": this._new_box,
-            "Doit Box": this._new_doitbox,
-            "JS Box": this._new_jsbox,
+            "Data Box": ()=>{this._new_box("databox")},
+            "Doit Box": ()=>{this._new_box("doitbox")},
+            "JS Box": ()=>{this._new_box("jsbox")},
+            "HTML Box": ()=>{this._new_box("htmlbox")},
             "divider1": "divider",
-            "Turtle Box": this._new_turtlebox,
-            "Graphics Box": this._new_graphicsbox,
-            "Sprite Box": this._new_spritebox,
+            "Turtle Box": ()=>{this._new_box("turtlebox")},
+            "SVGTurtle Box": ()=>{this._new_box("svgturtlebox")},
+            "Graphics Box": ()=>{this._new_box("graphics")},
+            "SVGGraphics Box": ()=>{this._new_box("svggraphics")},
+            "Sprite Box": ()=>{this._new_box("sprite")},
             "divider2": "divider",
-            "Port": this._new_portbox
+            "Port": ()=>{this._new_box("port")},
         }
     }
 
@@ -243,8 +222,11 @@ class MakeMenu extends React.Component {
             "Data Box": "cube",
             "Doit Box": "code",
             "JS Box": "code",
+            "HTML Box": "code",
             "Turtle Box": "media",
+            "SVGTurtle Box": "media",
             "Graphics Box": "media",
+            "SVGGraphics Box": "media",
             "Sprite Box": "symbol-triangle-up",
             "Port": "feed"
         }

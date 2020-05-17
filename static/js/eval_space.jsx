@@ -6,7 +6,7 @@ import {shape_classes} from "./pixi_shapes.js";
 import {data_kinds, container_kinds} from "./shared_consts.js";
 import {isKind, degreesToRadians, radiansToDegrees} from "./utilities.js"
 
-export {doExecution, repairCopiedDrawnComponents}
+export {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics}
 
 var _name_index;
 var _base_node;
@@ -32,6 +32,38 @@ function addConverted(cdict) {
         nstring += "\n" + cdict[nd].converted
     }
     return nstring
+}
+
+async function _mouseClickOnSprite(sprite_box_id, base_node) {
+    let snode = _getMatchingNode(sprite_box_id, base_node);
+    let [named_nodes, tid] = findNamedBoxesInScope(snode, base_node);
+    let found = false;
+    for (let node of named_nodes) {
+        if (node.name == "mouseClickOnSprite") {
+            found = true;
+            break
+        }
+    }
+    if (!found) return;
+    let the_node = window.newTextNode("mouseClickOnSprite");
+    let the_code_line = window.newLineNode([the_node]);
+    await doExecution(the_code_line, sprite_box_id, base_node)
+}
+
+async function _mouseClickOnGraphics(graphics_box_id, base_node) {
+    let gnode = _getMatchingNode(graphics_box_id, base_node);
+    let [named_nodes, tid] = findNamedBoxesInScope(gnode, base_node);
+    let found = false;
+    for (let node of named_nodes) {
+        if (node.name == "mouseClickOnGraphics") {
+            found = true;
+            break
+        }
+    }
+    if (!found) return;
+    let the_node = window.newTextNode("mouseClickOnGraphics");
+    let the_code_line = window.newLineNode([the_node]);
+    await doExecution(the_code_line, graphics_box_id, base_node)
 }
 
 async function doExecution(the_code_line, box_id, base_node) {
@@ -263,6 +295,12 @@ async function redisplay() {
     await delay(delay_amount)
 }
 
+async function getMousePosition(current_turtle_id) {
+    let mpos = window.turtle_box_refs[current_turtle_id].current._getMousePosition();
+    let mpos_string = `${Math.round(mpos.x)} ${Math.round(mpos.y)}`;
+    return window.newValueBox(null, mpos_string)
+}
+
 async function forward(current_turtle_id, steps, eval_in_place=null) {
     window.turtle_box_refs[current_turtle_id].current._moveForward(steps, async (param_dict)=>{
         return await update_sprite_params(param_dict, eval_in_place);
@@ -359,6 +397,10 @@ function stampHollowCircle(current_turtle_id, r) {
 
 function type(current_turtle_id, boxortext) {
     window.turtle_box_refs[current_turtle_id].current._type(boxortext);
+}
+
+function setPosition(current_turtle_id, abox) {
+    window.turtle_box_refs[current_turtle_id].current._setPosition(abox);
 }
 
 function setTypeFont(current_turtle_id, boxortext, eval_in_place=null) {

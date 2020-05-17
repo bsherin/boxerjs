@@ -2,13 +2,14 @@ import React from "react";
 import ContentEditable from "react-contenteditable";
 import PropTypes from "prop-types";
 
-import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, rgbToHex,
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, rgbToHex, svgRgbToHex,
     degreesToRadians, propsAreEqual} from "./utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
-import {doExecution, repairCopiedDrawnComponents} from "./eval_space.js";
+import {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics} from "./eval_space.js";
 
 import {Line, Rectangle, Ellipse, } from "./pixi_shapes.js";
+import {SvgLine, SvgRect} from "./svg_shapes.js"
 // noinspection ES6CheckImport
 import { Sprite, Stage, withApp, Container, Text} from "react-pixi-fiber";
 import * as PIXI from "pixi.js";
@@ -41,31 +42,77 @@ PIXI.settings.RESOLUTION = 1;
 const loader = PIXI.Loader.shared;
 loader.add('turtle', "/static/assets/turtle_image.png");
 
-function _convertColorArg(the_color_strings) {
-        let bgcolor;
-        if (the_color_strings.length == 1) {
-            let the_str = the_color_strings[0];
-            if (isNormalInteger(the_str)) {
-                bgcolor = parseInt(the_str);
-            }
-            else {
-                bgcolor = the_str;
-            }
+function _convertColorArg(the_color_string) {
+    let bgcolor;
+    if (typeof(the_color_string) == "number") {
+        bgcolor = the_color_string
+    }
+    else if (the_color_string.split(" ").length == 1) {
+        if (isNormalInteger(the_color_string)) {
+            bgcolor = parseInt(the_color_string);
         }
         else {
-            let cnums = [];
-            for (let c of the_color_strings) {
-                cnums.push(parseInt(c))
-            }
-            bgcolor = rgbToHex(cnums[0], cnums[1], cnums[2]);
+            bgcolor = the_color_string;
         }
-        return bgcolor
     }
+    else {
+        let cnums = [];
+        for (let c of the_color_string.split(" ")) {
+            cnums.push(parseInt(c))
+        }
+        bgcolor = rgbToHex(cnums[0], cnums[1], cnums[2]);
+    }
+    return bgcolor
+}
+
+function _svgConvertColorArg(the_color_string) {
+    let bgcolor;
+    if (typeof(the_color_string) == "number") {
+        bgcolor = "#" + the_color_string.toString(16).toUpperCase();
+    }
+    else if (the_color_string.split(" ").length == 1) {
+        if (isNormalInteger(the_color_string)) {
+            bgcolor = "#000000"
+        }
+        else {
+            bgcolor = the_color_string;
+        }
+    }
+    else {
+        let cnums = [];
+        for (let c of the_color_string.split(" ")) {
+            cnums.push(parseInt(c))
+        }
+        bgcolor = svgRgbToHex(cnums[0], cnums[1], cnums[2]);
+    }
+    return bgcolor
+}
 
 class SpriteBox extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
+        this.spriteRef = React.createRef();
+    }
+
+    _listen_for_clicks () {
+        let self = this;
+        if (this.spriteRef && this.spriteRef.current) {
+            this.spriteRef.current.removeListener("pointerdown", this._onMouseDown);
+            this.spriteRef.current.addListener("pointerdown", this._onMouseDown);
+        }
+    }
+
+    _onMouseDown(event) {
+        _mouseClickOnSprite(this.props.unique_id, this.props.funcs.getBaseNode())
+    }
+
+    componentDidMount () {
+        this._listen_for_clicks();
+    }
+
+    componentDidUpdate () {
+        this._listen_for_clicks();
     }
 
     shouldComponentUpdate(nextProps, nextState, nextContext) {
@@ -117,7 +164,7 @@ class SpriteBox extends React.Component {
         return null
     }
 
-    _getAllParams() {
+    _getAllParams(in_svg=false) {
         let pdict = {};
         let mnode = this._myNode();
         for (let lin of mnode.line_list) {
@@ -136,8 +183,12 @@ class SpriteBox extends React.Component {
             }
             if (nd.name == "penColor") {
                 let color_string = nd.line_list[0].node_list[0].the_text;
-                let the_color_strings = color_string.trim().split(" ");
-                pdict.penColor = _convertColorArg(the_color_strings)
+                if (in_svg) {
+                    pdict.penColor = _svgConvertColorArg(color_string)
+                }
+                else {
+                    pdict.penColor = _convertColorArg(color_string)
+                }
             }
         }
         return pdict
@@ -257,6 +308,10 @@ class SpriteBox extends React.Component {
         }
     }
 
+    _getMousePosition() {
+        return this.props.getMousePosition();
+    }
+
     _setTypeFont(aboxorstring, callback=null) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
@@ -273,16 +328,14 @@ class SpriteBox extends React.Component {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
         let the_color_strings = the_text.trim().split(" ");
-        let pcolor = _convertColorArg(the_color_strings);
+        // let pcolor = _convertColorArg(the_color_strings);
         this._setMyParams({penColor: the_text}, callback);
     }
 
     _setBackgroundColor(aboxorstring) {
         let the_text = this._getText(aboxorstring);
         if (!the_text) return;
-        let the_color_strings = the_text.trim().split(" ");
-        let bgcolor = _convertColorArg(the_color_strings);
-        this.props.setBgColor(bgcolor)
+        this.props.setBgColor(the_text)
     }
 
     _type(aboxorstring) {
@@ -302,6 +355,13 @@ class SpriteBox extends React.Component {
         this.props.addComponent(new_comp)
     }
 
+    _setPosition(abox) {
+        let the_text = this._getText(abox);
+        if (!the_text) return;
+        let [x, y] = the_text.split(" ");
+        this._moveTo(parseInt(x), parseInt(y))
+    }
+
     _setPenWidth(w, callback=null) {
         this._setMyParams({penWidth: w}, callback);
     }
@@ -315,19 +375,31 @@ class SpriteBox extends React.Component {
     }
 
     _moveTo(newX, newY, pdown=null, callback=null) {
-        let sparams = this._getAllParams();
+        let sparams = this._getAllParams(this.props.in_svg);
         if (pdown == null) {
             pdown = sparams["pen"]
         }
         if (newX != this.props.xPosition || newY != this.props.yPosition) {
             let new_comp;
             if (pdown) {
-                new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
+                if (!this.props.in_svg) {
+                    new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
                                   xend={newX} yend={newY}
                                   key={guid()}
                                   penwidth={sparams.penWidth} pencolor={sparams.penColor}
 
                 />);
+                }
+                else {
+                    new_comp = (<SvgLine x={sparams.xPosition} y={sparams.yPosition}
+                                         xend={newX} yend={newY}
+                                         key={guid()}
+                                         penWidth={sparams.penWidth}
+                                         penColor={sparams.penColor}
+
+                    />);
+                }
+
                 this.props.addComponent(new_comp, ()=>{
                     this._setMyParams ({"xPosition": newX, "yPosition": newY}, ()=>{
                         if (callback) {
@@ -412,15 +484,31 @@ class SpriteBox extends React.Component {
 
     render() {
         let sparams = this._getAllParams();
-        let the_sprite = (
-            <Sprite x={sparams["xPosition"]}
-                    y={sparams["yPosition"]}
-                    scale={sparams["spriteSize"]}
-                    angle={-1 * sparams["heading"]}
-                    anchor={[0.5, 0.5]}>
-                {sparams.shape_components}
-            </Sprite>
-        );
+        let the_sprite;
+        if (!this.props.in_svg) {
+            the_sprite = (
+                <Sprite x={sparams["xPosition"]}
+                        y={sparams["yPosition"]}
+                        interactive={true}
+                        ref={this.spriteRef}
+                        scale={sparams["spriteSize"]}
+                        angle={-1 * sparams["heading"]}
+                        anchor={[0.5, 0.5]}>
+                    {sparams.shape_components}
+                </Sprite>
+            );
+        }
+        else {
+            let trans_string = `translate(${sparams["xPosition"]}, ${sparams["yPosition"]}) 
+            rotate(${-1 * sparams["heading"]}) 
+            scale(${sparams["spriteSize"]}, ${sparams["spriteSize"]})`
+            the_sprite = (
+                <g transform={trans_string} style={{overflow: "visible"}}>
+                    {sparams.shape_components}
+                </g>
+                // <circle cx={sparams["xPosition"]} cy={sparams["yPosition"]} strokeWidth={1} r={5} stroke="green" fill="yellow"/>
+            )
+        }
 
         if (this.props.showGraphics) {
             if (sparams.shown) {
@@ -437,11 +525,55 @@ class SpriteBox extends React.Component {
     }
 }
 
+SpriteBox.propTypes = {
+    in_svg: PropTypes.bool
+}
+
+SpriteBox.defaultProps = {
+    in_svg: false
+}
+
 class GraphicsBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
+        this.graphicsRef = React.createRef();
         this.do_wrap = true;
+        this.last_x = 0;
+        this.last_y = 0;
+    }
+
+    _listen_for_clicks () {
+        let self = this;
+        if (this.graphicsRef && this.graphicsRef.current) {
+            if (this.graphicsRef && this.graphicsRef.current) {
+                this.graphicsRef.current.removeListener("pointerdown", this._onMouseDown);
+                this.graphicsRef.current.addListener("pointerdown", this._onMouseDown);
+                this.graphicsRef.current.removeListener("pointermove", this._onMouseMove);
+                this.graphicsRef.current.addListener("pointermove", this._onMouseMove);
+            }
+        }
+    }
+
+    _onMouseMove(event) {
+        if (this.graphicsRef && this.graphicsRef.current) {
+            let newPosition = event.data.getLocalPosition(this.graphicsRef.current.parent);
+            this.last_x = newPosition.x;
+            this.last_y = newPosition.y;
+        }
+
+    }
+
+    _onMouseDown(event) {
+        _mouseClickOnGraphics(this.props.unique_id, this.props.funcs.getBaseNode())
+    }
+
+    componentDidMount () {
+        this._listen_for_clicks();
+    }
+
+    componentDidUpdate () {
+        this._listen_for_clicks();
     }
 
     _addComponent(new_comp, callback=null) {
@@ -458,6 +590,10 @@ class GraphicsBoxRaw extends React.Component {
         this.do_wrap = wrap;
     }
 
+    _getMousePosition() {
+        return {x: this.last_x, y: this.last_y}
+    }
+
     _setBgColor(color) {
         this.props.funcs.changeNode(this.props.unique_id, "bgColor", color);
     }
@@ -469,14 +605,13 @@ class GraphicsBoxRaw extends React.Component {
     _getColorBoxColor() {
         let mynode = this.props.funcs.getNode(this.props.unique_id);
         let color_string = mynode.line_list[0].node_list[0].the_text;
-        let the_color_strings = color_string.trim().split(" ");
-        return _convertColorArg(the_color_strings)
+        return _convertColorArg(color_string)
     }
 
     render() {
         if (this.props.closed || !this.props.showGraphics) {
             return (
-                <DataBox {...this.props} addComponent={this._addComponent}
+                <DataBox {...this.props} in_svg={false} addComponent={this._addComponent}
                                          do_wrap={this.do_wrap}
                                          setWrap={this._setWrap}
                                          setBgColor={this._setBgColor}
@@ -484,15 +619,15 @@ class GraphicsBoxRaw extends React.Component {
             )
         }
         else {
-            let gwidth = this.props.inner_width;
-            let gheight = this.props.inner_height;
+            let gwidth = this.props.graphics_fixed_width;
+            let gheight = this.props.graphics_fixed_height;
             if (this.props.kind == "color") {
-                let bgcolor = this._getColorBoxColor();
+                let converted_bgcolor = this._getColorBoxColor();
                 return (
                     <Stage options={{width: gwidth, height: gheight, antialias: true}}>
                         <Sprite width={gwidth} height={gheight} key="bgsprite"
                                 texture={PIXI.Texture.WHITE}
-                                tint={bgcolor} />
+                                tint={converted_bgcolor} />
                     </Stage>
                 );
             }
@@ -509,6 +644,7 @@ class GraphicsBoxRaw extends React.Component {
                             this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
                             let new_comp = (
                                 <SpriteBox {...nd}
+                                            in_svg={false}
                                            key={nd.unique_id}
                                            app={this.props.app}
                                            ref={window.turtle_box_refs[nd.unique_id]}
@@ -518,6 +654,7 @@ class GraphicsBoxRaw extends React.Component {
                                            addComponent={this._addComponent}
                                            do_wrap={this.do_wrap}
                                            setWrap={this._setWrap}
+                                           getMousePosition={this._getMousePosition}
                                            setBgColor={this._setBgColor}
                                            clearComponents={this._clearComponents}
                                            showGraphics={this.props.showGraphics}/>
@@ -529,14 +666,18 @@ class GraphicsBoxRaw extends React.Component {
                         }
                     }
                 }
+                let bgcolor = _convertColorArg(this.props.bgColor)
                 let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
                 let scalePoint = [-1, 1];  // This reflects over y axis
                 return (
                     <Stage options={{width: gwidth, height:gheight, antialias: true}}>
-                        <Sprite width={gwidth} height={gheight} key="bgsprite"
-                                texture={PIXI.Texture.WHITE}
-                                tint={this.props.bgColor} />
                         <Container position={offsetPoint} angle={180} scale={scalePoint}>
+                            <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                    texture={PIXI.Texture.WHITE}
+                                    position={{x: -gwidth / 2, y: -gheight / 2}}
+                                    ref={this.graphicsRef}
+                                    interactive={true}
+                                    tint={bgcolor} />
                             {sprite_components.length > 0 && sprite_components}
                             {(this.props.drawn_components.length > 0) && this.props.drawn_components}
                         </Container>
@@ -559,6 +700,116 @@ GraphicsBoxRaw.propTypes = {
 };
 
 const GraphicsBox = withApp(GraphicsBoxRaw);
+
+class SvgGraphicsBox extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.graphicsRef = React.createRef();
+        this.do_wrap = true;
+        this.last_x = 0;
+        this.last_y = 0;
+    }
+
+
+
+    _addComponent(new_comp, callback=null) {
+        this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp, callback);
+        //this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
+    }
+
+    _clearComponents(callback=null) {
+        // this.setState({drawnComponents: []})
+        this.props.funcs.changeNode(this.props.unique_id, "drawn_components", [], callback)
+    }
+
+    _setWrap(wrap) {
+        this.do_wrap = wrap;
+    }
+
+    _getMousePosition() {
+        return {x: this.last_x, y: this.last_y}
+    }
+
+    _setBgColor(color) {
+        this.props.funcs.changeNode(this.props.unique_id, "bgColor", color);
+    }
+
+    render() {
+        if (this.props.closed || !this.props.showGraphics) {
+            return (
+                <DataBox {...this.props} addComponent={this._addComponent}
+                                         in_svg={true}
+                                         do_wrap={this.do_wrap}
+                                         setWrap={this._setWrap}
+                                         setBgColor={this._setBgColor}
+                                         clearComponents={this._clearComponents}/>
+            )
+        }
+        else {
+            let gwidth = this.props.graphics_fixed_width;
+            let gheight = this.props.graphics_fixed_height;
+            let sprite_components = [];
+            let acindex = 0;
+            let temp_ll = _.cloneDeep(this.props.line_list);
+            if (this.props.closetLine) {
+                temp_ll.push(this.props.closetLine)
+            }
+            for (let lin of temp_ll) {
+                for (let nd of lin.node_list) {
+                    if (nd.kind == "sprite") {
+                        this.props.funcs.setTurtleRef(nd.unique_id, React.createRef());
+                        let new_comp = (
+                            <SpriteBox {...nd}
+                                       in_svg={true}
+                                       key={nd.unique_id}
+                                       app={this.props.app}
+                                       ref={window.turtle_box_refs[nd.unique_id]}
+                                       funcs={this.props.funcs}
+                                       graphics_fixed_width={gwidth}
+                                       graphics_fixed_height={gheight}
+                                       addComponent={this._addComponent}
+                                       do_wrap={this.do_wrap}
+                                       setWrap={this._setWrap}
+                                       getMousePosition={this._getMousePosition}
+                                       setBgColor={this._setBgColor}
+                                       clearComponents={this._clearComponents}
+                                       showGraphics={this.props.showGraphics}/>
+                        );
+                        acindex += 1;
+                        if (new_comp) {
+                            sprite_components.push(new_comp)
+                        }
+                    }
+                }
+            }
+            let bgcolor = _svgConvertColorArg(this.props.bgColor)
+            let trans_string = `scale(1, -1) translate( ${gwidth / 2}, ${gheight / 2} )`
+            return (
+                <React.Fragment>
+                    <svg width={gwidth} height={gheight} transform={trans_string} style={{overflow: "visible"}}>
+                        <SvgRect width={gwidth} height={gheight} key="bgrect"
+                                 x={-gwidth / 2}
+                                 y= {-gheight / 2}
+                                 fill={bgcolor} />
+                        {sprite_components.length > 0 && sprite_components}
+                        {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                    </svg>
+                </React.Fragment>
+            )
+        }
+    }
+}
+
+SvgGraphicsBox.propTypes = {
+    unique_id: PropTypes.string,
+    graphics_fixed_width: PropTypes.number,
+    graphics_fixed_height: PropTypes.number,
+    showGraphics: PropTypes.bool,
+    funcs: PropTypes.object,
+    app: PropTypes.object
+};
+
 
 
 class TextNode extends React.Component {
@@ -969,6 +1220,23 @@ class PortBox extends React.Component {
                                               portal_is_zoomed={this.props.am_zoomed}
                                               {...tnode} funcs={this.props.funcs}/>
                 }
+                else if (tnode.kind == "svggraphics") {
+                    inner_content = <NamedBox WrappedComponent={SvgGraphicsBox}
+                                              portal_root={this.props.unique_id}
+                                              portal_parent={this.props.portal_root}
+                                              am_in_portal={this.props.unique_id}
+                                              portal_is_zoomed={this.props.am_zoomed}
+                                              {...tnode} funcs={this.props.funcs}/>
+                }
+                else if (tnode.kind == "htmlbox") {
+                    inner_content = <NamedBox WrappedComponent={HtmlBox}
+                                              portal_root={this.props.unique_id}
+                                              portal_parent={this.props.portal_root}
+                                              am_in_portal={this.props.unique_id}
+                                              portal_is_zoomed={this.props.am_zoomed}
+                                              clickable_label={false}
+                                              {...tnode} funcs={this.props.funcs}/>
+                }
             }
         }
 
@@ -1060,6 +1328,115 @@ DataBox.defaultProps = {
     showGraphics: false
 };
 
+class HtmlBox extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.state = {};
+        this.nameRef = null;
+        this.boxRef = React.createRef();
+        this.state.focusingName = false;
+        this.state.boxWidth = null;
+        this.cmobject = null;
+    }
+
+
+    _handleCodeChange(new_code) {
+        this.props.funcs.handleCodeChange(this.props.unique_id, new_code)
+    }
+
+    _handleBlur() {
+        this.props.funcs.storeFocus(this.props.unique_id, 0, this.props.portal_root);
+    }
+
+
+    _setCMObject(cmobject) {
+        this.cmobject = cmobject
+    }
+
+    componentDidMount() {
+        this._setFocusIfRequired()
+    }
+
+    componentDidUpdate () {
+        this._setFocusIfRequired()
+    }
+
+    _setFocusIfRequired () {
+        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
+            if (this.cmobject) {
+                this.cmobject.focus();
+                this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
+            }
+        }
+    }
+
+    _upArrow() {
+        // let head = this.cmobject.getCursor();
+        // if (head.line == 0) {
+        //     this._nameMe()
+        // }
+        // else {
+        //     this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        // }
+    }
+
+    _extraKeys() {
+        let self = this;
+        return {
+                'Ctrl-N': ()=>self._nameMe(),
+                'ArrowUp': ()=>self._upArrow(),
+                'Up': ()=>self._upArrow()
+            }
+    }
+
+    render() {
+        let dbclass;
+        if (this.props.closed) {
+            return null
+        }
+        if (this.props.showConverted) {
+            let converted_dict = {__html: this.props.the_code};
+            return (
+                <div dangerouslySetInnerHTML={converted_dict}></div>
+            )
+        }
+        else {
+            return (
+                <React.Fragment>
+                    <ReactCodemirror code_content={this.props.the_code}
+                                     mode={{name: "xml", htmlMode: true}}
+                                     handleChange={this._handleCodeChange}
+                                     handleBlur={this._handleBlur}
+                                     saveMe={null}
+                                     setCMObject={this._setCMObject}
+                                     readOnly={false}
+                                     extraKeys={this._extraKeys()}
+                                     first_line_number={null}
+                    />
+                </React.Fragment>
+            )
+        }
+
+    }
+}
+
+HtmlBox.propTypes = {
+    name: PropTypes.string,
+    the_code: PropTypes.string,
+    showConverted: PropTypes.bool,
+    closed: PropTypes.bool,
+    unique_id: PropTypes.string,
+    funcs: PropTypes.object,
+    selected: PropTypes.bool,
+};
+
+HtmlBox.defaultProps = {
+    closed: false,
+    am_zoomed: false,
+    innerWidth: 0,
+    innerHeight: 0
+};
 
 class JsBox extends React.Component {
     constructor(props) {
@@ -1210,6 +1587,16 @@ class DataboxLine extends React.Component {
                                 funcs={this.props.funcs}/>
                 )
             }
+            else if (the_node.kind == "htmlbox") {
+                return (
+                    <NamedBox WrappedComponent={HtmlBox}
+                              portal_root={this.props.portal_root}
+                              {...the_node}
+                                key={the_node.unique_id}
+                                funcs={this.props.funcs}/>
+                )
+            }
+
 
             else if (the_node.kind == "sprite") {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
@@ -1230,6 +1617,15 @@ class DataboxLine extends React.Component {
             else if (the_node.kind == "graphics" || the_node.kind == "color") {
                 return (
                     <NamedBox WrappedComponent={GraphicsBox}
+                              portal_root={this.props.portal_root}
+                              {...the_node}
+                             key={the_node.unique_id}
+                             funcs={this.props.funcs}/>
+                )
+            }
+            else if (the_node.kind == "svggraphics") {
+                return (
+                    <NamedBox WrappedComponent={SvgGraphicsBox}
                               portal_root={this.props.portal_root}
                               {...the_node}
                              key={the_node.unique_id}
