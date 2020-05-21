@@ -130,9 +130,13 @@ class MainApp extends React.Component {
 
     componentDidMount() {
         window.changeNode = this._changeNode;
+        window.newDataBoxNode = this._newDataBoxNode;
+        window.newClosetLine = this._newClosetLine;
+        window.healLine = this._healLine;
         window.newLineNode = this._newLineNode;
         window.newTextNode = this._newTextNode;
         window.newDoitNode = this._newDoitBoxNode;
+        window.newPort = this._newPort;
         window.newColorBox = this._newColorBox;
         window.newGraphicsBox = this._newGraphicsBox;
         window.newSvgGraphicsBox = this._newSvgGraphicsBox;
@@ -1005,6 +1009,8 @@ class MainApp extends React.Component {
         for (let lnode of line_list) {
             lnode.parent = uid;
         }
+        closet_line.parent = uid;
+
         this._renumberNodes(line_list);
         let new_node = {
             kind: "sprite",
@@ -1032,6 +1038,7 @@ class MainApp extends React.Component {
     _setSpriteParams(uid, pdict, callback = null) {
         let new_base = _.cloneDeep(this.state.base_node);
         let mnode = this._getMatchingNode(uid, new_base);
+        let vnode = this._getMatchingNode(uid, window.virtualNodeTree);
         for (let lin of mnode.line_list) {
             for (let nd of lin.node_list) {
                 if (nd.name && pdict.hasOwnProperty(nd.name)) {
@@ -1039,9 +1046,25 @@ class MainApp extends React.Component {
                 }
             }
         }
+        if (vnode) {
+            for (let lin of vnode.line_list) {
+                for (let nd of lin.node_list) {
+                    if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                        nd.line_list[0].node_list[0].the_text = String(pdict[nd.name]);
+                    }
+                }
+            }
+        }
         for (let nd of mnode.closetLine.node_list) {
             if (nd.name && pdict.hasOwnProperty(nd.name)) {
                 nd.line_list[0].node_list[0].the_text = String(pdict[nd.name]);
+            }
+        }
+        if (vnode) {
+            for (let nd of vnode.closetLine.node_list) {
+                if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                    nd.line_list[0].node_list[0].the_text = String(pdict[nd.name]);
+                }
             }
         }
 
@@ -1310,6 +1333,7 @@ class MainApp extends React.Component {
         if (mnode) {
             repairCopiedDrawnComponents(new_val, true);
             mnode[param_name] = new_val;
+            mnode.key = guid();
             this.setState({ base_node: new_base }, callback);
         }
     }

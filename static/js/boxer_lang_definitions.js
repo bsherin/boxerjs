@@ -23,7 +23,7 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `await right(current_turtle_id, ${arglist[0]}, eval_in_place)`
+            return `await right(current_turtle_id, ${arglist[0]})`
         }
     },
     left: {
@@ -64,7 +64,7 @@ let boxer_statements = {
             ["ycoord", "number"]
         ],
         converter: (arglist) => {
-            return `await setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]}, eval_in_place)`
+            return `await setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]})`
         }
     },
     setheading: {
@@ -72,19 +72,19 @@ let boxer_statements = {
             ["angle", "number"]
         ],
         converter: (arglist) => {
-            return `await setheading(current_turtle_id, ${arglist[0]}, eval_in_place)`
+            return `await setheading(${arglist[0]}, my_node_id)`
         }
     },
     showturtle: {
         args: [],
         converter: (arglist) => {
-            return "await showTurtle(current_turtle_id)"
+            return "await showTurtle(my_node_id)"
         }
     },
     hideturtle: {
         args: [],
         converter: (arglist) => {
-            return "await hideTurtle(current_turtle_id)"
+            return "await hideTurtle(my_node_id)"
         }
     },
     "set-pen-width": {
@@ -326,7 +326,7 @@ let boxer_statements = {
             ["newval", "expression"]
         ],
         converter: (arglist) => {
-            return `await change("${arglist[0]}", ${arglist[1]}, my_node_id, eval_in_place)`
+            return `await change("${arglist[0]}", ${arglist[1]}, my_node_id)`
         }
     },
 
@@ -336,7 +336,7 @@ let boxer_statements = {
             ["newval", "expression"]
         ],
         converter: (arglist) => {
-            return `await changeGraphics("${arglist[0]}", ${arglist[1]}, my_node_id, eval_in_place)`
+            return `await changeGraphics("${arglist[0]}", ${arglist[1]}, my_node_id)`
         }
     },
 
@@ -345,7 +345,7 @@ let boxer_statements = {
             ["newval", "expression"]
         ],
         converter: (arglist) => {
-            return `await changeGraphics("shape", ${arglist[0]}, my_node_id, eval_in_place)`
+            return `await changeGraphics("shape", ${arglist[0]}, my_node_id)`
         }
     },
 

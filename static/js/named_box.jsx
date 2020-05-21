@@ -602,7 +602,7 @@ class TypeLabel extends React.Component {
     render() {
         if (this.props.clickable) {
             return (
-                <button onClick={this._handleClick} className="type-label clickable">{this.props.the_label}</button>
+                <Button onClick={this._handleClick} className="type-label clickable">{this.props.the_label}</Button>
             )
         }
         return (

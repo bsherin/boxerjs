@@ -4,8 +4,9 @@ import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer
 import {guid} from "./utilities.js";
 import {container_kinds, data_kinds, graphics_kinds} from "./shared_consts.js";
 
-export {_convertNamedDoit, insertVirtualNode, _createLocalizedFunctionCall,
-    _getMatchingNode, findNamedBoxesInScope}
+export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, getPortTarget, makeChildrenNonVirtual,
+    _getMatchingNode, findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
+
 
 // This is the first thing called to begin processing of either a single line executed
 // from the interface or a tell statement
@@ -13,61 +14,119 @@ export {_convertNamedDoit, insertVirtualNode, _createLocalizedFunctionCall,
 // as a virtual doit node in the hierarchy.
 // Then it converts this virtual doit node using _convertNamedDoit
 // After this, it discovers global variables and creates the javascript code to initialize them.
-function _createLocalizedFunctionCall(the_code_line, box_id, base_node, root=true) {
+function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
     let local_the_code_line = _.cloneDeep(the_code_line);
     let _tempDoitNode = window.newDoitNode([local_the_code_line]);
     _tempDoitNode.name = "_tempFunc";
-    let _virtualNodeTree = _.cloneDeep(base_node);
-    let _start_node = _getMatchingNode(box_id, _virtualNodeTree);
-    let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node, _virtualNodeTree);
-    let _tempFuncString = _convertNamedDoit(_inserted_start_node, _virtualNodeTree);
-    let fname;
-    let context_name;
-    if (root) {
-        fname = "_rootFunc";
-        context_name = "_outerFunc";
-    }
-    else {
-        fname = "_tellFunc" + String(window.tell_function_counter);
-        context_name = "_tellContextFunc" +  String(window.tell_function_counter);
-        window.tell_function_counter += 1;
-    }
+    let _start_node = _getMatchingNode(box_id, window.virtualNodeTree);
+    let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node);
+    _inserted_start_node.ports = ports
+    // _convertFunctionNode(_inserted_start_node, ports)
+    return _inserted_start_node
 
-    let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(_start_node, _virtualNodeTree);
-    let global_declarations_string = "";
-    for (let _node of _named_nodes) {
-        if (_node.name == "world") continue;
-        let alt_name = null;
-        if (_node.kind == "port") {
-            alt_name = _node.name;
-            _node = getPortTarget(_node, _virtualNodeTree);
-            if (!_node) continue;
-        }
-        if (_node.kind == "databox") {
-            global_declarations_string += "\n" + dataBoxToString(_node, alt_name)
-        }
-        else if (_node.kind == "jsbox") {
-            global_declarations_string += "\n" + jsBoxToString(_node, alt_name)
-        }
-        else if (_node.kind != "doitbox") {
-            global_declarations_string += "\n" + boxObjectToString(_node, alt_name)
-        }
-    }
-    if (current_turtle_id) {
-        global_declarations_string += `\n let current_turtle_id = "${current_turtle_id}"`
-    }
+}
 
-    window.virtualNodeTrees[context_name] = _virtualNodeTree;
-    let func_defn = `
-    function ${context_name}() {
-        let _context_name = "${context_name}";
-        ${global_declarations_string}
-        ${_tempFuncString}
-        return _tempFunc
+function _convertFunctionNode(doitNode) {
+    try {
+        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, window.virtualNodeTree);
+
+        // Identify the different types
+        // Get the arguments needed for each doit and jsbox
+        let context = preprocessNamedBoxes(_named_nodes, window.virtualNodeTree);
+        context.doitId = doitNode.unique_id;
+
+        // Get the input names for the box we're converting
+        let arglist = context.doit_boxes[doitNode.name].args;
+        let input_names = [];
+        for (let arg of arglist) {
+            input_names.push(arg[0])
+        }
+        let converted_body;
+        context.local_var_nodes = {}
+        doitNode.input_names = input_names;
+        context.input_names = input_names;
+        let inserted_lines = 0;
+        for (let input_name of input_names) {
+            let new_node = window.newDataBoxNode();
+            new_node.name = input_name;
+            let inserted_node = insertVirtualNode(new_node, doitNode)
+            context.local_var_nodes[input_name] = inserted_node.unique_id
+            // inserted_lines += 1
+        }
+
+        // Add ports if there are any
+        // This is a mechanism for getting input arguments into tells
+        if (doitNode.hasOwnProperty("ports") && doitNode.ports) {
+            for (let portname in doitNode.ports) {
+                let new_port = window.newPort(doitNode.ports[portname])
+                new_port.name = portname
+                let inserted_port = insertVirtualNode(new_port, doitNode)
+                context.data_boxes[portname] = inserted_port
+                // inserted_lines += 1
+            }
+        }
+
+        // Find all called doit boxes and copy them locally
+        // Then recursively call this function to convert them
+        let called_doits = findCalledDoits(doitNode, window.virtualNodeTree, context);
+        let called_doit_string = "";
+        context.copied_doits = {};
+
+        for (let called_doit of called_doits) {
+            if (called_doit.node.parent == doitNode.unique_id) {
+                continue
+            }
+            let vnode = insertVirtualNode(called_doit.node, doitNode);
+            // inserted_lines += 1;
+            context.copied_doits[called_doit.node.name] = {
+                node: vnode,
+                args: called_doit.args
+            };
+            // _convertFunctionNode(vnode)
+        }
+
+        // process remaining lines in doit box we're converting
+        // skip new lines added at the end as well as the input line, if there is one.
+        let line_list = doitNode.line_list;
+        let endat = line_list.length - inserted_lines;
+        if (arglist.length > 0) {
+            converted_body = convertStatementList(line_list.slice(1, endat),
+                context, true)
+        } else {
+            converted_body = convertStatementList(line_list.slice(0, endat),
+                context, true)
+        }
+        let name_string = `async function (`;
+        let first = true;
+        for (let arg of doitNode.input_names) {
+            if (!first) {
+                name_string = name_string + ", ";
+            }
+            first = false;
+            name_string = name_string + arg
+        }
+        name_string += ")";
+        let assign_input_string = "";
+        for (let arg of doitNode.input_names) {
+            let assign_string = `await change("${arg}", ${arg}, "${context.doitId}")\n` ;
+            assign_input_string += assign_string
+        }
+
+        doitNode.raw_func = `${name_string} {
+                let my_node_id = "${doitNode.unique_id}";
+                let current_turtle_id = "${current_turtle_id}";
+                ${assign_input_string}
+                ${converted_body}
+            }
+        `;
+        // doitNode.cfunc = _new_func;
+        return
     }
-    `;
-    window.context_functions[context_name] = [fname, func_defn];
-    return fname
+    catch(error) {
+        let title = `Error transpiling doit box '${doitNode.name}'`;
+        window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
+
+    }
 }
 
 // finds all of the named boxes starting from startBoxNode
@@ -162,7 +221,7 @@ function getContainedNames(theNode, base_node, name_list, current_turtle_id) {
 }
 
 
-function insertVirtualNode(nodeToInsert, boxToInsertIn, virtualNodeTree) {
+function insertVirtualNode(nodeToInsert, boxToInsertIn) {
     let lnodeToInsert = _.cloneDeep(nodeToInsert);
     let new_id = guid();
     lnodeToInsert.unique_id = new_id;
@@ -177,12 +236,16 @@ function insertVirtualNode(nodeToInsert, boxToInsertIn, virtualNodeTree) {
         }
     }
     lnodeToInsert.virtual = true;
-    let _tempLineNode = window.newLineNode([lnodeToInsert]);
-    _tempLineNode.parent = boxToInsertIn.unique_id;
-    _tempLineNode.position = boxToInsertIn.line_list.length;
+    if (!boxToInsertIn.closetLine) {
+        boxToInsertIn.closetLine = window.newClosetLine();
+        boxToInsertIn.closetLine.parent = boxToInsertIn.unique_id;
+    }
+    lnodeToInsert.parent = boxToInsertIn.closetLine.unique_id;
+    boxToInsertIn.closetLine.node_list.push(lnodeToInsert)
+    window.healLine(boxToInsertIn.closetLine)
+
     makeChildrenVirtual(lnodeToInsert);
 
-    boxToInsertIn.line_list.push(_tempLineNode);
     return lnodeToInsert;
 }
 
@@ -205,95 +268,25 @@ function makeChildrenVirtual(node) {
     }
 }
 
-// Convert a named doit box to javascript
-function _convertNamedDoit (doitNode, virtualNodeTree) {
-    try {
-        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, virtualNodeTree);
-
-        // Identify the different types
-        // Get the arguments needed for each doit and jsbox
-        let context = preprocessNamedBoxes(_named_nodes, virtualNodeTree);
-
-        // Get the assignment strings for local vaiables.
-        let lvarstring = "";
-        for (let dboxName in context.data_boxes) {
-            let dbox = context.data_boxes[dboxName];
-            let parentLine = _getMatchingNode(dbox.parent, virtualNodeTree);
-            if (parentLine.parent == doitNode.unique_id) {
-                lvarstring += "\n" + dataBoxToString(dbox, dboxName);
+function makeChildrenNonVirtual(node) {
+    if (container_kinds.includes(node.kind)) {
+        for (let line of node.line_list) {
+            line.virtual = false;
+            for (let lnode of line.node_list) {
+                lnode.virtual = false;
+                makeChildrenVirtual(lnode)
             }
         }
-        if (current_turtle_id) {
-            lvarstring += `\n let current_turtle_id = "${current_turtle_id}"`
-        }
-
-        // Get the input names for the box we're converting
-        let arglist = context.doit_boxes[doitNode.name].args;
-        let input_names = [];
-        for (let arg of arglist) {
-            input_names.push(arg[0])
-        }
-        let converted_body;
-        context.input_names = input_names;
-
-        // Find all called doit boxes and copy them locally
-        // Then recursively call this function to convert them
-        let called_doits = findCalledDoits(doitNode, virtualNodeTree, context);
-        let called_doit_string = "";
-        context.copied_doits = {};
-        let inserted_lines = 0;
-        for (let called_doit of called_doits) {
-            if (called_doit.node.parent == doitNode.unique_id) {
-                continue
+        if (node.closetLine) {
+            node.closetLine.virtual = false;
+            for (let lnode of node.closetLine.node_list) {
+                lnode.virtual = true;
+                makeChildrenVirtual(lnode)
             }
-            let vnode = insertVirtualNode(called_doit.node, doitNode, virtualNodeTree);
-            inserted_lines += 1;
-            context.copied_doits[called_doit.node.name] = {
-                node: vnode,
-                args: called_doit.args
-            };
-            called_doit_string += "\n" + _convertNamedDoit(vnode, virtualNodeTree)
         }
-
-        // process remaining lines in doit box we're converting
-        // skip new lines added at the end as well as the input line, if there is one.
-        let line_list = doitNode.line_list;
-        let endat = line_list.length - inserted_lines;
-        if (arglist.length > 0) {
-            converted_body = convertStatementList(line_list.slice(1, endat),
-                virtualNodeTree, context, true)
-        } else {
-            converted_body = convertStatementList(line_list.slice(0, endat),
-                virtualNodeTree, context, true)
-        }
-        let name_string = `async function ${doitNode.name} (`;
-        let first = true;
-        for (let arg of context.input_names) {
-            if (!first) {
-                name_string = name_string + ", ";
-            }
-            first = false;
-            name_string = name_string + arg
-        }
-        name_string += ")";
-
-        let res_string = `
-            ${name_string} {
-                let my_node_id = "${doitNode.unique_id}";
-                ${lvarstring}
-                ${converted_body}
-                ${called_doit_string}
-                ${eval_in_place_string}
-            }
-        `;
-        return res_string
-    }
-    catch(error) {
-        let title = `Error transpiling doit box '${doitNode.name}'`;
-        window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
-
     }
 }
+
 
 // Finds doit boxes that are called
 // The names are adjusted if we have a portal to a doit box
@@ -379,7 +372,7 @@ function preprocessNamedBoxes(namedNodes, virtualNodeTree) {
 }
 
 // Loop over a list of lines converting them
-function convertStatementList(line_list, virtualNodeTree, context, return_last_line=false) {
+function convertStatementList(line_list, context, return_last_line=false) {
     let converted_string = "";
     let counter = 0;
     for (let line of line_list) {
@@ -387,13 +380,13 @@ function convertStatementList(line_list, virtualNodeTree, context, return_last_l
         let token_list = tokenizeLine(line);
         counter += 1;
         let is_last_line = return_last_line && counter == line_list.length;
-        converted_string += convertStatementLine(token_list, virtualNodeTree, context, is_last_line)
+        converted_string += convertStatementLine(token_list, context, is_last_line) + ";\n"
     }
     return converted_string
 }
 
 // convert a tokenized statement
-function convertStatementLine(token_list, virtualNodeTree, context, is_last_line=false) {
+function convertStatementLine(token_list, context, is_last_line=false) {
     if (token_list.length == 0){
         return ""
     }
@@ -403,9 +396,9 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
     // If the first token is an object, then it cant be the start of a statement or function call
     if ((typeof(first_token) == "object")) {
         if (!first_token.name) { // A raw doit box on the last line
-            let lresult = consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)[0] + ";"
+            let lresult = consumeAndConvertNextArgument(consuming_line, context)[0] + ";"
             if (is_last_line) {
-                lresult = "return " + lresult
+                lresult = "\nreturn " + lresult
             }
             return lresult
         }
@@ -430,14 +423,20 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
         args = boxer_statements[first_token].args
     }
     else if (statement_type == "boxer_tell") {
-        return convertTell(token_list, virtualNodeTree, context, is_last_line)
+        let inserted_node = convertTell(token_list, context)
+        let call_string = ` await getBoxValue("${inserted_node.name}", "${inserted_node.unique_id}")()`;
+        if (is_last_line) {
+            call_string = "\nreturn " + call_string;
+        }
+        return call_string
+
     }
     else {
         // We've got something that's not recognizable as a statement or function call
         // If it's the last line, we return it, on the assumption that it's a variable name.
         // Otherwise there's nothing we can do with it that will have any effect.
         if (is_last_line) {
-            return "return " + consumeAndConvertNextArgument(token_list, virtualNodeTree, context)[0] + ";"
+            return "\nreturn " + consumeAndConvertNextArgument(token_list, context)[0] + ";"
         }
         else {
             return ""
@@ -459,12 +458,13 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
         }
         // Some boxer statements take statement lists as arguments. They are treated specially.
         if (arg[1] != "statement_list") {
-            consume_result = consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context);
+            let is_raw = arg[1] == "raw_string"
+            consume_result = consumeAndConvertNextArgument(consuming_line, context, is_raw);
             consuming_line = consuming_line.slice(consume_result[1]);
             converted_args.push(consume_result[0])
         }
         else {
-            consume_result = consumeAndConvertNextStatementList(consuming_line, virtualNodeTree, context);
+            consume_result = consumeAndConvertNextStatementList(consuming_line, context);
             consuming_line = consuming_line.slice(consume_result[1]);
             converted_args.push(consume_result[0])
         }
@@ -482,31 +482,42 @@ function convertStatementLine(token_list, virtualNodeTree, context, is_last_line
             first = false;
             arg_string = arg_string + arg
         }
-        result_string = `await ${first_token}(${arg_string})\n`;
+        result_string = ` await getBoxValue("${first_token}", "${context.doitId}")(${arg_string})\n`;
 
     }
     else {
         result_string = boxer_statements[first_token].converter(converted_args) + "\n"
     }
     if (consuming_line.length > 0) {
-        result_string += "\n" + convertStatementLine(consuming_line, virtualNodeTree, context)
+        result_string += "\n" + convertStatementLine(consuming_line, context)
     }
     else if (is_last_line) {
         if (statement_type != "boxer_statement" || boxer_statements[first_token].allow_return) {
-            result_string = "return " + result_string + ";"
+            result_string = "\nreturn " + result_string + ";"
         }
     }
     return result_string
 }
 
+function findNamedNode(name, starting_id) {
+    let start_node = _getMatchingNode(starting_id, window.virtualNodeTree);
+    let [named_nodes, tid] = findNamedBoxesInScope(start_node, window.virtualNodeTree);
+    for (let node of named_nodes) {
+        if (node.name == name) {
+            return node
+        }
+    }
+    return null
+}
+
 // For a tell statement, we essentially start the whole thing over again
 // We wrap the the statement list in a doit box and insert it in the
 // hierarchy in the right location. then convert it
-function convertTell(token_list, virtualNodeTree, context, is_last_line) {
+function convertTell(token_list, context) {
 
     // If the target is a port, this case should already be handled correctly in
     // the context built earlier. There's nothing special to do
-    let startBox = context.data_boxes[token_list[1]];
+    let startBox = findNamedNode(token_list[1], context.doitId);
     let box_id = startBox.unique_id;
     let the_node;
     if (typeof(token_list[2]) == "object") {
@@ -516,21 +527,22 @@ function convertTell(token_list, virtualNodeTree, context, is_last_line) {
         the_node = window.newTextNode(token_list[2]);
     }
     let the_code_line = window.newLineNode([the_node]);
-    let _fname = _createLocalizedFunctionCall(the_code_line, box_id, window.getBaseNode(), false);
+    let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes);
 
-    if (is_last_line) {
-        return `\nreturn await ${_fname}()\n`
-    }
-    else{
-        return `\nawait ${_fname}()\n`
-    }
+    // if (is_last_line) {
+    //     return `\nreturn await ${_fname}()\n`
+    // }
+    // else{
+    //     return `\nawait ${_fname}()\n`
+    // }
+    return _inserted_start_node
 }
 
 // Identifies the first argument in the given token list and converts it to a javascript string
 // It can be a single token, such as a number or variable name, or a box
 // It can be multiple tokens, such as a function call
 // It can also be multiple tokens consisting of tokens separated by operators.
-function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context) {
+function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
     let first_node = consuming_line[0];
     let first_token;
     let tokens_consumed = 1;
@@ -539,10 +551,10 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
     // If the first token is an object, then it is treated as the next argument in its entirety
     if (typeof(first_node) == "object") {
         if (first_node.kind == "port") {
-            first_node = getPortTarget(first_node, virtualNodeTree)
+            first_node = getPortTarget(first_node, window.virtualNodeTree)
         }
         if (first_node.kind == "doitbox") {
-            let fstring = convertStatementList(first_node.line_list, virtualNodeTree, context, true);
+            let fstring = convertStatementList(first_node.line_list, context, true);
             first_token = `await (async ()=>{${fstring}})()\n`
         }
         // If we have a one line databox, then we can attempt to extract the contents as a string or number
@@ -581,12 +593,18 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
             let args;
             let ntype = getNameType(first_node, context);
             // check if variable name
-            // If it is, then we convert it just by taking the name as a string.
+            // If it is, then we call getBoxValue to get the value.
             if (ntype == "user_data" || ntype == "input_name") {
-                first_token = first_node;
+                if (is_raw) {
+                    first_token = first_node;
+                }
+                else{
+                    first_token = `getBoxValue("${first_node}", "${context.doitId}")`;
+                }
+
                 new_consuming_line = new_consuming_line.slice(1,);
             }
-            // If not a variable name, it must be the anme of a statement or function call
+            // If not a variable name, it must be the name of a statement or function call
             else {
                 // Figure out how many arguments it needs.
                 if (ntype == "user_doit") {
@@ -624,7 +642,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
                         first = false;
                         arg_string = arg_string + arg
                     }
-                    first_token = `await ${first_node}(${arg_string})`;
+                    first_token = ` await getBoxValue("${first_node}", "${context.doitId}")(${arg_string})`;
 
                 }
                 else {
@@ -647,7 +665,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
                 if (new_consuming_line.length <= 1) {
                     throw `Not enough arguments for operator '${next_token}'`
                 }
-                let cresult = consumeAndConvertNextArgument(new_consuming_line.slice(1, ), virtualNodeTree, context);
+                let cresult = consumeAndConvertNextArgument(new_consuming_line.slice(1, ), context);
                 tokens_consumed += cresult[1];
                 result_string += cresult[0];
             }
@@ -659,7 +677,7 @@ function consumeAndConvertNextArgument(consuming_line, virtualNodeTree, context)
 
 // This is for consuming a statement list that appear as an argument
 // To a boxer statement that expects a statement list
-function consumeAndConvertNextStatementList(consuming_line, virtualNodeTree, context) {
+function consumeAndConvertNextStatementList(consuming_line, context) {
     let first_node = consuming_line[0];
     let first_token;
     let tokens_consumed = 1;
@@ -668,12 +686,12 @@ function consumeAndConvertNextStatementList(consuming_line, virtualNodeTree, con
 
     // The token is a doit box, so we convert the doit box to a string
     if (typeof(first_node) == "object") {
-        result_string = convertStatementList(first_node.line_list, virtualNodeTree, context);
+        result_string = convertStatementList(first_node.line_list, context);
         return [result_string, 1]
     }
     // otherwise its a single inline statement that we convert
     else {
-        result_string = convertStatementLine(consuming_line, virtualNodeTree, context);
+        result_string = convertStatementLine(consuming_line, context);
         return [result_string, consuming_line.length]
     }
 }
@@ -701,6 +719,37 @@ function boxObjectToString(dbox, alt_name=null) {
     }
     let dbstring = JSON.stringify(dbox);
     return `var ${var_name} = ${dbstring}`
+}
+
+function boxObjectToValue(dbox) {
+    let dbstring = JSON.stringify(dbox);
+    let cdbstring = null;
+    eval("cdbstring = " + dbstring)
+    return cdbstring
+}
+
+function dataBoxToValue(dbox) {
+    if (dbox.line_list.length == 1){
+        let the_line = dbox.line_list[0];
+        if (the_line.node_list.length == 1) {
+            let the_text = the_line.node_list[0].the_text.trim();
+            if (!the_text) {
+                return null
+            }
+            if (isNaN(the_text)) {
+                return the_text
+            }
+            else {
+                return eval(the_text)
+            }
+        }
+        else {
+            return boxObjectToValue(dbox)
+        }
+    }
+    else {
+        return boxObjectToValue(dbox)
+    }
 }
 
 function dataBoxToString(dbox, alt_name=null) {
