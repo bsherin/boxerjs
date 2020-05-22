@@ -222,7 +222,7 @@ class MainApp extends React.Component {
         else if (nd.kind == "svggraphics"){
             nd.component_specs = [];
             for (let comp of nd.drawn_components) {
-                let new_spec = {type: comp.type.name, props: comp.props};
+                let new_spec = {type: comp.type.type_name, props: comp.props};
                 nd.component_specs.push(new_spec)
             }
             nd.drawn_components = [];

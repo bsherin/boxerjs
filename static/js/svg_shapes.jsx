@@ -21,6 +21,8 @@ class SvgLine extends React.Component {
     }
 }
 
+SvgLine.type_name = "SvgLine";  // this is needed for dehydrating in production build
+
 class SvgRect extends React.Component {
     constructor(props) {
         super(props);
@@ -53,6 +55,8 @@ SvgRect.defaultProps = {
     stroke: null,
     penWidth: null
 }
+
+SvgRect.type_name = "SvgRect";
 
 class SvgTriangle extends React.Component {
     constructor(props) {
@@ -87,6 +91,8 @@ SvgTriangle.propTypes = {
     fill: PropTypes.string,
 }
 
+SvgTriangle.type_name = "SvgTriangle";
+
 SvgTriangle.defaultProps = {
     x: 0,
     y: 0,
@@ -96,6 +102,7 @@ SvgTriangle.defaultProps = {
 
 const svg_shape_classes = {
     SvgLine: SvgLine,
-    SvgRect: SvgRect
+    SvgRect: SvgRect,
+    SvgTriangle: SvgTriangle
 };
 

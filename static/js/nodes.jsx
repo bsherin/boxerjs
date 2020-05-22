@@ -262,7 +262,7 @@ class SpriteBox extends React.Component {
 
     _stampRectangle(w, h, hollow=false) {
         let sparams = this._getAllParams();
-        let new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
+        let new_comp = (<SvgRect x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
                                    width={w} height={h} fill={hollow ? null : sparams["penColor"]}
                                    penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}
         />);
