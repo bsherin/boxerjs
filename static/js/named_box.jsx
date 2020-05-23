@@ -12,318 +12,306 @@ import {graphics_kinds} from "./shared_consts.js";
 
 const resizeTolerance = 2;
 
-export {EditableTag, NamedBox, CloseButton, TypeLabel, ZoomButton}
+export {EditableTag, withName, CloseButton, TypeLabel, ZoomButton, NamedBox_propTypes, NamedBox_defaultProps}
 
-class NamedBox extends React.Component {
-    constructor (props) {
-        super(props);
-        doBinding(this);
-        this.state = {};
-        this.nameRef = null;
-        this.boxRef = React.createRef();
-        this.from_style = null;
-        this.state = {
-            focusingName: false,
-            boxWidth: null,
-            resizing: false,
-            dwidth: 0,
-            dheight: 0,
-            startingWidth: null,
-            startingHeight: null
-        };
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-       return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-        || this.props.funcs.containsPort(this.props.unique_id)
-    }
-
-    _flipMe() {
-        this.boxRef = React.createRef();
-        this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
-    }
-
-    _convertMe() {
-        this.boxRef = React.createRef();
-        this.props.funcs.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
-    }
-
-    _closeMe() {
-        if (this.props.am_zoomed) {
-            this._unzoomMe();
-            return
-        }
-        if (this.props.am_in_portal) {
-            if (this.props.portal_is_zoomed) {
-                this.props.funcs.unzoomBox(this.props.am_in_portal)
-            }
-            else {
-                let have_focus = this.boxRef.current.contains(document.activeElement);
-                this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, ()=>{
-                    if (have_focus) {
-                        this.props.funcs.positionAfterBox(this.props.am_in_portal, this.props.portal_parent)
-                    }
-                });
-            }
+function withName(WrappedComponent) {
+    return class extends React.Component {
+        constructor(props) {
+            super(props);
+            doBinding(this);
+            this.state = {};
+            this.nameRef = null;
+            this.boxRef = React.createRef();
+            this.from_style = null;
+            this.state = {
+                focusingName: false,
+                boxWidth: null,
+                resizing: false,
+                dwidth: 0,
+                dheight: 0,
+                startingWidth: null,
+                startingHeight: null
+            };
         }
 
-        else {
-            let have_focus = this.boxRef.current.contains(document.activeElement);
-            this.props.funcs.changeNode(this.props.unique_id, "closed", true, ()=>{
-                if (have_focus) {
-                    this.props.funcs.positionAfterBox(this.props.unique_id, this.props.portal_root)
+        shouldComponentUpdate(nextProps, nextState) {
+            return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
+                || this.props.funcs.containsPort(this.props.unique_id)
+        }
+
+        _flipMe() {
+            this.boxRef = React.createRef();
+            this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+        }
+
+        _convertMe() {
+            this.boxRef = React.createRef();
+            this.props.funcs.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
+        }
+
+        _closeMe() {
+            if (this.props.am_zoomed) {
+                this._unzoomMe();
+                return
+            }
+            if (this.props.am_in_portal) {
+                if (this.props.portal_is_zoomed) {
+                    this.props.funcs.unzoomBox(this.props.am_in_portal)
+                } else {
+                    let have_focus = this.boxRef.current.contains(document.activeElement);
+                    this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, () => {
+                        if (have_focus) {
+                            this.props.funcs.positionAfterBox(this.props.am_in_portal, this.props.portal_parent)
+                        }
+                    });
                 }
+            } else {
+                let have_focus = this.boxRef.current.contains(document.activeElement);
+                this.props.funcs.changeNode(this.props.unique_id, "closed", true, () => {
+                    if (have_focus) {
+                        this.props.funcs.positionAfterBox(this.props.unique_id, this.props.portal_root)
+                    }
+                })
+            }
+        }
+
+        _openMe() {
+            this.setState({opening: true});
+            if (this.props.am_in_portal) {
+                this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
+                return
+            }
+            this.props.funcs.changeNode(this.props.unique_id, "closed", false)
+        }
+
+        _submitNameRef(the_ref) {
+            this.nameRef = the_ref
+        }
+
+        _doneEditingName(callback = null) {
+            this.setState({focusingName: false}, callback)
+        }
+
+        componentDidMount() {
+            if (this.boxRef && this.boxRef.current) {
+                if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                    this.setState({boxWidth: this.boxRef.current.offsetWidth});
+                }
+            }
+            if (this.nameRef) {
+                $(this.nameRef).focus(this._gotNameFocus)
+            }
+        }
+
+        _gotNameFocus() {
+            this.setState({focusingName: true})
+        }
+
+        componentDidUpdate() {
+            let self = this;
+            if (this.props.focusName && this.props.focusName == this.props.portal_root) {
+                if (this.nameRef) {
+                    $(this.nameRef).focus();
+                    this.setState({focusingName: true}, () => {
+                        self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                    });
+                }
+            }
+            if (!this.props.closed && this.boxRef && this.boxRef.current) {
+                if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
+                    this.setState({boxWidth: this.boxRef.current.offsetWidth});
+                }
+            }
+            if (this.nameRef) {
+                $(this.nameRef).focus(this._gotNameFocus)
+            }
+        }
+
+        _zoomMe() {
+            if (this.props.am_in_portal) {
+                this.props.funcs.zoomBox(this.props.am_in_portal)
+            } else {
+                this.props.funcs.zoomBox(this.props.unique_id)
+            }
+
+        }
+
+        _unzoomMe() {
+            this.props.funcs.unzoomBox(this.props.unique_id)
+
+        }
+
+        getUsableDimensions() {
+            return {
+                usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
+                usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
+                usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
+                body_height: window.innerHeight - BOTTOM_MARGIN
+            };
+        }
+
+        _startResize(e, ui, startX, startY) {
+            let bounding_rect = this.boxRef.current.getBoundingClientRect();
+
+            let start_width = bounding_rect.width;
+            let start_height = bounding_rect.height;
+            this.setState({
+                resizing: true, dwidth: 0, dheight: 0,
+                startingWidth: start_width, startingHeight: start_height
             })
         }
-    }
 
-    _openMe() {
-        this.setState({opening: true});
-        if (this.props.am_in_portal) {
-            this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
-            return
-        }
-        this.props.funcs.changeNode(this.props.unique_id, "closed", false)
-    }
-
-    _submitNameRef(the_ref) {
-        this.nameRef = the_ref
-    }
-
-    _doneEditingName(callback=null) {
-        this.setState({focusingName: false}, callback)
-    }
-
-    componentDidMount() {
-        if (this.boxRef && this.boxRef.current) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _gotNameFocus() {
-        this.setState({focusingName: true})
-    }
-
-    componentDidUpdate () {
-        let self = this;
-        if (this.props.focusName && this.props.focusName == this.props.portal_root) {
-            if (this.nameRef) {
-                $(this.nameRef).focus();
-                this.setState({focusingName: true},()=>{
-                    self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
-                });
-            }
-        }
-        if (!this.props.closed && this.boxRef && this.boxRef.current) {
-            if (this.state.boxWidth != this.boxRef.current.offsetWidth) {
-                 this.setState({ boxWidth: this.boxRef.current.offsetWidth });
-            }
-        }
-        if (this.nameRef){
-            $(this.nameRef).focus(this._gotNameFocus)
-        }
-    }
-
-    _zoomMe() {
-        if (this.props.am_in_portal) {
-            this.props.funcs.zoomBox(this.props.am_in_portal)
-        }
-        else {
-            this.props.funcs.zoomBox(this.props.unique_id)
+        _onResize(e, ui, x, y, dx, dy) {
+            this.setState({dwidth: dx, dheight: dy})
         }
 
-    }
-
-    _unzoomMe() {
-        this.props.funcs.unzoomBox(this.props.unique_id)
-
-    }
-
-     getUsableDimensions() {
-        return {
-            usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
-            usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
-            usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
-            body_height: window.innerHeight - BOTTOM_MARGIN
-        };
-    }
-
-    _startResize(e, ui, startX, startY) {
-        let bounding_rect = this.boxRef.current.getBoundingClientRect();
-
-        let start_width = bounding_rect.width;
-        let start_height = bounding_rect.height;
-        this.setState({resizing: true, dwidth: 0, dheight: 0,
-            startingWidth: start_width, startingHeight: start_height})
-    }
-
-    _onResize(e, ui, x, y, dx, dy) {
-        this.setState({dwidth: dx, dheight: dy})
-    }
-
-    _setSize(new_width, new_height) {
-        if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
-            this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
-        }
-        else {
-            this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
-        }
-    }
-
-    _stopResize(e, ui, x, y, dx, dy) {
-        let self = this;
-        this.setState({resizing: false, dwidth: 0, dheight:0}, ()=>{
-            if (Math.abs(dx) < resizeTolerance && Math.abs(dy) < resizeTolerance) {
-                self._setSize(false, false)
-            }
-            else {
-                self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)}
-            }
-        )
-
-    }
-
-    render() {
-        let dbclass;
-        let type_label;
-        if (this.props.type_label) {
-            type_label = this.props.type_label
-        }
-        else if (this.props.kind == "doitbox") {
-            type_label = "Doit"
-        }
-        else if (this.props.kind == "jsbox") {
-            type_label = "JSBox"
-        }
-        else {
-            type_label = "Data"
-        }
-        let clickable_label;
-        let label_function;
-        if (graphics_kinds.includes(this.props.kind)) {
-            clickable_label = true;
-            label_function = this._flipMe;
-        }
-        else if (this.props.kind == "htmlbox") {
-            clickable_label = true;
-            label_function = this._convertMe;
-        }
-        else {
-            clickable_label = false;
-            label_function = null
-        }
-        let outer_style;
-        let inner_style;
-        let width;
-        let height;
-        let inner_width;
-        let inner_height;
-        let immediate;
-        if (this.props.closed) {
-            if ((this.props.name != null) || this.state.focusingName) {
-                dbclass = "closed-data-box data-box-with-name"
+        _setSize(new_width, new_height) {
+            if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
+                this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
             } else {
-                dbclass = "closed-data-box"
+                this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
             }
-            outer_style = {};
-            inner_style = {width: 75, height: 36};
-            immediate = false
         }
-        else {
-            dbclass = "data-box data-box-with-name targetable";
-            if (this.props.am_zoomed) {
-                let usable_dimensions = this.getUsableDimensions();
-                width = usable_dimensions.usable_width;
-                height = usable_dimensions.usable_height - 10;
-                inner_height = "100%";
-                inner_width = "100%";
-                outer_style = {
-                    width: width,
-                    height: height,
-                    position: "absolute",
-                    top: USUAL_TOOLBAR_HEIGHT + 10,
-                    left: SIDE_MARGIN,
-                };
-                inner_style = {
-                    height: inner_height,
-                    width: inner_width
-                };
-                immediate = true;
+
+        _stopResize(e, ui, x, y, dx, dy) {
+            let self = this;
+            this.setState({resizing: false, dwidth: 0, dheight: 0}, () => {
+                    if (Math.abs(dx) < resizeTolerance && Math.abs(dy) < resizeTolerance) {
+                        self._setSize(false, false)
+                    } else {
+                        self._setSize(this.state.startingWidth + dx, this.state.startingHeight + dy)
+                    }
+                }
+            )
+
+        }
+
+        render() {
+            let dbclass;
+            let type_label;
+            if (this.props.type_label) {
+                type_label = this.props.type_label
+            } else if (this.props.kind == "doitbox") {
+                type_label = "Doit"
+            } else if (this.props.kind == "jsbox") {
+                type_label = "JSBox"
+            } else {
+                type_label = "Data"
             }
-            else if (this.state.resizing) {
-                outer_style = {};
-                inner_width = this.state.startingWidth + this.state.dwidth;
-                inner_height = this.state.startingHeight + this.state.dheight;
-                inner_style = {
-                    width: inner_width,
-                    height: inner_height,
-                    position: "relative"
-                };
-                immediate = true;
-            } else if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
-                outer_style = {};
-                inner_style = {
-                    position: "relative",
-                    width: this.props.graphics_fixed_width + 13,
-                    height: this.props.graphics_fixed_height + 16
-                };
-                immediate = false;
+            let clickable_label;
+            let label_function;
+            if (graphics_kinds.includes(this.props.kind)) {
+                clickable_label = true;
+                label_function = this._flipMe;
+            } else if (this.props.kind == "htmlbox") {
+                clickable_label = true;
+                label_function = this._convertMe;
+            } else {
+                clickable_label = false;
+                label_function = null
             }
-            else if (this.props.fixed_size) {
+            let outer_style;
+            let inner_style;
+            let width;
+            let height;
+            let inner_width;
+            let inner_height;
+            let immediate;
+            if (this.props.closed) {
+                if ((this.props.name != null) || this.state.focusingName) {
+                    dbclass = "closed-data-box data-box-with-name"
+                } else {
+                    dbclass = "closed-data-box"
+                }
                 outer_style = {};
-                inner_width = this.props.fixed_width;
-                inner_height = this.props.fixed_height;
-                inner_style = {
-                    width: inner_width,
-                    height: inner_height,
-                    position: "relative"
-                };
+                inner_style = {width: 75, height: 36};
                 immediate = false
+            } else {
+                dbclass = "data-box data-box-with-name targetable";
+                if (this.props.am_zoomed) {
+                    let usable_dimensions = this.getUsableDimensions();
+                    width = usable_dimensions.usable_width;
+                    height = usable_dimensions.usable_height - 10;
+                    inner_height = "100%";
+                    inner_width = "100%";
+                    outer_style = {
+                        width: width,
+                        height: height,
+                        position: "absolute",
+                        top: USUAL_TOOLBAR_HEIGHT + 10,
+                        left: SIDE_MARGIN,
+                    };
+                    inner_style = {
+                        height: inner_height,
+                        width: inner_width
+                    };
+                    immediate = true;
+                } else if (this.state.resizing) {
+                    outer_style = {};
+                    inner_width = this.state.startingWidth + this.state.dwidth;
+                    inner_height = this.state.startingHeight + this.state.dheight;
+                    inner_style = {
+                        width: inner_width,
+                        height: inner_height,
+                        position: "relative"
+                    };
+                    immediate = true;
+                } else if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
+                    outer_style = {};
+                    inner_style = {
+                        position: "relative",
+                        width: this.props.graphics_fixed_width + 13,
+                        height: this.props.graphics_fixed_height + 16
+                    };
+                    immediate = false;
+                } else if (this.props.fixed_size) {
+                    outer_style = {};
+                    inner_width = this.props.fixed_width;
+                    inner_height = this.props.fixed_height;
+                    inner_style = {
+                        width: inner_width,
+                        height: inner_height,
+                        position: "relative"
+                    };
+                    immediate = false
+                } else {
+                    inner_style = {width: "auto", height: "auto"};
+                    outer_style = {};
+                    immediate = true
+                }
             }
-            else {
-                inner_style = {width: "auto", height: "auto"};
-                outer_style = {};
-                immediate = true
+
+            if (this.props.kind == "doitbox" || this.props.kind == "jsbox") {
+                dbclass = dbclass + " doit-box";
+            } else if (this.props.kind == "sprite") {
+                dbclass = dbclass + " sprite-box";
+            } else if (this.props.kind == "port") {
+                dbclass = dbclass + " port"
             }
-        }
+            if (this.props.selected) {
+                dbclass = dbclass + " selected";
+            }
+            if (this.props.transparent) {
+                dbclass += " transparent"
+            }
 
-        if (this.props.kind == "doitbox" || this.props.kind == "jsbox") {
-            dbclass = dbclass + " doit-box";
-        } else if (this.props.kind == "sprite") {
-            dbclass = dbclass + " sprite-box";
-        } else if (this.props.kind == "port") {
-            dbclass = dbclass + " port"
-        }
-        if (this.props.selected) {
-            dbclass = dbclass + " selected";
-        }
-        if (this.props.transparent) {
-            dbclass += " transparent"
-        }
-
-        let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
-        let outer_class = "data-box-outer";
-        if (this.props.name == null && !this.state.focusingName) {
-            outer_class += " empty-name"
-        }
-        let WrappedComponent = this.props.WrappedComponent;
-        if (!this.from_style) {
-            this.from_style = inner_style
-        }
-        let wrapper_style;
-        if (this.props.am_zoomed) {
-            wrapper_style = {height: "100%"}
-        }
-        else {
-            wrapper_style = {}
-        }
-        return (
-            <div className={outer_class} style={outer_style} ref={this.outerRef}>
+            let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
+            let outer_class = "data-box-outer";
+            if (this.props.name == null && !this.state.focusingName) {
+                outer_class += " empty-name"
+            }
+            // let WrappedComponent = this.props.WrappedComponent;
+            if (!this.from_style) {
+                this.from_style = inner_style
+            }
+            let wrapper_style;
+            if (this.props.am_zoomed) {
+                wrapper_style = {height: "100%"}
+            } else {
+                wrapper_style = {}
+            }
+            return (
+                <div className={outer_class} style={outer_style} ref={this.outerRef}>
                     <EditableTag the_name={this.props.name}
                                  portal_root={this.props.portal_root}
                                  portal_parent={this.props.portal_parent}
@@ -334,62 +322,62 @@ class NamedBox extends React.Component {
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
                                  boxId={this.props.unique_id}/>
-                 <Spring from={this.from_style} to={inner_style} immediate={immediate}>
-                     {inner_props => {
-                         if (this.props.closed) {
-                             return ( <div>
-                                 <div className={dbclass} style={inner_props}
-                                  ref={this.boxRef}
-                                  onMouseDown={(e) => {
-                                      e.preventDefault()
-                                  }}
-                                  onClick={this._openMe}>
-                                 <div className="closed-button-inner"></div>
+                    <Spring from={this.from_style} to={inner_style} immediate={immediate}>
+                        {inner_props => {
+                            if (this.props.closed) {
+                                return (<div>
+                                        <div className={dbclass} style={inner_props}
+                                             ref={this.boxRef}
+                                             onMouseDown={(e) => {
+                                                 e.preventDefault()
+                                             }}
+                                             onClick={this._openMe}>
+                                            <div className="closed-button-inner"></div>
 
-                             </div>
-                                 <TypeLabel clickable={clickable_label}
-                                            clickFunc={label_function}
-                                            the_label={type_label}/>
-                             </div>
-                             )
-                         }
-                     else {
-                         return(<div style={wrapper_style}>
-                             <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
-                                          style={inner_props}>
-                                         <CloseButton handleClick={this._closeMe}/>
-                                         <WrappedComponent {...this.props} ref={this.props.inner_ref}
-                                                           inner_width={inner_props.width}
-                                                           inner_height={inner_props.height}
-                                                           graphics_width={this.props.graphics_fixed_width}
-                                                           graphics_height={this.props.graphics_fixed_height}
-                                         />
-                                         <ZoomButton handleClick={this._zoomMe}/>
-                                         <DragHandle position_dict={draghandle_position_dict}
-                                                     dragStart={this._startResize}
-                                                     onDrag={this._onResize}
-                                                     dragEnd={this._stopResize}
-                                                     direction="both"
-                                                     iconSize={15}/>
+                                        </div>
+                                        <TypeLabel clickable={clickable_label}
+                                                   clickFunc={label_function}
+                                                   the_label={type_label}/>
+                                    </div>
+                                )
+                            } else {
+                                return (<div style={wrapper_style}>
+                                        <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
+                                             style={inner_props}>
+                                            <CloseButton handleClick={this._closeMe}/>
+                                            <WrappedComponent {...this.props} ref={this.props.inner_ref}
+                                                              inner_width={inner_props.width}
+                                                              inner_height={inner_props.height}
+                                                              graphics_width={this.props.graphics_fixed_width}
+                                                              graphics_height={this.props.graphics_fixed_height}
+                                            />
+                                            <ZoomButton handleClick={this._zoomMe}/>
+                                            <DragHandle position_dict={draghandle_position_dict}
+                                                        dragStart={this._startResize}
+                                                        onDrag={this._onResize}
+                                                        dragEnd={this._stopResize}
+                                                        direction="both"
+                                                        iconSize={15}/>
 
-                                     </div>
-                                  {!this.props.am_zoomed &&
-                                         <TypeLabel clickable={clickable_label}
-                                                    clickFunc={label_function}
-                                                    the_label={type_label}/>
-                                 }
-                                 </div>
-                            )
-                        }
-                     }}
-                </Spring>
-            </div>
-        )
+                                        </div>
+                                        {!this.props.am_zoomed &&
+                                        <TypeLabel clickable={clickable_label}
+                                                   clickFunc={label_function}
+                                                   the_label={type_label}/>
+                                        }
+                                    </div>
+                                )
+                            }
+                        }}
+                    </Spring>
+                </div>
+            )
 
+        }
     }
 }
 
-NamedBox.propTypes = {
+let NamedBox_propTypes = {
     name: PropTypes.string,
     kind: PropTypes.string,
     closed: PropTypes.bool,
@@ -401,7 +389,9 @@ NamedBox.propTypes = {
     selected: PropTypes.bool,
     am_zoomed: PropTypes.bool,
     fixed_size: PropTypes.bool,
-    am_in_portal: PropTypes.string,
+    am_in_portal: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.string]),
     portal_is_zoomed: PropTypes.bool,
     type_label: PropTypes.string,
     inner_ref: PropTypes.object,
@@ -413,7 +403,7 @@ NamedBox.propTypes = {
         PropTypes.number])
 };
 
-NamedBox.defaultProps = {
+let NamedBox_defaultProps = {
     kind: "databox",
     closed: false,
     clickable_label: false,

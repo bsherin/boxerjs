@@ -12,7 +12,7 @@ class SvgLine extends React.Component {
 
     render() {
         return (
-            <line
+            <line key={guid()}
                   x1={this.props.x} y1={this.props.y}
                   x2={this.props.xend} y2={this.props.yend}
                   strokeWidth={this.props.penWidth} stroke={this.props.penColor}
@@ -31,7 +31,7 @@ class SvgRect extends React.Component {
 
     render() {
         return (
-            <rect
+            <rect key={guid()}
                   x={this.props.x} y={this.props.y}
                   width={this.props.width} height={this.props.height}
                   strokeWidth={this.props.penWidth} stroke={this.props.penColor}
@@ -71,7 +71,7 @@ class SvgTriangle extends React.Component {
         let h = this.props.height;
         let point_string = `${x - w / 2}, ${y - h / 2} ${x}, ${y + h / 2} ${x + w / 2}, ${y - h / 2}`
         return (
-            <polygon
+            <polygon key={guid()}
                   points={point_string}
                   width={this.props.width} height={this.props.height}
                   strokeWidth={this.props.penWidth} stroke={this.props.penColor}

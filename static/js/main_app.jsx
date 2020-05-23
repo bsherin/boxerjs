@@ -22,7 +22,6 @@ import {withErrorDrawer} from "./error_drawer.js";
 import {container_kinds, text_kinds, defaultBgColor} from "./shared_consts.js";
 import {shape_classes, Triangle} from "./pixi_shapes.js";
 import {svg_shape_classes, SvgTriangle} from "./svg_shapes.js"
-import {NamedBox} from "./named_box.js";
 
 let tsocket = null;
 
@@ -1967,6 +1966,7 @@ class MainApp extends React.Component {
             toggleCloset: this._toggleCloset,
             getStateForSave: this._getStateForSave,
             containsPort: this._containsPort,
+            retargetPort: this._retargetPort,
             retargetPortLastFocus: this._retargetPortLastFocus
         };
         return funcs
@@ -2029,15 +2029,14 @@ class MainApp extends React.Component {
                                   user_name={window.username}
                                   menus={menus}
                     />
-                    <NamedBox WrappedComponent={PortBox}
-                             name={zoomed_node.name}
+                    <PortBox name={zoomed_node.name}
                              target={zoomed_node.target}
                              focusName={false}
                              am_zoomed={true}
                              closed={false}
                              selected={false}
-                              portal_root="root"
-                              portal_parent={null}
+                             portal_root="root"
+                             portal_parent={null}
                              innerHeight={this.state.innerHeight}
                              innerWidth={this.state.innerWidth}
                              unique_id={this.state.zoomed_node_id}
@@ -2053,26 +2052,24 @@ class MainApp extends React.Component {
                                   user_name={window.username}
                                   menus={menus}
                     />
-                    <NamedBox WrappedComponent={JsBox}
-                              name={zoomed_node.name}
-                             focusName={false}
-                             am_zoomed={true}
-                             closed={false}
-                             selected={false}
-                              kind={zoomed_node.kind}
-                              the_code={zoomed_node.the_code}
-                              className="data-box-outer"
-                              portal_root="root"
-                              portal_parent={null}
-                             innerHeight={this.state.innerHeight}
-                             innerWidth={this.state.innerWidth}
-                             unique_id={this.state.zoomed_node_id}
-                              clickable_label={false}
-                             funcs={this.funcs}/>
+                    <JsBox name={zoomed_node.name}
+                           focusName={false}
+                           am_zoomed={true}
+                           closed={false}
+                           selected={false}
+                           kind={zoomed_node.kind}
+                           the_code={zoomed_node.the_code}
+                           className="data-box-outer"
+                           portal_root="root"
+                           portal_parent={null}
+                           innerHeight={this.state.innerHeight}
+                           innerWidth={this.state.innerWidth}
+                           unique_id={this.state.zoomed_node_id}
+                           clickable_label={false}
+                           funcs={this.funcs}/>
                      <KeyTrap global={true}  bindings={key_bindings} />
              </React.Fragment>
             )
-
         }
         return (
             <React.Fragment>
@@ -2080,8 +2077,7 @@ class MainApp extends React.Component {
                               user_name={window.username}
                               menus={menus}
                 />
-                <NamedBox WrappedComponent={DataBox}
-                         name={zoomed_node.name}
+                <DataBox name={zoomed_node.name}
                          funcs={this.funcs}
                          showCloset={zoomed_node.showCloset}
                          closetLine={zoomed_node.closetLine}
@@ -2091,8 +2087,8 @@ class MainApp extends React.Component {
                          focusName={false}
                          am_zoomed={true}
                          closed={false}
-                          portal_root="root"
-                              portal_parent={null}
+                         portal_root="root"
+                         portal_parent={null}
                          innerHeight={this.state.innerHeight}
                          innerWidth={this.state.innerWidth}
                          unique_id={this.state.zoomed_node_id}

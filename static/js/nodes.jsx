@@ -18,8 +18,9 @@ import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_cons
 import {defaultFontSize, defaultFontStyle, data_kinds} from "./shared_consts.js";
 import {extractText, isNormalInteger} from "./utilities";
 
-import {NamedBox} from "./named_box.js";
+import {withName, NamedBox_propTypes, NamedBox_defaultProps} from "./named_box.js";
 import {_getMatchingNode} from "./transpile";
+import {Button} from "@blueprintjs/core";
 
 export {DataBox, PortBox, JsBox, loader}
 
@@ -534,6 +535,7 @@ class SpriteBox extends React.Component {
     }
 }
 
+
 SpriteBox.propTypes = {
     in_svg: PropTypes.bool
 }
@@ -620,7 +622,7 @@ class GraphicsBoxRaw extends React.Component {
     render() {
         if (this.props.closed || !this.props.showGraphics) {
             return (
-                <DataBox {...this.props} in_svg={false} addComponent={this._addComponent}
+                <DataBoxRaw {...this.props} in_svg={false} addComponent={this._addComponent}
                                          do_wrap={this.do_wrap}
                                          setWrap={this._setWrap}
                                          setBgColor={this._setBgColor}
@@ -630,6 +632,7 @@ class GraphicsBoxRaw extends React.Component {
         else {
             let gwidth = this.props.graphics_fixed_width;
             let gheight = this.props.graphics_fixed_height;
+
             if (this.props.kind == "color") {
                 let converted_bgcolor = this._getColorBoxColor();
                 return (
@@ -708,9 +711,9 @@ GraphicsBoxRaw.propTypes = {
     app: PropTypes.object
 };
 
-const GraphicsBox = withApp(GraphicsBoxRaw);
+const GraphicsBox = withApp(withName(GraphicsBoxRaw));
 
-class SvgGraphicsBox extends React.Component {
+class SvgGraphicsBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
@@ -724,7 +727,6 @@ class SvgGraphicsBox extends React.Component {
 
     _addComponent(new_comp, callback=null) {
         this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp, callback);
-        //this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
     }
 
     _clearComponents(callback=null) {
@@ -747,12 +749,13 @@ class SvgGraphicsBox extends React.Component {
     render() {
         if (this.props.closed || !this.props.showGraphics) {
             return (
-                <DataBox {...this.props} addComponent={this._addComponent}
-                                         in_svg={true}
-                                         do_wrap={this.do_wrap}
-                                         setWrap={this._setWrap}
-                                         setBgColor={this._setBgColor}
-                                         clearComponents={this._clearComponents}/>
+                <DataBoxRaw {...this.props}
+                            addComponent={this._addComponent}
+                            in_svg={true}
+                            do_wrap={this.do_wrap}
+                            setWrap={this._setWrap}
+                            setBgColor={this._setBgColor}
+                            clearComponents={this._clearComponents}/>
             )
         }
         else {
@@ -796,7 +799,7 @@ class SvgGraphicsBox extends React.Component {
             let trans_string = `scale(1, -1) translate( ${gwidth / 2}, ${gheight / 2} )`
             return (
                 <React.Fragment>
-                    <svg width={gwidth} height={gheight} transform={trans_string} style={{overflow: "visible"}}>
+                    <svg key={guid()} width={gwidth} height={gheight} transform={trans_string} style={{overflow: "visible"}}>
                         <SvgRect width={gwidth} height={gheight} key="bgrect"
                                  x={-gwidth / 2}
                                  y= {-gheight / 2}
@@ -809,6 +812,8 @@ class SvgGraphicsBox extends React.Component {
         }
     }
 }
+
+var SvgGraphicsBox = withName(SvgGraphicsBoxRaw)
 
 SvgGraphicsBox.propTypes = {
     unique_id: PropTypes.string,
@@ -1172,19 +1177,21 @@ TextNode.propTypes = {
     the_text: PropTypes.string,
     setFocus: PropTypes.oneOfType([
         PropTypes.bool,
-        PropTypes.number]),
+        PropTypes.array]),
     unique_id: PropTypes.string,
     selected: PropTypes.bool,
     funcs: PropTypes.object,
-    am_in_portal: PropTypes.string
+    am_in_portal: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.string])
 };
 
 TextNode.defaultProps = {
-    setFocus: null,
+    setFocus: false,
     am_in_portal: false
 };
 
-class PortBox extends React.Component {
+class PortBoxRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
@@ -1200,13 +1207,12 @@ class PortBox extends React.Component {
         else {
             tnode = _.cloneDeep(this.props.funcs.getNode(this.props.target));
             if (!tnode) {
-                inner_content = <div>Target is missing</div>;
+                inner_content = <Button onClick={()=>{this.props.funcs.retargetPort(this.props.unique_id)}}>Target is missing</Button>;
             }
             else {
                 tnode.closed = this.props.closed;
                 if (tnode.kind == "databox" || tnode.kind == "doitbox" || tnode.closed) {
-                    inner_content = <NamedBox WrappedComponent={DataBox}
-                                              portal_root={this.props.unique_id}
+                    inner_content = <DataBox portal_root={this.props.unique_id}
                                               {...tnode} am_in_portal={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               portal_is_zoomed={this.props.am_zoomed}
@@ -1214,32 +1220,28 @@ class PortBox extends React.Component {
                     />
                 }
                 else if (tnode.kind == "sprite") {
-                    inner_content = <NamedBox WrappedComponent={SpriteBox}
-                                              portal_root={this.props.unique_id}
+                    inner_content = <SpriteBox portal_root={this.props.unique_id}
                                               am_in_portal={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               portal_is_zoomed={this.props.am_zoomed}
                                               {...tnode} funcs={this.props.funcs}/>
                 }
                 else if (tnode.kind == "graphics" || tnode.kind == "color") {
-                    inner_content = <NamedBox WrappedComponent={GraphicsBox}
-                                              portal_root={this.props.unique_id}
+                    inner_content = <GraphicsBox portal_root={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
                                               {...tnode} funcs={this.props.funcs}/>
                 }
                 else if (tnode.kind == "svggraphics") {
-                    inner_content = <NamedBox WrappedComponent={SvgGraphicsBox}
-                                              portal_root={this.props.unique_id}
+                    inner_content = <SvgGraphicsBox portal_root={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
                                               {...tnode} funcs={this.props.funcs}/>
                 }
                 else if (tnode.kind == "htmlbox") {
-                    inner_content = <NamedBox WrappedComponent={HtmlBox}
-                                              portal_root={this.props.unique_id}
+                    inner_content = <HtmlBox portal_root={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
@@ -1257,7 +1259,9 @@ class PortBox extends React.Component {
     }
 }
 
-class DataBox extends React.Component {
+var PortBox = withName(PortBoxRaw)
+
+class DataBoxRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
@@ -1315,8 +1319,12 @@ class DataBox extends React.Component {
     }
 }
 
-DataBox.propTypes = {
-    am_in_portal: PropTypes.bool,
+var DataBox = withName(DataBoxRaw)
+
+DataBox.propTypes = Object.assign({
+    am_in_portal: PropTypes.oneOfType([
+        PropTypes.bool,
+        PropTypes.string]),
     portal_parent: PropTypes.string,
     portal_root: PropTypes.string,
     unique_id: PropTypes.string,
@@ -1327,17 +1335,17 @@ DataBox.propTypes = {
     setBgColor: PropTypes.func,
     clearComponents: PropTypes.func,
     showGraphics: PropTypes.bool
-}
+}, NamedBox_propTypes);
 
-DataBox.defaultProps = {
+DataBox.defaultProps = Object.assign(NamedBox_defaultProps,{
     do_wrap: null,
     setWrap: null,
     setBgColor: null,
      clearComponents: null,
     showGraphics: false
-};
+});
 
-class HtmlBox extends React.Component {
+class HtmlBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
@@ -1430,6 +1438,8 @@ class HtmlBox extends React.Component {
     }
 }
 
+var HtmlBox = withName(HtmlBoxRaw)
+
 HtmlBox.propTypes = {
     name: PropTypes.string,
     the_code: PropTypes.string,
@@ -1447,7 +1457,7 @@ HtmlBox.defaultProps = {
     innerHeight: 0
 };
 
-class JsBox extends React.Component {
+class JsBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
@@ -1537,6 +1547,8 @@ class JsBox extends React.Component {
     }
 }
 
+var JsBox = withName(JsBoxRaw)
+
 JsBox.propTypes = {
     name: PropTypes.string,
     the_code: PropTypes.string,
@@ -1578,8 +1590,8 @@ class DataboxLine extends React.Component {
                               am_in_portal={this.props.am_in_portal}
                               portal_parent={this.props.portal_parent}
                               portal_root={this.props.portal_root}
-                               selected={the_node.selected}
-                               className="editable"
+                              selected={the_node.selected}
+                              className="editable"
                               funcs={this.props.funcs}
                               unique_id={the_node.unique_id}
                               setFocus={the_node.setFocus}
@@ -1589,20 +1601,18 @@ class DataboxLine extends React.Component {
             }
             else if (the_node.kind == "jsbox") {
                 return (
-                    <NamedBox WrappedComponent={JsBox}
-                              portal_root={this.props.portal_root}
-                              {...the_node}
-                                key={the_node.unique_id}
-                                funcs={this.props.funcs}/>
+                    <JsBox portal_root={this.props.portal_root}
+                           {...the_node}
+                           key={the_node.unique_id}
+                           funcs={this.props.funcs}/>
                 )
             }
             else if (the_node.kind == "htmlbox") {
                 return (
-                    <NamedBox WrappedComponent={HtmlBox}
-                              portal_root={this.props.portal_root}
-                              {...the_node}
-                                key={the_node.unique_id}
-                                funcs={this.props.funcs}/>
+                    <HtmlBox portal_root={this.props.portal_root}
+                             {...the_node}
+                             key={the_node.unique_id}
+                             funcs={this.props.funcs}/>
                 )
             }
 
@@ -1610,35 +1620,32 @@ class DataboxLine extends React.Component {
             else if (the_node.kind == "sprite") {
                 this.props.funcs.setTurtleRef(the_node.unique_id, React.createRef());
                 return (
-                    <NamedBox WrappedComponent={SpriteBox}
-                              portal_root={this.props.portal_root}
-                              {...the_node}
-                                key={the_node.unique_id}
-                                inner_ref={window.turtle_box_refs[the_node.unique_id]}
-                                funcs={this.props.funcs}
-                              do_wrap={this.props.do_wrap}
-                              setWrap={this.props.setWrap}
-                              setBgColor={this.props.setBgColor}
-                              clearComponents={this.props.clearComponents}
-                              showGraphics={this.props.showGraphics}/>
+                    <SpriteBox portal_root={this.props.portal_root}
+                               {...the_node}
+                               key={the_node.unique_id}
+                               inner_ref={window.turtle_box_refs[the_node.unique_id]}
+                               funcs={this.props.funcs}
+                               do_wrap={this.props.do_wrap}
+                               setWrap={this.props.setWrap}
+                               setBgColor={this.props.setBgColor}
+                               clearComponents={this.props.clearComponents}
+                               showGraphics={this.props.showGraphics}/>
                 )
             }
             else if (the_node.kind == "graphics" || the_node.kind == "color") {
                 return (
-                    <NamedBox WrappedComponent={GraphicsBox}
-                              portal_root={this.props.portal_root}
-                              {...the_node}
-                             key={the_node.unique_id}
-                             funcs={this.props.funcs}/>
+                    <GraphicsBox portal_root={this.props.portal_root}
+                                 {...the_node}
+                                 key={the_node.unique_id}
+                                 funcs={this.props.funcs}/>
                 )
             }
             else if (the_node.kind == "svggraphics") {
                 return (
-                    <NamedBox WrappedComponent={SvgGraphicsBox}
-                              portal_root={this.props.portal_root}
-                              {...the_node}
-                             key={the_node.unique_id}
-                             funcs={this.props.funcs}/>
+                    <SvgGraphicsBox portal_root={this.props.portal_root}
+                                    {...the_node}
+                                    key={the_node.unique_id}
+                                    funcs={this.props.funcs}/>
                 )
             }
             else if (the_node.kind == "port") {
@@ -1658,20 +1665,16 @@ class DataboxLine extends React.Component {
                         type_label = "Doit"
                     }
                 }
-
-                return (<NamedBox WrappedComponent={PortBox}
-                                  portal_root={this.props.portal_root}
-                                  {...the_node}
-                                  key={the_node.unique_id}
+                return (<PortBox portal_root={this.props.portal_root}
+                                 {...the_node}
+                                 key={the_node.unique_id}
                                   type_label={type_label}
-                                  funcs={this.props.funcs}/>
+                                 funcs={this.props.funcs}/>
                 )
             }
-
             else  {
                 return (
-                    <NamedBox WrappedComponent={DataBox}
-                              portal_root={this.props.portal_root}
+                    <DataBox portal_root={this.props.portal_root}
                              key={the_node.unique_id}
                              kind={the_node.kind}
                              showCloset={the_node.showCloset}
