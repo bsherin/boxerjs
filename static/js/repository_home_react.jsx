@@ -64,7 +64,7 @@ class RepositoryHomeApp extends React.Component {
         let aheight = getUsableDimensions().usable_height_no_bottom;
         let awidth = getUsableDimensions().usable_width - 170;
         this.state = {
-            selected_tab_id: "collections-pane",
+            selected_tab_id: "projects-pane",
             usable_width: awidth,
             usable_height: aheight,
             pane_states: {}
@@ -129,19 +129,7 @@ class RepositoryHomeApp extends React.Component {
     }
 
     render () {
-        let collection_pane = (
-                        <LibraryPane
-                                     res_type="collection"
-                                     allow_search_inside={false}
-                                     allow_search_metadata={false}
-                                     ToolbarClass={RepositoryCollectionToolbar}
-                                     updatePaneState={this._updatePaneState}
-                                     {...this.state.pane_states["collection"]}
-                                     {...this.props.errorDrawerFuncs}
-                                     errorDrawerFuncs={this.props.errorDrawerFuncs}
-                                     is_repository={true}
-                                     tsocket={tsocket}/>
-        );
+
         let projects_pane = (<LibraryPane
                                      res_type="project"
                                      allow_search_inside={false}
@@ -151,54 +139,15 @@ class RepositoryHomeApp extends React.Component {
                                      updatePaneState={this._updatePaneState}
                                      {...this.state.pane_states["project"]}
                                      {...this.props.errorDrawerFuncs}
-                                     errorDrawerFuncs={this.props.errorDrawerFuncs}
                                      is_repository={true}
                                      tsocket={tsocket}/>
         );
-        let tiles_pane = (<LibraryPane
-                                     res_type="tile"
-                                     allow_search_inside={true}
-                                     allow_search_metadata={true}
-                                     search_inside_view="search_inside_tiles"
-                                     search_metadata_view = "search_tile_metadata"
-                                     ToolbarClass={RepositoryTileToolbar}
-                                     updatePaneState={this._updatePaneState}
-                                     {...this.state.pane_states["tile"]}
-                                     {...this.props.errorDrawerFuncs}
-                                     errorDrawerFuncs={this.props.errorDrawerFuncs}
-                                     is_repository={true}
-                                     tsocket={tsocket}/>
-        );
-        let lists_pane = (<LibraryPane
-                                    res_type="list"
-                                     allow_search_inside={true}
-                                     allow_search_metadata={true}
-                                     search_inside_view="search_inside_lists"
-                                     search_metadata_view = "search_list_metadata"
-                                     ToolbarClass={RepositoryListToolbar}
-                                    updatePaneState={this._updatePaneState}
-                                    {...this.state.pane_states["list"]}
-                                    {...this.props.errorDrawerFuncs}
-                                     errorDrawerFuncs={this.props.errorDrawerFuncs}
-                                    is_repository={true}
-                                     tsocket={tsocket}/>
-        );
-        let code_pane = (<LibraryPane
-                                res_type="code"
-                                allow_search_inside={true}
-                                allow_search_metadata={true}
-                                search_inside_view="search_inside_code"
-                                search_metadata_view = "search_code_metadata"
-                                ToolbarClass={RepositoryCodeToolbar}
-                                updatePaneState={this._updatePaneState}
-                                {...this.state.pane_states["code"]}
-                                 {...this.props.errorDrawerFuncs}
-                                     errorDrawerFuncs={this.props.errorDrawerFuncs}
-                                is_repository={true}
-                                tsocket={tsocket}/>
-        );
+
         let outer_style = {width: this.state.usable_width,
             height: this.state.usable_height,
+            position: "absolute",
+            top: USUAL_TOOLBAR_HEIGHT,
+            left: 0,
             paddingLeft: 0
         };
         return (
@@ -208,29 +157,9 @@ class RepositoryHomeApp extends React.Component {
                              selectedTabId={this.state.selected_tab_id}
                              renderActiveTabPanelOnly={true}
                              vertical={true} large={true} onChange={this._handleTabChange}>
-                        <Tab id="collections-pane" panel={collection_pane}>
-                            <Tooltip content="Collections" position={Position.RIGHT}>
-                                <Icon icon="box" iconSize={20} tabIndex={-1} color={this.getIconColor("collections-pane")}/>
-                            </Tooltip>
-                        </Tab>
                         <Tab id="projects-pane" panel={projects_pane}>
                             <Tooltip content="Projects" position={Position.RIGHT}>
                                 <Icon icon="projects" iconSize={20} tabIndex={-1} color={this.getIconColor("projects-pane")}/>
-                            </Tooltip>
-                        </Tab>
-                        <Tab id="tiles-pane" panel={tiles_pane}>
-                            <Tooltip content="Tiles" position={Position.RIGHT}>
-                                <Icon icon="application" iconSize={20} tabIndex={-1} color={this.getIconColor("tiles-pane")}/>
-                            </Tooltip>
-                        </Tab>
-                        <Tab id="lists-pane" panel={lists_pane}>
-                            <Tooltip content="Lists" position={Position.RIGHT}>
-                                <Icon icon="list" iconSize={20} tabIndex={-1} color={this.getIconColor("lists-pane")}/>
-                            </Tooltip>
-                        </Tab>
-                        <Tab id="code-pane" panel={code_pane}>
-                            <Tooltip content="Code" position={Position.RIGHT}>
-                                <Icon icon="code" tabIndex={-1} color={this.getIconColor("code-pane")}/>
                             </Tooltip>
                         </Tab>
                     </Tabs>
@@ -343,29 +272,6 @@ let specializedToolbarPropTypes = {
     muti_select: PropTypes.bool,
 };
 
-class RepositoryCollectionToolbar extends React.Component {
-
-    constructor(props) {
-        super(props);
-        doBinding(this);
-    }
-
-    get button_groups() {
-        return [
-            [["copy", this.props.repository_copy_func, "import", false, "regular", [], "Copy to library"]]
-        ];
-     }
-
-     render () {
-        return <LibraryToolbar button_groups={this.button_groups}
-                               left_position={this.props.left_position}
-                               sendRef={this.props.sendRef}
-                               multi_select={this.props.multi_select} />
-     }
-}
-
-RepositoryCollectionToolbar.propTypes = specializedToolbarPropTypes;
-
 
 class RepositoryProjectToolbar extends React.Component {
     constructor(props) {
@@ -390,92 +296,6 @@ class RepositoryProjectToolbar extends React.Component {
 }
 
 RepositoryProjectToolbar.propTypes = specializedToolbarPropTypes;
-
-class RepositoryTileToolbar extends React.Component {
-    constructor(props) {
-        super(props);
-        doBinding(this);
-    }
-
-    _tile_view(e) {
-        this.props.view_func("/repository_view_module/")
-    }
-
-    get button_groups() {
-        return [
-            [["view", this._tile_view, "eye-open", false, "regular", [], "view"],
-                ["copy", this.props.repository_copy_func, "import", false, "regular", [], "Copy to library"]]
-            ];
-     }
-
-     render () {
-        return <LibraryToolbar button_groups={this.button_groups}
-                               left_position={this.props.left_position}
-                               sendRef={this.props.sendRef}
-                               multi_select={this.props.multi_select} />
-     }
-
-}
-
-RepositoryTileToolbar.propTypes = specializedToolbarPropTypes;
-
-class RepositoryListToolbar extends React.Component {
-    constructor(props) {
-        super(props);
-        doBinding(this);
-    }
-
-    _list_view(e) {
-        this.props.view_func("/repository_view_list/")
-    }
-
-    get button_groups() {
-        return [
-            [["view", this._list_view, "eye-open", false, "regular", [], "view"],
-                ["copy", this.props.repository_copy_func, "import", false, "regular", [], "Copy to library"]]
-        ];
-     }
-
-     render () {
-        return <LibraryToolbar button_groups={this.button_groups}
-                               left_position={this.props.left_position}
-                               sendRef={this.props.sendRef}
-                               multi_select={this.props.multi_select} />
-     }
-
-}
-
-RepositoryListToolbar.propTypes = specializedToolbarPropTypes;
-
-
-class RepositoryCodeToolbar extends React.Component {
-    constructor(props) {
-        super(props);
-        doBinding(this);
-    }
-
-    _code_view(e) {
-        this.props.view_func("/repository_view_code/")
-    }
-
-
-    get button_groups() {
-        return [
-            [["view", this._code_view, "eye-open", false, "regular", [], "view"],
-                ["copy", this.props.repository_copy_func, "import", false, "regular", [], "Copy to library"]]
-        ];
-     }
-
-     render () {
-        return <LibraryToolbar button_groups={this.button_groups}
-                               left_position={this.props.left_position}
-                               sendRef={this.props.sendRef}
-                               multi_select={this.props.multi_select} />
-     }
-
-}
-
-RepositoryCodeToolbar.propTypes = specializedToolbarPropTypes;
 
 
 _repository_home_main();

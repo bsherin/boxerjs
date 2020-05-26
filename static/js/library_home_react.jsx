@@ -356,6 +356,7 @@ class ProjectToolbar extends React.Component {
             [["new", this._new_world,"book", false, "regular", ["ctrl+n"], "New World"],
                 ["open", this._view_world, "document-open", false, "regular", ["space", "return", "ctrl+o"], "View"]],
             [["rename", this.props.rename_func, "edit", false, "regular", [], "Rename"]],
+            [["share", this.props.send_repository_func, "share", false, "regular", [], "Share to repository"]],
             [["delete", this._project_delete, "trash", true, "regular", [], "Delete"]],
             [["refresh", this.props.refresh_func, "refresh", false, "regular", [], "Refresh list"]]
         ];

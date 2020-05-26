@@ -13,20 +13,20 @@ from communication_utils import make_jsonizable_and_compress, read_project_dict
 from exception_mixin import generic_exception_handler
 
 from resource_manager import ResourceManager
-from project_manager import ProjectManager  # RepositoryProjectManager
+from project_manager import ProjectManager, RepositoryProjectManager
 from users import User
 
 from js_source_management import js_source_dict, _develop, css_source
 
-# repository_user = User.get_user_by_username("repository")
+repository_user = User.get_user_by_username("repository")
 admin_user = User.get_user_by_username("admin")
 
 project_manager = ProjectManager("project")
-# repository_project_manager = RepositoryProjectManager("project")
+repository_project_manager = RepositoryProjectManager("project")
 
 
 managers = {
-    "project": [project_manager],
+    "project": [project_manager, repository_project_manager],
 }
 
 
@@ -55,46 +55,30 @@ def new_world():
 
 def copy_between_accounts(source_user, dest_user, res_type, new_res_name, res_name):
     try:
-        if res_type == "collection":
-            collection_to_copy = source_user.full_collection_name(res_name)
-            new_collection_name = dest_user.full_collection_name(new_res_name)
-            for doc in db[collection_to_copy].find():
-                del doc["_id"]
-                if "file_id" in doc:
-                    doc_text = fs.get(doc["file_id"]).read()
-                    doc["file_id"] = fs.put(doc_text)
-                db[new_collection_name].insert_one(doc)
-            db[new_collection_name].update_one({"name": "__metadata__"},
-                                               {'$set': {"datetime": datetime.datetime.utcnow()}})
-            metadata = db[new_collection_name].find_one({"name": "__metadata__"})
+        name_field = name_keys[res_type]
+        collection_name = source_user.resource_collection_name(res_type)
+        old_dict = db[collection_name].find_one({name_field: res_name})
+        new_res_dict = {name_field: new_res_name}
+        for (key, val) in old_dict.items():
+            if (key == "_id") or (key == name_field):
+                continue
+            new_res_dict[key] = val
+        if "metadata" not in new_res_dict:
+            mdata = {"datetime": datetime.datetime.utcnow(),
+                     "updated": datetime.datetime.utcnow(),
+                     "tags": "",
+                     "notes": ""}
+            new_res_dict["metadata"] = mdata
         else:
-            name_field = name_keys[res_type]
-            collection_name = source_user.resource_collection_name(res_type)
-            old_dict = db[collection_name].find_one({name_field: res_name})
-            new_res_dict = {name_field: new_res_name}
-            for (key, val) in old_dict.items():
-                if (key == "_id") or (key == name_field):
-                    continue
-                new_res_dict[key] = val
-            if "metadata" not in new_res_dict:
-                mdata = {"datetime": datetime.datetime.utcnow(),
-                         "updated": datetime.datetime.utcnow(),
-                         "tags": "",
-                         "notes": ""}
-                new_res_dict["metadata"] = mdata
-            else:
-                new_res_dict["metadata"]["datetime"] = datetime.datetime.utcnow()
-            if res_type == "project":
-                project_dict = read_project_dict(fs, new_res_dict["metadata"], old_dict["file_id"])
-                project_dict["user_id"] = dest_user.get_id()
-                pdict = make_jsonizable_and_compress(project_dict)
-                new_res_dict["file_id"] = fs.put(pdict)
-            elif "file_id" in new_res_dict:
-                doc_text = fs.get(new_res_dict["file_id"]).read()
-                new_res_dict["file_id"] = fs.put(doc_text)
-            new_collection_name = dest_user.resource_collection_name(res_type)
-            db[new_collection_name].insert_one(new_res_dict)
-            metadata = new_res_dict["metadata"]
+            new_res_dict["metadata"]["datetime"] = datetime.datetime.utcnow()
+
+        project_dict = read_project_dict(fs, old_dict["file_id"])
+        project_dict["user_id"] = dest_user.get_id()
+        pdict = make_jsonizable_and_compress(project_dict)
+        new_res_dict["file_id"] = fs.put(pdict)
+        new_collection_name = dest_user.resource_collection_name(res_type)
+        db[new_collection_name].insert_one(new_res_dict)
+        metadata = new_res_dict["metadata"]
         overall_res = [metadata, jsonify({"success": True, "message": "Resource Successfully Copied", "alert_type": "alert-success"})]
         return overall_res
     except Exception as ex:
