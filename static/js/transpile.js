@@ -10,10 +10,8 @@ export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, g
 
 // This is the first thing called to begin processing of either a single line executed
 // from the interface or a tell statement
-// It first creates a temporary doit node, wrapped around the line of code, then inserts it
+// It creates a temporary doit node, wrapped around the line of code, then inserts it
 // as a virtual doit node in the hierarchy.
-// Then it converts this virtual doit node using _convertNamedDoit
-// After this, it discovers global variables and creates the javascript code to initialize them.
 function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
     let local_the_code_line = _.cloneDeep(the_code_line);
     let _tempDoitNode = window.newDoitNode([local_the_code_line]);
@@ -21,16 +19,18 @@ function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
     let _start_node = _getMatchingNode(box_id, window.virtualNodeTree);
     let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node);
     _inserted_start_node.ports = ports
-    // _convertFunctionNode(_inserted_start_node, ports)
     return _inserted_start_node
-
 }
 
+// This takes a doit node, and transpiles it to javascript
+// Then the result javascript is attached to the node in raw_func
+// This is called from getBoxValue, when it tries to execute the doitBox but doesn't find raw_func already there.
 function _convertFunctionNode(doitNode) {
     try {
+
         let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, window.virtualNodeTree);
 
-        // Identify the different types
+        // Identify the types of the named boxes found
         // Get the arguments needed for each doit and jsbox
         let context = preprocessNamedBoxes(_named_nodes, window.virtualNodeTree);
         context.doitId = doitNode.unique_id;
@@ -45,16 +45,18 @@ function _convertFunctionNode(doitNode) {
         context.local_var_nodes = {}
         doitNode.input_names = input_names;
         context.input_names = input_names;
+
+        // Insert virtual data boxes for each input
+        // This makes them easy to refer to
         let inserted_lines = 0;
         for (let input_name of input_names) {
             let new_node = window.newDataBoxNode();
             new_node.name = input_name;
             let inserted_node = insertVirtualNode(new_node, doitNode)
             context.local_var_nodes[input_name] = inserted_node.unique_id
-            // inserted_lines += 1
         }
 
-        // Add ports if there are any
+        // Add virtual ports corresponding to ports attached to this doit node
         // This is a mechanism for getting input arguments into tells
         if (doitNode.hasOwnProperty("ports") && doitNode.ports) {
             for (let portname in doitNode.ports) {
@@ -62,7 +64,6 @@ function _convertFunctionNode(doitNode) {
                 new_port.name = portname
                 let inserted_port = insertVirtualNode(new_port, doitNode)
                 context.data_boxes[portname] = inserted_port
-                // inserted_lines += 1
             }
         }
 
@@ -82,11 +83,11 @@ function _convertFunctionNode(doitNode) {
                 node: vnode,
                 args: called_doit.args
             };
-            // _convertFunctionNode(vnode)
         }
 
         // process remaining lines in doit box we're converting
         // skip new lines added at the end as well as the input line, if there is one.
+        // (In the current version, inserted_lines will always be zero.)
         let line_list = doitNode.line_list;
         let endat = line_list.length - inserted_lines;
         if (arglist.length > 0) {
@@ -96,6 +97,8 @@ function _convertFunctionNode(doitNode) {
             converted_body = convertStatementList(line_list.slice(0, endat),
                 context, true)
         }
+
+        // Start building the javascript string
         let name_string = `async function (`;
         let first = true;
         for (let arg of doitNode.input_names) {
@@ -106,6 +109,8 @@ function _convertFunctionNode(doitNode) {
             name_string = name_string + arg
         }
         name_string += ")";
+
+        // We need lines to put the input values into the virtual nodes created when the box is run
         let assign_input_string = "";
         for (let arg of doitNode.input_names) {
             let assign_string = `await change("${arg}", ${arg}, "${context.doitId}")\n` ;
@@ -119,7 +124,6 @@ function _convertFunctionNode(doitNode) {
                 ${converted_body}
             }
         `;
-        // doitNode.cfunc = _new_func;
         return
     }
     catch(error) {
@@ -407,7 +411,7 @@ function convertStatementLine(token_list, context, is_last_line=false) {
 
     // If we're here, then we have the start of a statement
     // Figure out how many arguments we need.
-    // Tells are treated spcially
+    // Tells are treated specially
     let statement_type = getNameType(first_token, context, is_last_line);
     let args;
     if (statement_type == "user_doit") {
@@ -512,7 +516,7 @@ function findNamedNode(name, starting_id) {
 
 // For a tell statement, we essentially start the whole thing over again
 // We wrap the the statement list in a doit box and insert it in the
-// hierarchy in the right location. then convert it
+// hierarchy in the right location.
 function convertTell(token_list, context) {
 
     // If the target is a port, this case should already be handled correctly in
@@ -529,12 +533,6 @@ function convertTell(token_list, context) {
     let the_code_line = window.newLineNode([the_node]);
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes);
 
-    // if (is_last_line) {
-    //     return `\nreturn await ${_fname}()\n`
-    // }
-    // else{
-    //     return `\nawait ${_fname}()\n`
-    // }
     return _inserted_start_node
 }
 

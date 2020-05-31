@@ -8,6 +8,7 @@ import { Button, Navbar, NavbarDivider, OverflowList, Alignment } from "@bluepri
 
 import {MenuComponent} from "./main_menus_react.js";
 import {doBinding, doSignOut} from "./utilities.js";
+import {propsAreEqual} from "./utilities";
 
 export {render_navbar, BoxerNavbar}
 
@@ -33,19 +34,13 @@ class BoxerNavbar extends React.Component {
         this.update_props = ["is_authenticated", "user_name", "menus", "selected", "show_api_links"]
     }
 
-
     shouldComponentUpdate(nextProps, nextState) {
-        for (let prop of this.update_props) {
-            if (nextProps[prop] != this.props[prop]) {
-                return true
-            }
+        if (window._running > 0){
+            return false
         }
-        for (let state of this.update_state_vars) {
-            if (nextState[state] != this.state[state]) {
-                return true
-            }
-        }
-        return false
+        let pequal = propsAreEqual(nextProps, this.props);
+        let sequal = propsAreEqual(nextState, this.state);
+        return !pequal || !sequal
     }
 
     componentDidMount() {

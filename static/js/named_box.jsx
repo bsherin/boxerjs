@@ -424,7 +424,7 @@ class EditableTag extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        return this.props.focusingMe || !propsAreEqual(nextProps, this.props)
+        return this.props.focusingMe || !propsAreEqual(nextProps, this.props, ["funcs"])
     }
 
     _handleChange(event) {

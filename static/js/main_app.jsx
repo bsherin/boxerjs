@@ -23,6 +23,15 @@ import {container_kinds, text_kinds, defaultBgColor} from "./shared_consts.js";
 import {shape_classes, Triangle} from "./pixi_shapes.js";
 import {svg_shape_classes, SvgTriangle} from "./svg_shapes.js"
 
+import {SpriteNode} from "./sprite_commands.js"
+import {GraphicsNode} from "./graphics_box_commands.js"
+
+const node_classes = {
+    "sprite": SpriteNode,
+    "graphics": GraphicsNode,
+    "svggraphics": GraphicsNode
+}
+
 let tsocket = null;
 
 // Prevent capturing focus by a button.
@@ -35,13 +44,13 @@ $(document).on('mousedown', "button",
 import {defaultPenWidth, defaultPenColor, defaultFontFamily} from "./shared_consts.js";
 import {defaultFontSize, defaultFontStyle} from "./shared_consts.js";
 import {repairCopiedDrawnComponents} from "./eval_space";
+import {graphics_kinds} from "./shared_consts";
 
 const MAX_UNDO_SAVES = 20;
 
-window.turtle_box_refs = {};
-
 function _main_main() {
     console.log("entering start_post_load");
+    window._running = 0;
     tsocket = new BoxerSocket("boxer", 5000);
 
     let MainAppPlus = withErrorDrawer(withStatus(MainApp, tsocket), tsocket);
@@ -95,9 +104,15 @@ function _rehydrateComponents(nd) {
         }
     }
     else if (nd.kind == "line") {
+        let new_node_list = [];
         for (let cnode of nd.node_list) {
             _rehydrateComponents(cnode)
+            if (Object.keys(node_classes).includes(cnode.kind)) {
+                cnode = new node_classes[cnode.kind](cnode)
+            }
+            new_node_list.push(cnode)
         }
+        nd.node_list = new_node_list
     }
 }
 
@@ -113,9 +128,6 @@ class MainApp extends React.Component {
         else {
             let base_node = _.cloneDeep(props.world_state.base_node);
             this._healStructure(base_node);
-            // for (let lin of base_node.line_list) {
-            //     this._healLine(lin, true)
-            // }
             this.state.base_node = base_node;
         }
         this.state.zoomed_node_id = this.state.base_node.unique_id;
@@ -131,9 +143,10 @@ class MainApp extends React.Component {
         this.history = [];
         this.present = this.state.base_node;
         this.undoing = false;
+        this.exportFuncs();
     }
 
-    componentDidMount() {
+    exportFuncs() {
         window.changeNode = this._changeNode;
         window.newDataBoxNode = this._newDataBoxNode;
         window.newClosetLine = this._newClosetLine;
@@ -147,11 +160,16 @@ class MainApp extends React.Component {
         window.newSvgGraphicsBox = this._newSvgGraphicsBox;
         window.newTurtleShape = this._newTurtleShape;
         window.newValueBox = this._newValueBox;
+        window.addGraphicsComponent = this._addGraphicsComponent;
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
         window.getBaseNode = this._getBaseNode;
+        window.getNode = this._getNode;
+        window.setSpriteParams = this._setSpriteParams
+    }
 
+    componentDidMount() {
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.base_node)];
         let new_base = _.cloneDeep(this.state.base_node);
@@ -232,9 +250,19 @@ class MainApp extends React.Component {
             }
         }
         else if (nd.kind == "line") {
+            let new_node_list = [];
             for (let cnode of nd.node_list) {
+                if (Object.keys(node_classes).includes(cnode.kind)) {
+                    let new_node = {};
+                    for (let param of cnode.saveParams) {
+                        new_node[param] = cnode[param]
+                    }
+                    cnode = new_node
+                }
                 this._dehydrateComponents(cnode)
+                new_node_list.push(cnode)
             }
+            nd.node_list = new_node_list
         }
     }
 
@@ -382,6 +410,24 @@ class MainApp extends React.Component {
             this.setState({base_node: new_base})
         }
     }
+
+    _getContainingGraphicsBox(start_id) {
+        let base_id = this.state.base_node.unique_id;
+        let self = this;
+        function getGBox(the_id) {
+            if (the_id == base_id) {
+                return null
+            }
+            let cnode = self._getNode(the_id)
+            if (graphics_kinds.includes(cnode.kind)) {
+                return cnode
+            }
+            else {
+                return getGBox(cnode.parent)
+            }
+        }
+        return getGBox(start_id);
+    }
     
     _insertBoxInText(kind, text_id, cursor_position, portal_root, new_base=null, update=true, is_doit=false) {
         if (new_base == null) {
@@ -389,7 +435,18 @@ class MainApp extends React.Component {
         }
         this._splitTextAtPosition(text_id, cursor_position, new_base, false);
         let mnode = this._getMatchingNode(text_id, new_base);
-        let new_node = this._nodeCreators()[kind]()
+        let new_node;
+        if (kind == "sprite") {
+            let use_svg = false;
+            let gbox = this._getContainingGraphicsBox(text_id)
+            if (gbox && gbox.kind == "svggraphics") {
+                use_svg = true;
+            }
+            new_node = this._nodeCreators()[kind](use_svg)
+        }
+        else {
+            new_node = this._nodeCreators()[kind]()
+        }
         if (["databox", "doitbox"].includes(kind)) {
             new_node.line_list[0].node_list[0].setFocus = [portal_root, 0];
         }
@@ -426,7 +483,6 @@ class MainApp extends React.Component {
                 document.removeEventListener("click", gotClick)
         }
     }
-
 
     _toggleBoxTransparency(boxId) {
         let new_base = _.cloneDeep(this.state.base_node);
@@ -888,7 +944,7 @@ class MainApp extends React.Component {
             lnode.parent = uid;
         }
         this._renumberNodes(line_list);
-        let new_node = {
+        let new_node_params= {
             kind: "graphics",
             key: uid,
             name: null,
@@ -911,7 +967,7 @@ class MainApp extends React.Component {
             graphics_fixed_height: 303,
             showGraphics: true,
         };
-        return new_node
+        return new GraphicsNode(new_node_params)
     }
 
     _newColorBox(color_string=null) {
@@ -1044,7 +1100,7 @@ class MainApp extends React.Component {
         closet_line.parent = uid;
 
         this._renumberNodes(line_list);
-        let new_node = {
+        let new_node_params = {
             kind: "sprite",
             key: uid,
             name: null,
@@ -1064,8 +1120,7 @@ class MainApp extends React.Component {
             unique_id: uid
 
         };
-        return new_node
-
+        return new SpriteNode(new_node_params)
     }
 
     _setSpriteParams(uid, pdict, callback=null) {
@@ -1749,10 +1804,6 @@ class MainApp extends React.Component {
         return this.state.base_node
     }
 
-    _setTurtleRef(uid, ref) {
-        window.turtle_box_refs[uid] = ref
-    }
-
     _findParents(node_id, base_node=null) {
         if (!base_node) {
             base_node = this.state.base_node
@@ -1949,7 +2000,6 @@ class MainApp extends React.Component {
             handleCodeChange: this._handleCodeChange,
             getBaseNode: this._getBaseNode,
             insertNode: this._insertNode,
-            setTurtleRef: this._setTurtleRef,
             openErrorDrawer: this.props.openErrorDrawer,
             updateIds: this._updateIds,
             setNodeSize: this._setNodeSize,

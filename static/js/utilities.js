@@ -5,7 +5,7 @@ import {data_kinds} from "./shared_consts.js";
 
 export {doBinding, doSignOut, isString, guid, isKind,
     getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
-    degreesToRadians, radiansToDegrees, selectedAcrossBoxes}
+    degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg}
 
 function isKind(item, kind) {
     return typeof(item) == "object" && item.hasOwnProperty("kind") && item.kind == kind
@@ -35,6 +35,11 @@ function extractText(abox) {
     return abox.line_list[0].node_list[0].the_text
 }
 
+function isEqualOmit(p1, p2) {
+    return _.isEqualWith(_.omit(p1, ["_owner"]), _.omit(p2, ["_ownere"]))
+
+}
+
 function propsAreEqual(p1, p2, skipProps = []) {
     if (skipProps.length == 0) {
         return _.isEqual(p1, p2)
@@ -45,6 +50,9 @@ function propsAreEqual(p1, p2, skipProps = []) {
     }
 
     for (let option in p1) {
+        if (option == "_owner") {
+            continue
+        }
         if (skipProps.includes(option)) continue;
         if (typeof p1[option] == "function") {
             if (!(typeof p2[option] == "function")) {
@@ -94,6 +102,31 @@ function arraysMatch (arr1, arr2) {
 	return true;
 
 }
+
+
+function _svgConvertColorArg(the_color_string) {
+    let bgcolor;
+    if (typeof(the_color_string) == "number") {
+        bgcolor = "#" + the_color_string.toString(16).toUpperCase();
+    }
+    else if (the_color_string.split(" ").length == 1) {
+        if (isNormalInteger(the_color_string)) {
+            bgcolor = "#000000"
+        }
+        else {
+            bgcolor = the_color_string;
+        }
+    }
+    else {
+        let cnums = [];
+        for (let c of the_color_string.split(" ")) {
+            cnums.push(parseInt(c))
+        }
+        bgcolor = svgRgbToHex(cnums[0], cnums[1], cnums[2]);
+    }
+    return bgcolor
+}
+
 
 
 function remove_duplicates (arrArg) {
@@ -162,4 +195,28 @@ function selectedAcrossBoxes(editableDiv) {
       }
   }
   return [snode.id, editableDiv.id]
+}
+
+
+function _convertColorArg(the_color_string) {
+    let bgcolor;
+    if (typeof(the_color_string) == "number") {
+        bgcolor = the_color_string
+    }
+    else if (the_color_string.split(" ").length == 1) {
+        if (isNormalInteger(the_color_string)) {
+            bgcolor = parseInt(the_color_string);
+        }
+        else {
+            bgcolor = the_color_string;
+        }
+    }
+    else {
+        let cnums = [];
+        for (let c of the_color_string.split(" ")) {
+            cnums.push(parseInt(c))
+        }
+        bgcolor = rgbToHex(cnums[0], cnums[1], cnums[2]);
+    }
+    return bgcolor
 }

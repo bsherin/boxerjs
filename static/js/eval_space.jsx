@@ -17,7 +17,7 @@ let delay_amount = 1;
 
 function changeNodePromise(uid, param_name, new_val) {
     return new Promise(function(resolve, reject) {
-        window.changeNode(uid, param_name, new_val, (data)=>{set
+        window.changeNode(uid, param_name, new_val, (data)=>{
             resolve(data)
         })
     })
@@ -74,9 +74,9 @@ async function doExecution(the_code_line, box_id, base_node) {
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id);
 
     try {
-        let _result = getBoxValue(_inserted_start_node.name, box_id)()
-        // eval("_inserted_start_node.cfunc = " + _inserted_start_node.raw_func)
-        // let _result = await _inserted_start_node.cfunc();
+        window._running += 1;
+        let _result = await getBoxValue(_inserted_start_node.name, box_id)()
+        window._running -= 1;
         return _result;
     } catch (error) {
         window.addErrorDrawerEntry({title: error.message, content: `<pre>${error.stack}</pre>`})
@@ -280,37 +280,65 @@ async function redisplay() {
     await delay(delay_amount)
 }
 
+
+function getSprite(current_turtle_id) {
+    return _getMatchingNode(current_turtle_id, window.getBaseNode())
+}
+
 async function getMousePosition(current_turtle_id) {
-    let mpos = window.turtle_box_refs[current_turtle_id].current._getMousePosition();
-    let mpos_string = `${Math.round(mpos.x)} ${Math.round(mpos.y)}`;
-    return window.newValueBox(null, mpos_string)
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        let mpos = the_sprite.getMousePosition();
+        let mpos_string = `${Math.round(mpos.x)} ${Math.round(mpos.y)}`;
+        return window.newValueBox(null, mpos_string)
+    }
+    return window.newValueBox(null, "not found")
+
 }
 
 async function forward(current_turtle_id, steps, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._moveForward(steps);
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.moveForward(steps);
+    }
 }
 
 async function back(current_turtle_id, steps, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._moveForward(-1 * steps);
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.moveForward(-1 * steps);
+    }
 }
 
-function clear(current_turtle_id, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._clear()
+async function clear(current_turtle_id, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.clear()
+    }
 }
 
-function clean(current_turtle_id, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._clean()
+async function clean(current_turtle_id, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.clean()
+    }
 }
 
 
-function reset(current_turtle_id, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._clear(async (param_dict)=>{
-        return await update_sprite_params(param_dict, eval_in_place);
-    })
+async function reset(current_turtle_id, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.clear(async (param_dict) => {
+            return await update_sprite_params(param_dict, eval_in_place);
+        })
+    }
 }
 
-function setGraphicsMode(current_turtle_id, boxorstring) {
-    window.turtle_box_refs[current_turtle_id].current._setGraphicsMode(boxorstring,)
+async function setGraphicsMode(current_turtle_id, boxorstring) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setGraphicsMode(boxorstring,)
+    }
 }
 
 async function showTurtle(my_node_id) {
@@ -322,73 +350,122 @@ function hideTurtle(my_node_id) {
     return change("shown", false, my_node_id);
 }
 
-function penup(current_turtle_id, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._penup();
+
+async function penup(current_turtle_id, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.penup();
+    }
 }
 
-function pendown(current_turtle_id, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._pendown();
+async function pendown(current_turtle_id, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.pendown();
+    }
 }
 
-function setPenWidth(current_turtle_id, w, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._setPenWidth(w);
+async function setPenWidth(current_turtle_id, w, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setPenWidth(w);
+    }
 }
 
-function stampRectangle(current_turtle_id, w, h) {
-    window.turtle_box_refs[current_turtle_id].current._stampRectangle(w, h);
+async function stampRectangle(current_turtle_id, w, h) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampRectangle(w, h);
+    }
 }
 
-function stampHollowRectangle(current_turtle_id, w, h) {
-    window.turtle_box_refs[current_turtle_id].current._stampRectangle(w, h, true);
+async function stampHollowRectangle(current_turtle_id, w, h) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampRectangle(w, h, true);
+    }
 }
 
-function dot(current_turtle_id, ) {
-    window.turtle_box_refs[current_turtle_id].current._dot();
+async function dot(current_turtle_id, ) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.dot();
+    }
 }
 
-function stampEllipse(current_turtle_id, w, h) {
-    window.turtle_box_refs[current_turtle_id].current._stampEllipse(w, h);
+async function stampEllipse(current_turtle_id, w, h) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampEllipse(w, h);
+    }
 }
 
-function stampHollowEllipse(current_turtle_id, w, h) {
-    window.turtle_box_refs[current_turtle_id].current._stampEllipse(w, h, true);
+async function stampHollowEllipse(current_turtle_id, w, h) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampEllipse(w, h, true);
+    }
 }
 
-function stampCircle(current_turtle_id, r) {
-    window.turtle_box_refs[current_turtle_id].current._stampEllipse(r * 2, r * 2);
+async function stampCircle(current_turtle_id, r) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampEllipse(r * 2, r * 2);
+    }
 }
 
-function stampHollowCircle(current_turtle_id, r) {
-    window.turtle_box_refs[current_turtle_id].current._stampEllipse(r * 2, r * 2, true);
+async function stampHollowCircle(current_turtle_id, r) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.stampEllipse(r * 2, r * 2, true);
+    }
 }
 
-function type(current_turtle_id, boxortext) {
-    window.turtle_box_refs[current_turtle_id].current._type(boxortext);
+async function type(current_turtle_id, boxortext) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.type(boxortext);
+    }
 }
 
-function setPosition(current_turtle_id, abox) {
-    window.turtle_box_refs[current_turtle_id].current._setPosition(abox);
+async function setPosition(current_turtle_id, abox) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setPosition(abox);
+    }
 }
 
-function setTypeFont(current_turtle_id, boxortext, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._setTypeFont(boxortext,);
+async function setTypeFont(current_turtle_id, boxortext, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setTypeFont(boxortext,);
+    }
 }
 
 async function right(current_turtle_id, degrees, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._right(degrees)
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.right(degrees)
+    }
 }
 
-function left(current_turtle_id, degrees, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._left(degrees)
+async function left(current_turtle_id, degrees, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.left(degrees)
+    }
 }
 
-function setxy(current_turtle_id, x, y, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._moveTo(x, y, null, async (newX, newY)=>{
-        if (eval_in_place) {
-            let estring = `xPosition =${newX};\nyPosition=${newY}`;
-            eval_in_place(estring);
-        }
-    })
+async function setxy(current_turtle_id, x, y, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.moveTo(x, y, null, async (newX, newY) => {
+            if (eval_in_place) {
+                let estring = `xPosition =${newX};\nyPosition=${newY}`;
+                eval_in_place(estring);
+            }
+        })
+    }
 }
 
 async function update_sprite_params(param_dict, eval_in_place=null) {
@@ -413,25 +490,28 @@ async function update_sprite_params(param_dict, eval_in_place=null) {
 }
 
 async function setheading(degrees, my_node_id) {
-    return await change("heading", degrees, my_node_id);
-    // return new Promise(function (resolve, reject) {
-    //             window.turtle_box_refs[current_turtle_id].current._setHeading(degrees, async (data) => {
-    //                 await delay(delay_amount);
-    //                 resolve()
-    //             })
-    //         })
+    return change("heading", degrees, my_node_id);
 }
 
-function setPenColor(current_turtle_id, the_text, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._setPenColor(the_text)
+async function setPenColor(current_turtle_id, the_text, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setPenColor(the_text)
+    }
 }
 
-function setBackgroundColor(current_turtle_id, the_text) {
-    window.turtle_box_refs[current_turtle_id].current._setBackgroundColor(the_text)
+async function setBackgroundColor(current_turtle_id, the_text) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setBackgroundColor(the_text)
+    }
 }
 
-function setSpriteSize(current_turtle_id, the_size, eval_in_place=null) {
-    window.turtle_box_refs[current_turtle_id].current._setSpriteSize(the_size)
+async function setSpriteSize(current_turtle_id, the_size, eval_in_place=null) {
+    let the_sprite = await getSprite(current_turtle_id)
+    if (the_sprite) {
+        the_sprite.setSpriteSize(the_size)
+    }
 }
 
 

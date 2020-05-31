@@ -478,7 +478,6 @@ let boxer_statements = {
             return `atan(${arglist[0]}, ${arglist[1]})`
         }
     },
-
 };
 
 let synonyms = {
