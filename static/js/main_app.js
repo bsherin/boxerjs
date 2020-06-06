@@ -117,8 +117,18 @@ class MainApp extends React.Component {
         doBinding(this);
         this.state = {};
         if (props.world_state == null) {
-            this.state.base_node = this._newDataBoxNode();
-            this.state.base_node.name = "world";
+            this.state.node_dict = {};
+            let [world_node_id, temp_dict] = this._newDataBoxNode([], false, temp_dict);
+            this.state.node_dict = {};
+            for (let nid in temp_dict) {
+                if (nid == world_node_id) {
+                    let updated_node = temp_dict[nid];
+                    updated_node["unique_id"] = "world";
+                    this.state.node_dict["world"] = updated_node;
+                } else {
+                    this.state.node_dict[nid] = temp_dict[nmid];
+                }
+            }
         } else {
             let base_node = _.cloneDeep(props.world_state.base_node);
             this._healStructure(base_node);
@@ -203,12 +213,24 @@ class MainApp extends React.Component {
         });
     }
 
-    _renumberNodes(node_list) {
+    _renumberNodes(line_id, target_dict) {
         let counter = 0;
-        for (let node of node_list) {
-            node["position"] = counter;
+
+        for (let nodeid of target_dict[line_id].node_list) {
+            target_dict = this.changeNodeAndReturn(nodeid, "position", counter, target_dict);
             counter += 1;
         }
+        return target_dict;
+    }
+
+    _renumberLines(node_id, target_dict) {
+        let counter = 0;
+
+        for (let lineid of target_dict[line_id].linelist) {
+            target_dict = this.changeNodeAndReturn(lineid, "position", counter, target_dict);
+            counter += 1;
+        }
+        return target_dict;
     }
 
     _getMainState() {
@@ -258,14 +280,14 @@ class MainApp extends React.Component {
         }
     }
 
-    _getContainingGraphicsBox(start_id) {
-        let base_id = this.state.base_node.unique_id;
+    _getContainingGraphicsBox(start_id, target_dict) {
+        let base_id = "world";
         let self = this;
         function getGBox(the_id) {
             if (the_id == base_id) {
                 return null;
             }
-            let cnode = self._getNode(the_id);
+            let cnode = target_dict[the_id];
             if (graphics_kinds.includes(cnode.kind)) {
                 return cnode;
             } else {
@@ -359,9 +381,12 @@ class MainApp extends React.Component {
         });
     }
 
-    _mergeTextNodes(n1, n2, node_list) {
-        node_list[n1].the_text = node_list[n1].the_text + node_list[n2].the_text;
-        node_list.splice(n2, 1);
+    _mergeTextNodes(n1, n2, line_id, target_dict) {
+        let id1 = target_dict[line_id].node_list[n1];
+        let id2 = target_dict[line_id].node_list[id2];
+        target_dict = this.changeNodeAndReturn(id1, "the_text", target_dict[id1].the_text + target_dict[id2].the_text);
+        target_dict = this._removeNodeAndReturn(id2, target_dict);
+        return target_dict;
     }
 
     _comparePortboxes(db1, db2) {

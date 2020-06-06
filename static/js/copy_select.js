@@ -28,33 +28,136 @@ let copySelectMixin = {
         }
     },
 
-    _addToClipboardStart(raw_new_node, clear=false) {
-        let new_node = _.cloneDeep(raw_new_node);
+    _addToClipboardStart(new_node_id, clear=false, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
+        }
         if (clear) {
-            let new_line = this._newLineNode([new_node]);
+            let new_line;
+            [new_line, target_dict] = this._newLineNode([new_node_id]);
             this.clipboard = [new_line];
         }
         else {
-            let first_line = this.clipboard[0];
-            first_line.node_list.unshift(new_node);
-            new_node.parent = first_line.unique_id;
+            let first_line = target_dict[this.clipboard[0]];
+            first_line.node_list.unshift(new_node_id);
+            target_dict = this.changeNode(new_node_id, "parent", first_line.unique_id);
             if (first_line.node_list.length > 1) {
                 if (first_line.node_list[0].kind == "text" && first_line.node_list[1].kind == "text") {
-                    this._mergeTextNodes(0, 1, first_line.node_list)
+                    target_dict = this._mergeTextNodes(0, 1, first_line.unique_id, target_dict)
                 }
             }
         }
+        return target_dict
     },
 
-    _startNewClipboardLine(clear=false){
-        let new_line1 = this._newLineNode();
+   _insertClipboard(text_id, cursor_position, portal_root, target_dict=null, update=true) {
+        if (!this.clipboard || this.clipboard.length == 0) {
+            return
+        }
+        if (target_dict == null) {
+            target_dict = this.state.node_dict;
+        }
+
+        target_dict = this._splitTextAtPosition(text_id, cursor_position, target_dict, false);
+        let nodeA = target_dict[text_id];
+        let targetLine = target_dict[nodeA.parent];
+        let nodeB = targetLine.node_list[nodeA.position + 1];
+
+        let updated_lines = _.cloneDeep(this.clipboard);
+        this._updateIds(updated_lines);
+        let focus_type;
+        let focus_text_pos;
+        let focus_node_id;
+        if (updated_lines.length == 1) {
+            if (updated_lines[0].node_list.length == 1) {
+                let inserted_node = updated_lines[0].node_list[0];
+                if (inserted_node.kind == "text") {
+                    focus_type = "text";
+                    if (nodeA.kind == "text") {
+                        focus_node_id = nodeA.unique_id;
+                        focus_text_pos = nodeA.the_text.length + inserted_node.the_text.length
+                    }
+                    else {
+                        focus_node_id = inserted_node.unique_id;
+                        focus_text_pos = inserted_node.the_text.length
+                    }
+                }
+                else {
+                    focus_type = "box";
+                    focus_node_id = inserted_node.unique_id
+                }
+            }
+            else {
+                let last_inserted_node = _.last(updated_lines[0].node_list);
+                if (last_inserted_node.kind == "text") {
+                    focus_type = "text";
+                    focus_node_id = last_inserted_node.unique_id;
+                    focus_text_pos =last_inserted_node.the_text.length
+                }
+                else {
+                    focus_type = "box";
+                    focus_node_id = last_inserted_node.unique_id
+                }
+            }
+            new_base = this._insertNodesAndReturn(updated_lines[0].node_list, targetLine.unique_id, nodeA.position + 1, new_base)
+        }
+        else {
+            let nodeB = targetLine.node_list[nodeA.position + 1];
+            new_base = this._splitLineAndReturn(targetLine.unique_id, nodeB.position, new_base);
+            targetLine = _getMatchingNode(targetLine.unique_id, new_base);
+            new_base = this._insertNodesAndReturn(updated_lines[0].node_list, targetLine.unique_id,
+                targetLine.node_list.length, new_base);
+            let last_inserted_node = _.last(_.last(updated_lines).node_list);
+            if (last_inserted_node.kind == "text") {
+                    focus_type = "text";
+                    focus_node_id = last_inserted_node.unique_id;
+                    focus_text_pos =last_inserted_node.the_text.length
+            }
+            else {
+                focus_type = "box";
+                focus_node_id = last_inserted_node.unique_id
+            }
+
+            let targetBox = _getMatchingNode(targetLine.parent, new_base);
+            let targetLine2 = targetBox.line_list[targetLine.position + 1];
+            new_base = this._insertNodesAndReturn(_.last(updated_lines).node_list, targetLine2.unique_id, 0, new_base)
+            if (updated_lines.length > 2) {
+                new_base = this.insertLinesAndReturn(updated_lines.slice(1, updated_lines.length - 1), targetBox.unique_id,
+                    targetLine.position + 1, new_base)
+            }
+        }
+        let self = this;
+        if (update) {
+            this._clearSelected(null, new_base, null, true);
+            this.setState({base_node: new_base}, positionCursor)
+        }
+        else{
+            positionCursor()
+        }
+
+        function positionCursor(){
+            if (focus_type == "text") {
+                self._changeNode(focus_node_id, "setFocus", [portal_root, focus_text_pos])
+            }
+            else  {
+                self._positionAfterBox(focus_node_id)
+            }
+
+        }
+    },
+
+    _startNewClipboardLine(clear=false, target_dict){
+        let new_line1_id;
+        target_dict = this.state.node_dict;
+        [new_line1_id, target_dict] = this._newLineNode();
         if (clear) {
-            let new_line2 = this._newLineNode();
-            this.clipboard = [new_line1, new_line2];
+            [new_line1_id, target_dict] = this._newLineNode();
+            this.clipboard = [new_line1_id, new_line2_id];
         }
         else {
             this.clipboard.unshift(new_line1)
         }
+        return target_dict
     },
 
     _setSelected(id_list) {
@@ -278,62 +381,6 @@ let copySelectMixin = {
             select_range: range
         })
     },
-     _healLine(line_pointer, recursive=false) {
-        let done = false;
 
-        // Merge adjacent text nodes
-        while (!done) {
-            this._renumberNodes(line_pointer.node_list);
-            done = true;
-            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
-                if ((line_pointer.node_list[i].kind == "text") && (line_pointer.node_list[i + 1].kind == "text")) {
-                    this._mergeTextNodes(i, i + 1, line_pointer.node_list);
-                    done = false;
-                    break
-                }
-            }
-        }
-        // Insert text node at start if necessary
-        if (line_pointer.node_list[0].kind != "text") {
-            let new_node = this._newTextNode("");
-            line_pointer.node_list.splice(0, 0, new_node);
-            new_node.parent = line_pointer.unique_id;
-            this._renumberNodes(line_pointer.node_list);
-        }
-        // Insert text node at end if necessary
-        if (_.last(line_pointer.node_list).kind != "text") {
-            let new_node = this._newTextNode("");
-            line_pointer.node_list.push(new_node);
-            new_node.parent = line_pointer.unique_id;
-            this._renumberNodes(line_pointer.node_list);
-        }
-        done = false;
-
-        // Insert text nodes between adjacent boxes
-        while (!done) {
-            this._renumberNodes(line_pointer.node_list);
-            done = true;
-            for (let i = 0; i < line_pointer.node_list.length - 1; ++i) {
-                if ((line_pointer.node_list[i].kind != "text") && (line_pointer.node_list[i + 1].kind != "text")) {
-                    let new_node = this._newTextNode("");
-                    line_pointer.node_list.splice(i + 1, 0, new_node);
-                    new_node.parent = line_pointer.unique_id;
-                    done = false;
-                    break
-                }
-            }
-        }
-
-        // Make sure all child notes point to the parent
-        for (let node of line_pointer.node_list) {
-            node.parent = line_pointer.unique_id;
-        }
-        if (recursive) {
-            for (let node of line_pointer.node_list) {
-                this._healStructure(node, line_pointer)
-
-            }
-        }
-    }
 
 }

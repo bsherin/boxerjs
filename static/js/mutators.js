@@ -7,459 +7,264 @@ export {mutatorMixin, _getMatchingNode, _getMatchingNodePath}
 
 let mutatorMixin = {
 
-    _buildChangeQuery(startingMatchPath, param_name, new_val, base_id) {
-        let matchPath = _.cloneDeep(startingMatchPath)
-        let fnode = matchPath.shift()
-        let query;
-        if (fnode.unique_id == base_id) {
-            if (matchPath.length == 0) {
-                query = {[param_name]: {$set: new_val}}
-                }
-            else {
-                query = this._buildChangeQuery(matchPath, param_name, new_val, base_id)
-            }
-        }
-        else if (fnode.kind == "line") {
-            if (!fnode.amCloset) {
-                if (matchPath.length == 0) {
-                    query = {line_list: {[fnode.position]: {[param_name]: {$set: new_val}}}}
-                }
-                else {
-                    query = {line_list: {[fnode.position]: this._buildChangeQuery(matchPath, param_name, new_val, base_id)}}
-                }
-            }
-            else {
-                if (matchPath.length == 0) {
-                    query = {closetLine: {[param_name]: {$set: new_val}}}
-                }
-                else {
-                    query = {closetLine: this._buildChangeQuery(matchPath, param_name, new_val, base_id)};
-                }
-            }
-        }
-        else if (container_kinds.includes(fnode.kind) || text_kinds.includes(fnode.kind)) {
-            if (matchPath.length == 0) {
-                query = {node_list: {[fnode.position]: {[param_name]: {$set: new_val}}}}
-            }
-            else {
-                query = {node_list: {[fnode.position]: this._buildChangeQuery(matchPath, param_name, new_val, base_id)}}
-            }
-
-        }
-        else if (fnode.kind == "port") {
-            query = {node_list: {[fnode.position]: {[param_name]: {$set: new_val}}}}
-        }
-        else {
-            query = null
-        }
-        return query
-    },
-
-    _buildReplaceLineQuery(matchPathToParent, new_line, base_id) {
-        let fnode = matchPathToParent.shift()
-        let query;
-        if (fnode.unique_id == base_id) {
-            if (matchPathToParent.length == 0) {
-                query =  {line_list: {$splice: [[new_line.position, 1, new_line]]}}
-            }
-            else {
-                query = this._buildReplaceLineQuery(matchPathToParent, new_line, base_id)
-            }
-        }
-        else if (fnode.kind == "line") {
-            if (!fnode.amCloset) {
-                query = {line_list: {[fnode.position]: this._buildReplaceLineQuery(matchPathToParent, new_line, base_id)}}
-
-            }
-            else {
-                query = {closetLine: this._buildReplaceLineQuery(matchPathToParent, new_line, base_id)};
-            }
-        }
-        else if (container_kinds.includes(fnode.kind) || text_kinds.includes(fnode.kind)) {
-            if (matchPathToParent.length == 0) {
-                query = {node_list: {[fnode.position]: {line_list: {$splice: [[new_line.position, 1, new_line]]}}}}
-            }
-            else {
-                query = {node_list: {[fnode.position]: this._buildReplaceLineQuery(matchPathToParent, new_line, base_id)}}
-            }
-
-        }
-        else {
-            return null
-        }
-        return query
-    },
-
-    // This doesn't seem to be used currently
-    _buildReplaceNodeQuery(matchPathToParent, new_node, base_id) {
-        let fnode = matchPathToParent.shift()
-        let query;
-        if (fnode.unique_id == base_id) {
-            query = this._buildReplaceLineQuery(matchPathToParent, new_line, base_id)
-        }
-        else if (fnode.kind == "line") {
-            if (!fnode.amCloset) {
-                if (matchPathToParent.length == 0) {
-                    query = {line_list: {[fnode.position]: {node_list: {$splice: [[new_node.position, 1, new_node]]}}}}
-                }
-                else {
-                    query = {line_list: {[fnode.position]: this._buildReplaceNodeQuery(matchPathToParent, new_node, base_id)}}
-                }
-            }
-            else {
-                if (matchPathToParent.length == 0) {
-                    query = {closetLine: {node_list: {$splice: [[new_node.position, 1, new_node]]}}}
-                }
-                else {
-                    query = {closetLine: this._buildReplaceLineQuery(matchPathToParent, new_node, base_id)};
-                }
-
-            }
-        }
-        else if (container_kinds.includes(fnode.kind) || text_kinds.includes(fnode.kind)) {
-            query = {node_list: {[fnode.position]: this._buildReplaceLineQuery(matchPathToParent, new_node, base_id)}}
-        }
-        else {
-            return null
-        }
-        return query
+    _createEntryAndReturn(new_node, new_dict=null){
+        if (!new_dict) {
+            new_dict = this.state.node_dict
+         }
+        let query = {[new_node.uid]: {$set: new_node}};
+        return update(new_dict, query)
     },
 
     _changeNode(uid, param_name, new_val, callback=null) {
-        let newBase = this.changeNodeAndReturn(uid, param_name, new_val)
-        this.setState({base_node: newBase}, callback)
+        let node_dict = this.changeNodeAndReturn(uid, param_name, new_val)
+        this.setState({node_dict: node_dict}, callback)
     },
 
-    changeNodeAndReturn(uid, param_name, input_val, new_base=null) {
+    changeNodeAndReturn(uid, param_name, input_val, new_dict=null) {
          let new_val = _.cloneDeep(input_val)
          repairCopiedDrawnComponents(new_val, true);
-         if (!new_base) {
-            new_base = this.state.base_node
+         if (!new_dict) {
+            new_dict = this.state.node_dict
          }
-         let mpath = _getMatchingNodePath(uid, [], new_base);
-
-         if (mpath) {
-             let query = this._buildChangeQuery(mpath, param_name, new_val, new_base.unique_id);
-             let newBase = update(new_base, query)
-             return newBase
-         }
-         return null
+         let query = {[uid]: {[param_name]: {$set: new_val}}}
+         let new_dict = update(new_dict, query)
+         return new_dict
     },
 
     _changeNodeMulti(uid, valdict, callback=null) {
-         let mpath = _getMatchingNodePath(uid, [], this.state.base_node);
+         let new_dict = this._changeNodeMultiAndReturn(uid, valdict, this.state.node_dict)
+         this.setState({base_node: new_dict}, callback)
+    },
 
-         if (mpath) {
-             let newBase = this.state.base_node
-             for (let param in valdict) {
-                 let new_val = val_dict["param"]
-                 repairCopiedDrawnComponents(new_val, true);
-                 let query = this._buildChangeQuery(mpath, param, new_val, newBase.unique_id);
-                 newBase = update(newBase, query)
-             }
-             this.setState({base_node: newBase})
-         }
+    _changeNodeMultiAndReturn(uid, valdict, new_dict=null) {
+        if (!new_dict) {
+            new_dict = this.state.node_dict
+        }
+        for (let param in valdict) {
+            let new_val = val_dict["param"]
+            repairCopiedDrawnComponents(new_val, true, new_dict);
+            let query = {[uid]: {[param_name]: {$set: new_val}}}
+            new_dict = update(new_dict, query)
+        }
+        return new_dict
     },
 
     _insertNodeIh(new_node, line_id, position, callback=null) {
-        let newBase = this._insertNodeAndReturn(new_node, line_id, position, this.state.base_node, true)
-        this.setState({base_node: newBase}, callback)
+        let new_dict = this._insertNodeAndReturn(new_node, line_id, position, this.state.base_node, true)
+        this.setState({node_dict: new_dict}, callback)
     },
 
-    _insertNodeAndReturn(new_node, line_id, position, base, heal_line=false) {
-        let parent_line = _.cloneDeep(_getMatchingNode(line_id, base));
-        new_node.parent= line_id;
-        parent_line.node_list.splice(position, 0, new_node);
+    _insertNodeAndReturn(new_node_id, line_id, position, new_dict, heal_line=false) {
+        let new_dict = this._changeNodeAndReturn(new_node_id, "parent", line_id, new_dict)
+        new_dict = update(node_dict, {[line_id]: {node_list: {$splice: [[position, 0, new_node_id]]}}})
         if (heal_line) {
-            this._healLine(parent_line);
+            new_dict = this._healLine(line_id, false, new_dict);
         }
         else {
-            this._renumberNodes(parent_line.node_list)
+            new_dict = this._renumberNodes(line_id, new_dict)
         }
-        let newBase = this.changeNodeAndReturn(line_id, "node_list", parent_line.node_list)
-        return newBase
+        return new_dict
     },
 
-    _insertNodesAndReturn(new_nodes, line_id, position, base) {
-
-        let parent_line = _.cloneDeep(_getMatchingNode(line_id, base));
-        for (let node of new_nodes) {
-            node.parent = line_id
+    _insertNodesAndReturn(new_node_ids, line_id, position, new_dict) {
+        for (let nid of new_node_ids) {
+             let new_dict = this._changeNodeAndReturn(nid, "parent", line_id, new_dict)
         }
+        new_dict = update(node_dict, {[line_id]: {node_list: {$splice: [[position, 0, ...new_node_ids]]}}})
 
-        parent_line.node_list.splice(position, 0, ...new_nodes);
-        this._healLine(parent_line);
+        new_dict = this._healLine(line_id, new_dict);
 
-        let mpath = _getMatchingNodePath(parent_line.parent, [], base);
-        let query = this._buildReplaceLineQuery(mpath, parent_line, base.unique_id)
-        let newBase = update(base, query)
-        return newBase
+        return new_dict
     },
 
-    _splitTextAtPosition(text_id, cursor_position, new_base) {
+    _replaceNodeAndReturn(new_node_id, line_id, position, node_dict, heal_line=false) {
+        let new_dict = this._changeNodeMultiAndReturn(new_node_id, "parent", line_id, new_dict)
+        new_dict = update(node_dict, {[line_id]: {node_list: {$splice: [[position, 1, new_node_id]]}}})
+        if (heal_line) {
+            new_dict = this._healLine(line_id, false, new_dict);
+        }
+        else {
+            new_dict = this._renumberNodes(line_id, new_dict)
+        }
+        return new_dict
+    },
 
-        let mnode = _.cloneDeep(_getMatchingNode(text_id, new_base));
-        let new_node;
+    _splitTextAtPosition(text_id, cursor_position, target_dict) {
+
+        let mnode = target_dict[text_id];
+        let new_node_id;
         if (cursor_position == 0) {
-            new_node = this._newTextNode("");
-            new_base = this._insertNodeAndReturn(new_node, mnode.parent, mnode.position, new_base)
+            let tdict = {};
+            [new_node_id, target_dict] = this._newTextNode("", target_dict);
+            target_dict = this._insertNodeAndReturn(new_node_id, mnode.parent, mnode.position, target_dict)
         }
         else if (cursor_position == mnode.the_text.length) {
-            new_node = this._newTextNode("");
-            new_base = this._insertNodeAndReturn(new_node, mnode.parent, mnode.position + 1, new_base)
+            [new_node_id, target_dict] = this._newTextNode("");
+            target_dict = this._insertNodeAndReturn(new_node_id, mnode.parent, mnode.position + 1, target_dict)
         }
         else {
             let text_split = [mnode.the_text.slice(0, cursor_position), mnode.the_text.slice(cursor_position,)];
-            new_node = this._newTextNode(text_split[1]);
-            new_base = this.changeNodeAndReturn(text_id, "the_text", text_split[0], new_base)
-            new_base = this._insertNodeAndReturn(new_node, mnode.parent, mnode.position + 1, new_base)
+            [new_node_id, target_dict] = this._newTextNode(text_split[1]);
+            target_dict = this.changeNodeAndReturn(text_id, "the_text", text_split[0], target_dict)
+            target_dict = this._insertNodeAndReturn(new_node_id, mnode.parent, mnode.position + 1, target_dict)
         }
-        return new_base
+        return target_dict
     },
 
-    _insertLineAndReturn(new_line, box_id, position, new_base=null) {
-        let newBase = this.insertLinesAndReturn([new_line], box_id, position, new_base)
-        return newBase
+    _insertLineAndReturn(new_line_id, box_id, position, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict;
+        }
+        let target_dict = this.insertLinesAndReturn([new_line_id], box_id, position, target_dict)
+        return target_dict
     },
 
-    insertLinesAndReturn(new_lines, boxId, position=0, new_base=null) {
-        if (new_base == null) {
-            new_base = this.state.base_node;
+    insertLinesAndReturn(new_line_ids, boxId, position=0, target_dict=null) {
+        if (target_dict == null) {
+            target_dict = this.state.node_dict;
         }
-        let parent_box = _.cloneDeep(_getMatchingNode(boxId, new_base));
-        for (let lin of new_lines) {
-            lin.parent = boxId
+        for (let lin_id of new_line_ids) {
+            target_dict = this.changeNodeAndReturn(lin_id, "parent", boxId)
         }
-        parent_box.line_list.splice(position, 0, ...new_lines);
-        this._renumberNodes(parent_box.line_list);
-        let newBase = this.changeNodeAndReturn(parent_box.unique_id, "line_list", parent_box.line_list, new_base)
-        return newBase
-    },
+        target_dict = update(target_dict, {[boxId]: {line_list: {$splice: [[position, 0, ...new_line_ids]]}}})
+        target_dict = this.renumberLines(boxId, target_dict)
 
-    _insertClipboard(text_id, cursor_position, portal_root, new_base=null, update=true) {
-        if (!this.clipboard || this.clipboard.length == 0) {
-            return
-        }
-        if (new_base == null) {
-            new_base = this.state.base_node;
-        }
-
-        new_base = this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let nodeA = _getMatchingNode(text_id, new_base);
-        let targetLine = _getMatchingNode(nodeA.parent, new_base);
-        let nodeB = targetLine.node_list[nodeA.position + 1];
-        let targetBox = _getMatchingNode(targetLine.parent, new_base);
-
-        let updated_lines = _.cloneDeep(this.clipboard);
-        this._updateIds(updated_lines);
-        let focus_type;
-        let focus_text_pos;
-        let focus_node_id;
-        if (updated_lines.length == 1) {
-            if (updated_lines[0].node_list.length == 1) {
-                let inserted_node = updated_lines[0].node_list[0];
-                if (inserted_node.kind == "text") {
-                    focus_type = "text";
-                    if (nodeA.kind == "text") {
-                        focus_node_id = nodeA.unique_id;
-                        focus_text_pos = nodeA.the_text.length + inserted_node.the_text.length
-                    }
-                    else {
-                        focus_node_id = inserted_node.unique_id;
-                        focus_text_pos = inserted_node.the_text.length
-                    }
-                }
-                else {
-                    focus_type = "box";
-                    focus_node_id = inserted_node.unique_id
-                }
-            }
-            else {
-                let last_inserted_node = _.last(updated_lines[0].node_list);
-                if (last_inserted_node.kind == "text") {
-                    focus_type = "text";
-                    focus_node_id = last_inserted_node.unique_id;
-                    focus_text_pos =last_inserted_node.the_text.length
-                }
-                else {
-                    focus_type = "box";
-                    focus_node_id = last_inserted_node.unique_id
-                }
-            }
-            new_base = this._insertNodesAndReturn(updated_lines[0].node_list, targetLine.unique_id, nodeA.position + 1, new_base)
-        }
-        else {
-            let nodeB = targetLine.node_list[nodeA.position + 1];
-            new_base = this._splitLineAndReturn(targetLine.unique_id, nodeB.position, new_base);
-            targetLine = _getMatchingNode(targetLine.unique_id, new_base);
-            new_base = this._insertNodesAndReturn(updated_lines[0].node_list, targetLine.unique_id,
-                targetLine.node_list.length, new_base);
-            let last_inserted_node = _.last(_.last(updated_lines).node_list);
-            if (last_inserted_node.kind == "text") {
-                    focus_type = "text";
-                    focus_node_id = last_inserted_node.unique_id;
-                    focus_text_pos =last_inserted_node.the_text.length
-            }
-            else {
-                focus_type = "box";
-                focus_node_id = last_inserted_node.unique_id
-            }
-
-            let targetBox = _getMatchingNode(targetLine.parent, new_base);
-            let targetLine2 = targetBox.line_list[targetLine.position + 1];
-            new_base = this._insertNodesAndReturn(_.last(updated_lines).node_list, targetLine2.unique_id, 0, new_base)
-            if (updated_lines.length > 2) {
-                new_base = this.insertLinesAndReturn(updated_lines.slice(1, updated_lines.length - 1), targetBox.unique_id,
-                    targetLine.position + 1, new_base)
-            }
-        }
-        let self = this;
-        if (update) {
-            this._clearSelected(null, new_base, null, true);
-            this.setState({base_node: new_base}, positionCursor)
-        }
-        else{
-            positionCursor()
-        }
-
-        function positionCursor(){
-            if (focus_type == "text") {
-                self._changeNode(focus_node_id, "setFocus", [portal_root, focus_text_pos])
-            }
-            else  {
-                self._positionAfterBox(focus_node_id)
-            }
-
-        }
+        return target_dict
     },
 
     _splitLineAtTextPosition(text_id, cursor_position, portal_root="root",
-                             new_base=null, update=true) {
-        if (new_base == null) {
-            new_base = this.state.base_node;
+                             target_dict=null, update=true) {
+        if (target_dict == null) {
+            target_dict = this.state.node_dict;
         }
-        new_base = this._splitTextAtPosition(text_id, cursor_position, new_base);
-        let mnode = _getMatchingNode(text_id, new_base);
+        target_dict = this._splitTextAtPosition(text_id, cursor_position, target_dict);
+        let mnode = target_dict[text_id];
         let pos = mnode.position;
         let linid = mnode.parent;
-        let parent_line = _getMatchingNode(linid, new_base);
+        let parent_line = target_dict[linid];
         let parent_line_pos = parent_line.position;
-        new_base = this._splitLineAndReturn(linid, pos + 1, new_base, false);
+        target_dict = this._splitLineAndReturn(linid, pos + 1, new_base, false);
         let dbox = _getMatchingNode(parent_line.parent, new_base);
-        dbox.line_list[parent_line_pos + 1].node_list[0].setFocus = [portal_root, 0];
+
+        let nd_for_focus = target_dict[parent_line.parent].line_list[parent_line_pos + 1].node_list[0]
+        target_dict = this.changeNodeAndReturn(nd_for_focus, "setFocus", [portal_root, 0]);
 
         if (update) {
-            this.setState({base_node: new_base})
+            this.setState({node_dict: target_dict})
+        }
+        else {
+            return target_dict
         }
     },
 
-    _splitLineAndReturn(line_id, position, new_base=null) {
-        if (new_base == null) {
-            new_base = this.state.base_node
+    _splitLineAndReturn(line_id, position, target_dict=null) {
+        if (target_dict == null) {
+            target_dict = this.state.node_dict
         }
-        let the_line = _.cloneDeep(_getMatchingNode(line_id, new_base));
+        let the_line = target_dict[line_id]
         let new_node_list = the_line.node_list.slice(position,);
+        target_dict = this.changeNodeAndReturn(line_id, "node_list",
+            [...the_line.node_list.slice(0, position)], target_dict)
+
+
         this._renumberNodes(new_node_list);
 
-        let new_line = this._newLineNode(new_node_list);
-        for (let nd of new_node_list) {
-            nd.parent = new_line.unique_id
+
+        let new_line_id;
+        [new_line_id, target_dict] = this._newLineNode(new_node_list);
+        for (let nd_id of new_node_list) {
+            target_dict = this.changeNodeAndReturn(nd_id, "parent", new_line_id)
         }
-        the_line.node_list = the_line.node_list.slice(0, position);
-        new_base = this.changeNodeAndReturn(the_line.unique_id, "node_list", the_line.node_list, new_base);
-        new_base = this._insertLineAndReturn(new_line, the_line.parent, the_line.position + 1, new_base);
-        return new_base
+        target_dict = this._renumberNodes(new_line_id, target_dict)
+
+        target_dict = this._insertLineAndReturn(new_line_id, the_line.parent, the_line.position + 1, target_dict);
+        return target_dict
     },
 
-    _insertBoxInText(kind, text_id, cursor_position, portal_root, new_base=null, update=true, is_doit=false) {
-        if (new_base == null) {
-            new_base = this.state.base_node;
+    _insertBoxInText(kind, text_id, cursor_position, portal_root, target_dict=null, update=true, is_doit=false) {
+        if (target_dict == null) {
+            target_dict = this.state.node_dict;
         }
-        new_base = this._splitTextAtPosition(text_id, cursor_position, new_base, false);
-        let mnode = _getMatchingNode(text_id, new_base);
-        let new_node;
+        target_dict = this._splitTextAtPosition(text_id, cursor_position, target_dict, false);
+        let mnode = target_dict[text_id];
+        let new_node_id;
         if (kind == "sprite") {
             let use_svg = false;
-            let gbox = this._getContainingGraphicsBox(text_id)
+            let gbox = this._getContainingGraphicsBox(text_id, target_dict)
             if (gbox && gbox.kind == "svggraphics") {
                 use_svg = true;
             }
-            new_node = this._nodeCreators()[kind](use_svg)
+            [new_node_id, target_dict] = this._newSpriteBox(use_svg, target_dict)
         }
         else {
-            new_node = this._nodeCreators()[kind]()
+            let temp_dict;
+            [new_node_id, temp_dict] = this._nodeCreators()[kind]()
+            target_dict = this._createEntryAndReturn(temp_dict[new_node_id], target_dict)
         }
         if (["databox", "doitbox"].includes(kind)) {
-            new_node.line_list[0].node_list[0].setFocus = [portal_root, 0];
+            target_dict = this.changeNodeAndReturn(target_dict[new_node_id].line_list[0].node_list[0],
+                "setFocus", [portal_root, 0], target_dict)
         }
         else if (text_kinds.includes(kind)) {
-            new_node.setFocus = [portal_root, 0];
+            target_dict = this.changeNodeAndReturn(new_node_id, "setFocus", [portal_root, 0])
         }
-        else if (kind == "port") {
-            this._enterPortTargetMode(new_node.unique_id)
-        }
+
         let self = this;
-        let newBase = this._insertNodeAndReturn(new_node, mnode.parent, mnode.position + 1, new_base, true);
+        let target_dict = this._insertNodeAndReturn(new_node_id, mnode.parent, mnode.position + 1, target_dict, true);
         this.setState({base_node: newBase}, ()=>{
-                 self._clearSelected()
-             });
+             self._clearSelected()
+             if (kind == "port") {
+                this._enterPortTargetMode(new_node.unique_id)
+            }
+         });
     },
-    _removeLineAndReturn(uid, new_base=null) {
-        if (new_base == null) {
-            new_base = this.state.base_node;
+    _removeLineAndReturn(uid, target_dict=null) {
+        if (target_dict == null) {
+            target_dict = this.state.node_dict;
         }
-        let mline = _getMatchingNode(uid, new_base);
-        let parent_box = _.cloneDeep(_getMatchingNode(mline.parent, new_base));
-        parent_box.line_list.splice(mline.position, 1);
-        this._renumberNodes(parent_box.line_list);
-        let newBase = this.changeNodeAndReturn(parent_box.unique_id, "line_list", parent_box.line_list, new_base);
-        return newBase
+        let mline = target_dict[uid];
+        target_dict = update(target_dict, {[mline.parent]: {line_list: {$splice: [[mline.position, 1]] }}})
+        target_dict = this._renumberLines(mline.parent, target_dict)
+        return target_dict
     },
 
-    _removeNodeAndReturn(uid, new_base=null) {
-        if (new_base == null) {
-            new_base = this.state.base_node;
+    _removeNodeAndReturn(uid, new_dict=null) {
+        if (new_dict == null) {
+            new_dict = this.state.node_dict;
         }
-        let mnode = _getMatchingNode(uid, new_base);
-        let parent_line = _getMatchingNode(mnode.parent, new_base);
-        parent_line.node_list.splice(mnode.position, 1);
-        this._healLine(parent_line);
-        let mpath = _getMatchingNodePath(parent_line.parent, [], base);
-        let query = this._buildReplaceLineQuery(mpath, parent_line, new_base.unique_id)
-        let newBase = update(new_base, query)
-        return newBase
+
+        let parent_id = new_dict[uid].parent;
+        new_dict = update(new_dict, {[parent_id]: {node_list: {$splice: [[new_dict[uid].position, 1]] }}})
+        new_dict = this._healLine(parent_id, false, new_dict);
+        return new_dict
     },
 
-    _removeNodeIh(uid, callback) {
-        let mnode = _getMatchingNode(uid, this.state.base_node);
-        let parent_line = _.cloneDeep(_getMatchingNode(mnode.parent, this.state.base_node));
-        parent_line.node_list.splice(mnode.position, 1);
-        this._healLine(parent_line);
-        let mpath = _getMatchingNodePath(parent_line.parent, [], this.state.base_node);
-        let query = this._buildReplaceLineQuery(mpath, parent_line, this.state.base_node.unique_id)
-        let newBase = update(this.state.base_node, query)
-        this.setState({base_node: newBase}, callback)
+    _removeNodeIh(uid, callback=null, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
+        }
+        let new_dict = this._removeNodeAndReturn(uid, this.state.node_dict)
+        this.setState({node_dict: new_dict}, callback)
     },
 
 
     _deleteToLineEnd(text_id, caret_pos) {
-        let new_base = this.state.base_node;
-        let mnode = _getMatchingNode(text_id, this.state.base_node);
-        let parent_line = _getMatchingNode(mnode.parent, new_base);
+        let target_dict = this.state.node_dict;
+        let mnode = target_dict[text_id];
         if (caret_pos == 0) {
             if (mnode.position == 0)  {
                 this.clipboard = [_.cloneDeep(parent_line)];
                 if (parent_line.amCloset) {
-                    let newnode = this._newTextNode();
-                    newnode.parent = parent_line.unique_id;
+                    [newnode_id, target_dict] = this._newTextNode(target_dict);
+                    target_dict = this.changeNodeAndReturn(newnode_id, "parent", mnode.parent, target_dict)
                     // parent_line.node_list = [new_node]
-                    this._changeNode(parent_line.unique_id, "node_list", [new_node], ()=>{
+                    this._changeNode(parent_line.unique_id, "node_list", [target_dict[new_node_id]], ()=>{
                         this._clearSelected()
                     })
                 }
                 else {
-                    new_base = this._removeLineAndReturn(parent_line.unique_id, new_base);
-                    this.setState({base_node: new_base}, ()=>{
+                    target_dict = this._removeLineAndReturn(mnode.parent, target_dict);
+                    this.setState({node_dict: target_dict}, ()=>{
                         this._clearSelected()
                     })
                 }
@@ -467,41 +272,46 @@ let mutatorMixin = {
             }
         }
         if (caret_pos < mnode.the_text.length - 1) {
-            new_base = this._splitTextAtPosition(text_id, caret_pos, new_base);
+            target_dict = this._splitTextAtPosition(text_id, caret_pos, target_dict);
         }
         else {
             return
         }
-        parent_line = _getMatchingNode(mnode.parent, new_base);
-        let deleted_nodes = parent_line.node_list.splice(mnode.position + 1,);
-        this.clipboard = [this._newLineNode(deleted_nodes)];
-        this.setState({base_node: new_base},()=>{
+        let deleted_nodes = target_dict[mnode.parent].node_list.slice(mnode.position + 1,);
+        target_dict = this.changeNodeAndReturn(target_dict[mnode.parent], "node_list",
+            [...target_dict[mnode.parent].node_list.slice(0, mnode.position)], target_dict);
+        let nline_id;
+        [nline_id, target_dict] = this._newLineNode(deleted_nodes)
+        this.clipboard = [nline_id];
+        this.setState({node_dict: target_dict},()=>{
             this._clearSelected()
         })
     },
 
-    _mergeWithPrecedingLine(second_line, callback=null) {
+    _mergeWithPrecedingLine(second_line_id, target_dict) {
+        let target_dict = this.state.node_dict;
+        let second_line = target_dict[second_line_id];
+        let dbox_id = second_line.parent;
+        let first_line_id = target_dict[dbox_id].line_list[second_line.position - 1];
+        let first_line = target_dict[first_line_id];
 
-        let dbox = _.cloneDeep(_getMatchingNode(second_line.parent, this.state.base_node));
-        let first_line = dbox.line_list[second_line.position - 1];
+        target_dict = this._insertNodesAndReturn(second_line.node_list, first_line_id,
+            first_line.node_list.length, target_dict);
 
-        first_line.node_list = first_line.node_list.concat(_.cloneDeep(second_line.node_list));
-        this._healLine(first_line);
-        dbox.line_list.splice(second_line.position, 1);
-        this._renumberNodes(dbox.line_list);
-        this._changeNode(dbox.unique_id, "line_list", dbox.line_list, callback)
+        return target_dict
     },
     _deletePrecedingBox(text_id, clearClipboard=true, portal_root) {
-        let mnode = _getMatchingNode(text_id, this.state.base_node);
-        let parent_line = _getMatchingNode(mnode.parent, this.state.base_node);
+        let target_dict = this.state.node_dict;
+        let mnode = target_dict[text_id];
+        let parent_line = target_dict[mnode.parent];
         let focus_node;
         let focus_pos;
         let self = this;
         if (mnode.position == 0) {
             if (!parent_line.amCloset && parent_line.position != 0) {
-                let dbox = _getMatchingNode(parent_line.parent, this.state.base_node);
-                let first_line = dbox.line_list[parent_line.position - 1];
-                let preceding_node = _.last(first_line.node_list);
+                let dbox = target_dict[parent_line.parent];
+                let first_line = target_dict[dbox.line_list[parent_line.position - 1]];
+                let preceding_node = target_dict[_.last(first_line.node_list)];
 
                 if (preceding_node.kind == "text") {
                     focus_node = preceding_node.unique_id;
@@ -511,18 +321,20 @@ let mutatorMixin = {
                     focus_node = text_id;
                     focus_pos = 0
                 }
-                this._mergeWithPrecedingLine(parent_line, null, true, positionCursor);
-                this._startNewClipboardLine(clearClipboard)
+                target_dict = this._startNewClipboardLine(clearClipboard)
+                target_dict = this._mergeWithPrecedingLine(parent_line.unique_id, target_dict);
+                this.setState({node_dict: target_dict, positionCursor})
             }
         }
         else {
-            let preceding_node = parent_line.node_list[mnode.position - 1];
+            let preceding_node_id = parent_line.node_list[mnode.position - 1];
+            let preceding_node = target_dict[preceding_node_id];
             if ((mnode.position - 2) < 0) {
                 focus_node = text_id;
                 focus_pos = 0
             }
             else {
-                let pre_preceding_node = parent_line.node_list[mnode.position - 2];
+                let pre_preceding_node = target_dict[parent_line.node_list[mnode.position - 2]];
                 if (pre_preceding_node.kind == "text") {
                     focus_node = pre_preceding_node.unique_id;
                     focus_pos = pre_preceding_node.the_text.length
@@ -534,8 +346,8 @@ let mutatorMixin = {
             }
 
             if (preceding_node.kind != "text") {
-                this._addToClipboardStart(preceding_node, clearClipboard);
-                this._removeNodeIh(preceding_node.unique_id, positionCursor)
+                target_dict = this._addToClipboardStart(preceding_node_id, clearClipboard, target_dict);
+                this._removeNodeIh(preceding_node.unique_id, positionCursor, target_dict)
             }
         }
 
@@ -545,56 +357,68 @@ let mutatorMixin = {
     },
 
     _addGraphicsComponent(uid, the_comp, callback=null) {
-        let mnode = _getMatchingNode(uid, this.state.base_node);
         let new_drawn_components = [...mnode.drawn_components, the_comp];
-        this._changeNode(mnode.unique_id, "drawn_components", new_drawn_components, callback)
+        this._changeNode(uid, "drawn_components", new_drawn_components, callback)
+    },
+
+    _getVirtualNode(uid) {
+        if (window.virtualNodeDict && window.VirtualNodeDict.hasOwnProperty(uid)) {
+            return window.virtualNodeDict(uid)
+        }
     },
 
     _setSpriteParams(uid, pdict, callback=null) {
-        let mnode = _getMatchingNode(uid, this.state.base_node);
-        let vnode = _getMatchingNode(uid, window.virtualNodeTree)
-        let new_base = this.state.base_node
-        for (let lin of mnode.line_list) {
-            for (let nd of lin.node_list) {
+        let target_dict = this.state.base_node;
+        let mnode = target_dict[uid];
+        let vnode = this._getVirtualNode(uid);
+        for (let lin_id of mnode.line_list) {
+            let lin = target_dict[line_id];
+            for (let nd_id of lin.node_list) {
+                let nd = target_dict[nd_id]
                 if (nd.name && pdict.hasOwnProperty(nd.name)) {
-                    new_base = this.changeNodeAndReturn(nd.line_list[0].node_list[0].unique_id, "the_text", String(pdict[nd.name]), new_base)
+                    target_dict = this.changeNodeAndReturn(nd.line_list[0].node_list[0].unique_id, "the_text", String(pdict[nd.name]), target_dict)
                 }
             }
         }
         if (vnode) {
-            for (let lin of vnode.line_list) {
-                for (let nd of lin.node_list) {
+            for (let lin_id of vnode.line_list) {
+                let lin = window.virtualNodeDict[lin_id];
+                for (let nd_id of lin.node_list) {
+                    let nd = window.virtualNodeDict[nd_id];
                     if (nd.name && pdict.hasOwnProperty(nd.name)) {
                         nd.line_list[0].node_list[0].the_text = String(pdict[nd.name])
                     }
                 }
             }
         }
-        for (let nd of mnode.closetLine.node_list) {
+        for (let nd_id of mnode.closetLine.node_list) {
+            let nd = target_dict[nd_id]
             if (nd.name && pdict.hasOwnProperty(nd.name)) {
-                new_base = this.changeNodeAndReturn(nd.line_list[0].node_list[0].unique_id, "the_text", String(pdict[nd.name]), new_base)
+                target_dict = this.changeNodeAndReturn(nd.line_list[0].node_list[0].unique_id, "the_text", String(pdict[nd.name]), target_dict)
             }
         }
         if (vnode) {
             for (let nd of vnode.closetLine.node_list) {
+                let nd = window.virtualNodeDict[nd_id];
                 if (nd.name && pdict.hasOwnProperty(nd.name)) {
                     nd.line_list[0].node_list[0].the_text = String(pdict[nd.name])
                 }
             }
         }
-        this.setState({base_node: new_base}, callback)
+        this.setState({node_dict: target_dict}, callback)
     },
      _zoomBox(uid) {
-        let newBase = this.changeNodeAndReturn(uid, "am_zoomed", true);
+        let target_dict = this.changeNodeAndReturn(uid, "am_zoomed", true);
         this.setState({base_node: newBase, zoomed_node_id: uid})
     },
     _unzoomBox(uid) {
-        let mnode = _getMatchingNode(uid, this.state.base_node);
+        let target_dict = this.state.node_dict;
+        let mnode = target_dict(uid);
         if (mnode.parent == null) {
             return
         }
 
-        let new_base = this.changeNodeAndReturn(uid, "am_zoomed", false);
+        let target_dict = this.changeNodeAndReturn(uid, "am_zoomed", false, target_dict);
 
         let found = false;
         while (!found) {
@@ -602,32 +426,35 @@ let mutatorMixin = {
             if (parent_id == null) {
                 found = true
             }
-            let parent_line = _getMatchingNode(parent_id, this.state.base_node);
-            mnode = _getMatchingNode(parent_line.parent, this.state.base_node);
+            let parent_line = target_dict[parent_id];
+            mnode = target_dict[parent_line.parent];
             if (mnode.am_zoomed) {
                 found = true
             }
         }
 
-        this.setState({base_node: new_base, zoomed_node_id: mnode.unique_id});
+        this.setState({node_dict: target_dict, zoomed_node_id: mnode.unique_id});
     },
 
-    _focusName(uid=null, box_id=null, portal_root="root") {
+    _focusName(uid=null, box_id=null, portal_root="root", target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
+        }
         if (box_id == null) {
             if (uid == null) {
                 uid = document.activeElement.id
             }
-            let mnode = _getMatchingNode(uid, this.state.base_node);
+            let mnode = target_dict[uid];
             if (mnode.kind == "jsbox") {
                 box_id = mnode.unique_id
             }
             else {
                 let line_id = mnode.parent;
-                box_id = this._getParentId(line_id);
+                box_id = target_dict[line_id].parent;
             }
         }
 
-        let currentName = _getMatchingNode(box_id, this.state.base_node).name;
+        let currentName = target_dict[box_id].name;
         let self = this;
         if (currentName == null) {
             this._changeNode(box_id, "name", "", doFocus)
@@ -641,147 +468,138 @@ let mutatorMixin = {
         }
     },
 
-    _healStructure(start_node, parent_node, parent_id=null) {
-        if (start_node.kind.includes("turtle")) {
-            let new_turtlebox = this._newTurtleBox();
-            new_turtlebox.parent = start_node.unique_id;
-            parent_node.node_list.splice(start_node.position, 1, new_turtlebox);
+    _healStructure(start_node_id, target_dict) {
+        let new_dict = target_dict;
+        let start_node = target_dict[start_node_id]
+        if (target_dict[start_node_id].kind.includes("turtle")) {
+            let new_turtle_box_id;
+            [new_turtle_box_id, target_dict] = this._newTurtleBox();
+            new_dict = this._replaceNodeAndReturn(new_turtle_box_id, target_dict[start_node_id].parent,
+                target_dict[start_node_id].position, target_dict)
             return
         }
         this._addMissingParams(start_node);
-        if (parent_id) {
-            start_node.parent = parent_id
-        }
+
         if (start_node.kind == "line") {
-            this._healLine(start_node, true)
+            new_dict = this._healLine(start_node, true, new_dict)
         }
         else if (container_kinds.includes(start_node.kind)) {
-            for (let lin of start_node.line_list) {
+            for (let lin_id of new_dict[start_node_id].line_list) {
                 // noinspection JSPrimitiveTypeWrapperUsage
+                new_dict = this.changeNodeAndReturn(line_id, "parent", start_node_id)
                 lin.parent = start_node.unique_id;
-                this._healStructure(lin, start_node)
+                new_dict = this._healStructure(lin_id, new_dict)
             }
-            this._renumberNodes(start_node.line_list);
-            if (start_node.closetLine) {
-                start_node.closetLine.parent = start_node.unique_id;
-                start_node.amCloset = true;
-                this._healStructure(start_node.closetLine)
+            new_dict = this._renumberNodes(new_dict[start_node_id], new_dict);
+            if (new_dict[start_node_id].closetLine) {
+                new_dict = this._changeNodeMultiAndReturn(new_dict[start_node_id].closetLine,
+                    {"parent": start_node_id, "amCloset": true}, new_dict)
+
+                new_dict = this._healStructure(start_node.closetLine, new_dict)
+            }
+            return new_dict
+        }
+    },
+    _healLine(line_id, recursive=false, target_dict) {
+        let done = false;
+
+        // Merge adjacent text nodes
+        while (!done) {
+            target_dict = this._renumberNodes(line_id,target_dict);
+            done = true;
+            for (let i = 0; i < target_dict[line_id].node_list.length - 1; ++i) {
+                if ((target_dict[new_node_list[i]].kind == "text") && (target_dict[new_node_list[i + 1]].kind == "text")) {
+                    target_dict = this._mergeTextNodes(i, i + 1, line_id, target_dict);
+                    done = false;
+                    break
+                }
+            }
+        }
+        // Insert text node at start if necessary
+        if (target_dict[line_id].node_list[0].kind != "text") {
+            let new_node_id;
+            [new_node_id, target_dict] = this._newTextNode("", target_dict);
+            target_dict = this._insertNodeAndReturn(new_node_id, line_id, 0, target_dict);
+        }
+        // Insert text node at end if necessary
+        if (_.last(target_dict[line_id].node_list).kind != "text") {
+            let new_node_id;
+            [new_node_id, target_dict] = this._newTextNode("");
+            let pos = target_dict[line_id].node_list.length;
+            target_dict = this._insertNodeAndReturn(new_node_id, line_id, pos, target_dict);
+        }
+        done = false;
+
+        // Insert text nodes between adjacent boxes
+        while (!done) {
+            target_dict = this._renumberNodes(line_id, target_dict);
+            done = true;
+            let the_len = target_dict[line_id].node_list.length;
+            for (let i = 0; i < the_len - 1; ++i) {
+                let n1_id = target_dict[line_id].node_list[i];
+                let n2_id = target_dict[line_id].node_list[i + 1];
+                if ((target_dict[n1_id].kind != "text") && (target_dict[n2_id].kind != "text")) {
+                    let new_node_id;
+                    [new_node_id, target_dict] = this._newTextNode("");
+                    target_dict = this._insertNodeAndReturn(new_node_id, line_id, i + 1, target_dict)
+                    done = false;
+                    break
+                }
+            }
+        }
+        ent
+        if (recursive) {
+            for (let node_id of target_dict[line_id].node_list) {
+                this._healStructure(node_id, target_dict)
+
             }
         }
     },
 
-    _addMissingParams(start_node) {
-        let model_node = this._nodeCreators()[start_node.kind]();
+    _addMissingParams(start_node_id, new_dict) {
+        let [model_node_id, temp_dict] = this._nodeCreators()[new_dict[start_node_id].kind]();
+        let model_node = temp_dict[model_node_id];
         for (let param in model_node) {
-            if (!start_node.hasOwnProperty(param)) {
-                start_node[param] = model_node[param]
+            if (!new_dict[start_node_id].hasOwnProperty(param)) {
+                new_dict = this.changeNodeAndReturn(start_node_id, param, model_node[param])
             }
         }
-        if (start_node.kind == "sprite") {
-            let model_main_line = model_node.line_list[0];
-            let current_main_line = start_node.line_list[0];
-            let new_main_nodes = [];
-            for (let mnd of model_main_line.node_list) {
+        if (new_dict[start_node_id].kind == "sprite") {
+            let model_main_line_id = model_node.line_list[0];
+            let current_main_line_id = new_dict[start_node_id].line_list[0];
+            for (let mnd_id of temp_dict[model_main_line_id].node_list) {
                 let found = false;
-                for (let nd of current_main_line.node_list) {
-                    if (nd.name == mnd.name) {
+                let mnd = temp_dict[mnd_id]
+                for (let nd_id of new_dict[current_main_line_id].node_list) {
+                    if (new_dict[nd_id].name == mnd.name) {
                         found = true;
                         break
                     }
                 }
                 if (!found) {
-                    let new_node = _.cloneDeep(mnd);
-                    new_main_nodes.push(new_node)
+                    new_dict = this._createEntryAndReturn(mnd, new_dict);
+                    new_dict = this._insertNodeAndReturn(mnd_id, current_main_line_id,
+                        new_dict[current_main_line_id].node_list.length, new_dict)
                 }
             }
-            current_main_line.node_list = current_main_line.node_list.concat(new_main_nodes);
-            this._renumberNodes(current_main_line.node_list);
-            let model_closet_line = model_node.closetLine;
-            let current_closet_line = start_node.closetLine;
-            let new_closet_nodes = [];
-            for (let mnd of model_closet_line.node_list) {
+            let model_closet_line = temp_dict[model_node.closetLine];
+            let current_closet_line_id = new_dict[start_node_id].closetLine;
+            for (let mnd_id of model_closet_line.node_list) {
                 let found = false;
-                for (let nd of current_closet_line.node_list) {
-                    if (nd.name == mnd.name) {
+                let mnd = temp_dict[mnd_id]
+                for (let nd_id of new_dict[current_closet_line_id].node_list) {
+                    if (new_dict[nd_id].name == mnd.name) {
                         found = true;
                         break
                     }
                 }
                 if (!found) {
-                    let new_node = _.cloneDeep(mnd);
-                    new_closet_nodes.push(new_node)
+                    new_dict = this._createEntryAndReturn(mnd, new_dict);
+                    new_dict = this._insertNodeAndReturn(mnd_id, current_closet_line_id,
+                        new_dict[current_closet_line_id].node_list.length, new_dict)
                 }
             }
-            current_closet_line.node_list = current_closet_line.node_list.concat(new_closet_nodes);
         }
+        return new_dict
     }
-}
-
-function _getMatchingNode(uid, node) {
-    if (node.unique_id == uid) {
-        return node
-    }
-    if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
-        return false
-    }
-    if (node.closetLine) {
-        if (node.closetLine.unique_id == uid) {
-            return node.closetLine
-        }
-        for (let nd of node.closetLine.node_list) {
-            let match = _getMatchingNode(uid, nd);
-            if (match) {
-                return match
-            }
-        }
-    }
-    for (let lin of node.line_list) {
-        if (lin.unique_id == uid) {
-            return lin
-        }
-        for (let nd of lin.node_list) {
-            let match = _getMatchingNode(uid, nd);
-            if (match) {
-                return match
-            }
-        }
-    }
-    return false
-}
-
-function _getMatchingNodePath(uid, path_list, node) {
-    path_list.push(node)
-    if (node.unique_id == uid) {
-        return path_list
-    }
-    if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
-        return false
-    }
-    if (node.closetLine) {
-        if (node.closetLine.unique_id == uid) {
-            path_list.push(node.closetLine)
-            return path_list
-        }
-        for (let nd of node.closetLine.node_list) {
-            let match = _getMatchingNodePath(uid, [node.closetLine], nd);
-            if (match) {
-                path_list = path_list.concat(match)
-                return path_list
-            }
-        }
-    }
-    for (let lin of node.line_list) {
-        if (lin.unique_id == uid) {
-            path_list.push(lin)
-            return path_list
-        }
-        for (let nd of lin.node_list) {
-            let match = _getMatchingNodePath(uid, [lin], nd);
-            if (match) {
-                path_list = path_list.concat(match)
-                return path_list
-            }
-        }
-    }
-    return false
 }

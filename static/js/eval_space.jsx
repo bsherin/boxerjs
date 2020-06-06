@@ -68,9 +68,9 @@ async function _mouseClickOnGraphics(graphics_box_id, base_node) {
     await doExecution(the_code_line, graphics_box_id, base_node)
 }
 
-async function doExecution(the_code_line, box_id, base_node) {
+async function doExecution(the_code_line, box_id, node_dict) {
     // window.context_functions = {};
-    window.virtualNodeTree = _.cloneDeep(base_node);
+    window.virtualNodeDict = _.cloneDeep(node_dict);
     // window.tell_function_counter = 0;
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id);
 
@@ -109,46 +109,44 @@ function getBoxValue(boxName, startId) {
 }
 
 
-function repairCopiedDrawnComponents(node, recursive=true) {
-    if (node && typeof(node) == "object" && node.hasOwnProperty("kind")){
+function repairCopiedDrawnComponents(node, recursive = true, target_dict) {
+    if (node && typeof node == "object" && node.hasOwnProperty("kind")) {
         if (container_kinds.includes(node.kind)) {
-            repairTrueNode(node)
-         }
+            repairTrueNode(node);
+        }
         if (node.kind == "line") {
-            for (let nd of node.node_list) {
-                repairTrueNode(nd)
+            for (let ndid of node.node_list) {
+                repairTrueNode(target_dict[ndid]);
             }
         }
-    }
-    else if (Array.isArray(node)) {
+    } else if (Array.isArray(node)) {
         for (let item of node) {
-            repairCopiedDrawnComponents(item, recursive)
+            repairCopiedDrawnComponents(item, recursive, target_dict);
         }
     }
     function repairTrueNode(anode) {
-            if (anode.kind == "graphics") {
-                let new_drawn_components  = [];
-                for (let comp of anode.drawn_components)  {
-                    let Dcomp = shape_classes[comp.type];
-                    let new_comp = <Dcomp {...comp.props}/>;
-                    new_drawn_components.push(new_comp)
-                }
-                anode.drawn_components = new_drawn_components
+        if (anode.kind == "graphics") {
+            let new_drawn_components = [];
+            for (let comp of anode.drawn_components) {
+                let Dcomp = shape_classes[comp.type];
+                let new_comp = React.createElement(Dcomp, comp.props);
+                new_drawn_components.push(new_comp);
             }
-            if (recursive && container_kinds.includes(anode.kind)) {
-                for (let lin of anode.line_list) {
-                    for (let nd of lin.node_list) {
-                        repairCopiedDrawnComponents(nd, true)
-                    }
-                }
-                if (anode.closetLine) {
-                    for (let nd of anode.closetLine.node_list) {
-                        repairCopiedDrawnComponents(nd, true)
-                    }
+            anode.drawn_components = new_drawn_components;
+        }
+        if (recursive && container_kinds.includes(anode.kind)) {
+            for (let lin of target_dict[anode.line_list]) {
+                for (let ndid of lin.node_list) {
+                    repairCopiedDrawnComponents(target_dict[ndid], true);
                 }
             }
+            if (anode.closetLine) {
+                for (let ndid of target_dict[target_dict[anode].closetLine].node_list) {
+                    repairCopiedDrawnComponents(target_dict[ndid], true);
+                }
+            }
+        }
     }
-
 }
 
 async function changeGraphics(boxname, newval, my_node_id, eval_in_place=null) {
