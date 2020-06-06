@@ -1,11 +1,12 @@
 
 import _ from 'lodash';
 import React from "react";
-import {findNamedBoxesInScope,_createLocalizedFunctionCall, _getMatchingNode, getPortTarget, makeChildrenNonVirtual,
+import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget, makeChildrenNonVirtual,
     dataBoxToValue, boxObjectToValue, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {shape_classes} from "./pixi_shapes.js";
 import {data_kinds, container_kinds} from "./shared_consts.js";
 import {isKind, degreesToRadians, radiansToDegrees} from "./utilities.js"
+import {_getMatchingNode} from "./mutators.js";
 
 export {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics}
 

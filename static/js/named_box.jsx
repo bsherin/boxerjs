@@ -35,6 +35,9 @@ function withName(WrappedComponent) {
         }
 
         shouldComponentUpdate(nextProps, nextState) {
+            if (window.freeze && window._running > 0){
+                return false
+            }
             return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
                 || this.props.funcs.containsPort(this.props.unique_id)
         }
@@ -424,6 +427,9 @@ class EditableTag extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
+        if (window.freeze && window._running > 0){
+                return false
+            }
         return this.props.focusingMe || !propsAreEqual(nextProps, this.props, ["funcs"])
     }
 

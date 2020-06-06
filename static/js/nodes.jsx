@@ -15,7 +15,7 @@ import * as PIXI from "pixi.js";
 import {data_kinds} from "./shared_consts.js";
 
 import {withName, NamedBox_propTypes, NamedBox_defaultProps} from "./named_box.js";
-import {_getMatchingNode} from "./transpile";
+import {_getMatchingNode} from "./mutators.js";
 import {Button} from "@blueprintjs/core";
 
 export {DataBox, PortBox, JsBox, loader}
@@ -394,6 +394,9 @@ class TextNode extends React.Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
+        if (window.freeze && window._running > 0){
+                return false
+            }
         return !propsAreEqual(nextProps, this.props, ["funcs"]) || this.props.setFocus
     }
 
@@ -826,6 +829,14 @@ class DataBoxRaw extends React.Component {
         doBinding(this);
     }
 
+    shouldComponentUpdate(nextProps, nextState) {
+        if (window.freeze && window._running > 0){
+                return false
+            }
+        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
+            || this.props.funcs.containsPort(this.props.unique_id)
+    }
+
     render() {
         let dbclass;
         if (this.props.closed) {
@@ -1132,11 +1143,15 @@ class DataboxLine extends React.Component {
     // If I have shouldComponentUpdate here I run into focus problems
     // When a new box is created it doesn't clear the setFocus in the text node
 
-    // shouldComponentUpdate(nextProps, nextState) {
-    //     let pequal = propsAreEqual(nextProps, this.props);
-    //     let sequal = propsAreEqual(nextState, this.state);
-    //     return !pequal || !sequal
-    // }
+    shouldComponentUpdate(nextProps, nextState) {
+        if (window.freeze && window._running > 0){
+                return false
+            }
+        return true
+        // let pequal = propsAreEqual(nextProps, this.props);
+        // let sequal = propsAreEqual(nextState, this.state);
+        // return !pequal || !sequal
+    }
 
     _handleSelection(selectedKeys) {
         this.props.funcs.setSelected(selectedKeys);

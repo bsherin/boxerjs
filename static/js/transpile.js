@@ -3,9 +3,10 @@ import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
 import {guid} from "./utilities.js";
 import {container_kinds, data_kinds, graphics_kinds} from "./shared_consts.js";
+import {_getMatchingNode} from "./mutators.js";
 
 export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, getPortTarget, makeChildrenNonVirtual,
-    _getMatchingNode, findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
+    findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
 
 
 // This is the first thing called to begin processing of either a single line executed
@@ -781,38 +782,6 @@ function dataBoxToString(dbox, alt_name=null) {
     }
 }
 
-
-function _getMatchingNode(uid, node) {
-    if (node.unique_id == uid) {
-            return node
-    }
-    if (!container_kinds.includes(node.kind) || (node.line_list.length == 0)) {
-        return false
-    }
-    if (node.closetLine) {
-        if (node.closetLine.unique_id == uid) {
-            return node.closetLine
-        }
-        for (let nd of node.closetLine.node_list) {
-            let match = _getMatchingNode(uid, nd);
-            if (match) {
-                return match
-            }
-        }
-    }
-    for (let lin of node.line_list) {
-        if (lin.unique_id == uid) {
-            return lin
-        }
-        for (let nd of lin.node_list) {
-            let match = _getMatchingNode(uid, nd);
-            if (match) {
-                return match
-            }
-        }
-    }
-    return false
-}
 
 function getPortTarget(portNode, base_node) {
     if (portNode.target == null) return null;
