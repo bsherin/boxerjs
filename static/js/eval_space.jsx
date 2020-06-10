@@ -6,7 +6,6 @@ import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget, makeC
 import {shape_classes} from "./pixi_shapes.js";
 import {data_kinds, container_kinds} from "./shared_consts.js";
 import {isKind, degreesToRadians, radiansToDegrees} from "./utilities.js"
-import {_getMatchingNode} from "./mutators.js";
 
 export {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics}
 
@@ -16,13 +15,13 @@ var _base_node;
 let delay_amount = 1;
 
 
-function changeNodePromise(uid, param_name, new_val) {
-    return new Promise(function(resolve, reject) {
-        window.changeNode(uid, param_name, new_val, (data)=>{
-            resolve(data)
-        })
-    })
-}
+// function changeNodePromise(uid, param_name, new_val) {
+//     return new Promise(function(resolve, reject) {
+//         window.changeNode(uid, param_name, new_val, (data)=>{
+//             resolve(data)
+//         })
+//     })
+// }
 
 function delay(msecs) {
     return new Promise(resolve => setTimeout(resolve, msecs));
@@ -70,13 +69,15 @@ async function _mouseClickOnGraphics(graphics_box_id, base_node) {
 
 async function doExecution(the_code_line, box_id, node_dict) {
     // window.context_functions = {};
-    window.virtualNodeDict = _.cloneDeep(node_dict);
+    if (window._running == 0) {
+        window.virtualNodeDict = _.cloneDeep(node_dict);
+    }
     // window.tell_function_counter = 0;
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id);
 
     try {
         window._running += 1;
-        let _result = await getBoxValue(_inserted_start_node.name, box_id)()
+        let _result = await getBoxValue(window.virtualNodeDict[_inserted_start_node.unique_id].name, box_id)()
         window._running -= 1;
         return _result;
     } catch (error) {
@@ -156,9 +157,9 @@ async function changeGraphics(boxname, newval, my_node_id, eval_in_place=null) {
         eval_in_place = eval
     }
     let _my_context_name = await eval_in_place("_context_name");
-    let mnode = findNamedNode(boxname, my_node_id, _my_context_name);
+    let mnode = findNamedNode(boxname, my_node_id);
     if (mnode.kind == "port") {
-        mnode = _getMatchingNode(mnode.target, window.getBaseNode())
+        mnode = window.getNodeDict()[mnode.target]
     }
     if (!mnode || mnode.virtual || !isKind(mnode, "graphics")) {
         return new Promise(function (resolve, reject) {
@@ -206,7 +207,7 @@ async function atan(y, x) {
 async function change(boxname, newval, my_node_id) {
     let mnode = findNamedNode(boxname, my_node_id);
     if (mnode.kind == "port") {
-        mnode = _getMatchingNode(mnode.target, window.virtualNodeTree)
+        mnode = window.virtualNodeDict[mnode.target]
     }
     if (!mnode) {
         return new Promise(function(resolve, reject) {
@@ -220,45 +221,63 @@ async function change(boxname, newval, my_node_id) {
             })
         }
 
-        let _newval = _.cloneDeep(newval);
-        window.updateIds(_newval.line_list);
-        for (let lin of _newval.line_list) {
-            lin.parent = mnode.unique_id
+        let new_line_list = [];
+        let target_dict = this.getNodeDict();
+        for (let lin_id of _newval.line_list) {
+            let new_line_id;
+            [new_line_id, window.virtualNodeDict] = window.cloneLine(lin_id, window.virtualNodeDict, window.virtualNodeDict, true)
+            new_line_list.push(new_line_id)
         }
-        mnode.line_list = _newval.line_list
+
+        mnode.line_list = new_line_list
 
         if (!mnode.virtual) {
-            makeChildrenNonVirtual(_newval)
+
+            let temp_dict = {};
+            for (let lin_id in new_line_list) {
+                [lin_id, temp_dict] = window.cloneLine(lin_id, window.virtualNodeDict, temp_dict, false);
+                makeChildrenNonVirtual(lin_id, temp_dict)
+            }
+            let target_dict =window.getNodeDict();
+            for (let lin_id in new_line_list) {
+                [lin_id, target_dict] = window.cloneLine(lin_id, temp_dict, target_dict, false);
+            }
             return new Promise(function (resolve, reject) {
-                window.changeNode(mnode.unique_id, "line_list", _newval.line_list, async (data) => {
+                window.changeNode(mnode.unique_id, "line_list", new_line_list, async (data) => {
                     await delay(delay_amount);
                     resolve(data)
-                })
+                }, target_dict)
             })
         }
 
     }
     else {
-        let newtext = window.newTextNode(String(newval));
-        let newline = window.newLineNode([newtext]);
-        newline.parent = mnode.unique_id;
-        mnode.line_list = [newline];
+
+        let newtext, newline;
+        [newtext_id, window.virtualNodeDict] = window.newTextNode(String(newval), window.virtualNodeDict);
+        [newline_id, window.virtualNodeDict] = window.newLineNode([newtext_id], window.virtualNodeDict);
+        window.virtualNodeDict[newline_id].parent = mnode.unique_id;
+        mnode.line_list = [newline_id];
         if (!mnode.virtual) {
-            makeChildrenNonVirtual(mnode)
-            return new Promise(function (resolve, reject) {
-                window.changeNode(mnode.unique_id, "line_list",
-                    [newline], async (data) => {
-                        await delay(delay_amount);
-                        resolve(data)
-                    })
-            })
+            window.cloneNodetoTrueND(newline_id, window.virtualNodeDict, false, ()=>{
+                return new Promise(function (resolve, reject) {
+                    window.changeNode(mnode.unique_id, "line_list",
+                        [newline_id], async (data) => {
+                            await delay(delay_amount);
+                            resolve(data)
+                        })
+                })
+            });
+
         }
     }
 }
 
 async function makeColor(r, g, b) {
     let color_string = `${r} ${g} ${b}`;
-    return window.newColorBox(color_string)
+    let new_id
+    [new_id, window.virtualNodeDict] =  window.newColorBox(color_string, window.virtual_node_dict)
+    return {vid: new_id}
 }
 
 async function snap(gbox) {

@@ -14,11 +14,13 @@ export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, g
 // It creates a temporary doit node, wrapped around the line of code, then inserts it
 // as a virtual doit node in the hierarchy.
 function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
-    let local_the_code_line = _.cloneDeep(the_code_line);
-    let _tempDoitNode = window.newDoitNode([local_the_code_line]);
-    _tempDoitNode.name = "_tempFunc";
-    let _start_node = _getMatchingNode(box_id, window.virtualNodeTree);
-    let _inserted_start_node = insertVirtualNode(_tempDoitNode, _start_node);
+    let temp_dict = {};
+    let local_code_line_id, _tempDoitNodeId;
+    [local_code_line_id, window.virtualNodeDict] = window.cloneNode(the_code_line.unique_id, null, window.virtualNodeDict, true);
+    [_tempDoitNodeId, window.virtualNodeDict] = window.newDoitNode([local_code_line_id], window.virtualNodeDict);
+    window.virtualNodeDict[_tempDoitNodeId].name = "_tempFunc";
+    window.virtualNodeDict[_tempDoitNodeId].virtual = true
+    let _inserted_start_node = insertVirtualNode(_tempDoitNodeId, box_id);
     _inserted_start_node.ports = ports
     return _inserted_start_node
 }
@@ -29,11 +31,11 @@ function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
 function _convertFunctionNode(doitNode) {
     try {
 
-        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, window.virtualNodeTree);
+        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, window.virtualNodeDict);
 
         // Identify the types of the named boxes found
         // Get the arguments needed for each doit and jsbox
-        let context = preprocessNamedBoxes(_named_nodes, window.virtualNodeTree);
+        let context = preprocessNamedBoxes(_named_nodes, window.virtualNodeDict);
         context.doitId = doitNode.unique_id;
 
         // Get the input names for the box we're converting
@@ -51,26 +53,29 @@ function _convertFunctionNode(doitNode) {
         // This makes them easy to refer to
         let inserted_lines = 0;
         for (let input_name of input_names) {
-            let new_node = window.newDataBoxNode();
-            new_node.name = input_name;
-            let inserted_node = insertVirtualNode(new_node, doitNode)
-            context.local_var_nodes[input_name] = inserted_node.unique_id
+            let new_node;
+            [new_node_id, window.virtualNodeDict] = window.newDataBoxNode([], false, window.virtualNodeDict);
+            let inserted_node = window.virtualNodeDict[new_node_id];
+            inserted_node.name = input_name;
+            insertVirtualNode(new_node_id, doitNode.unique_id);
+            context.local_var_nodes[input_name] = inserted_node.unique_id;
         }
 
         // Add virtual ports corresponding to ports attached to this doit node
         // This is a mechanism for getting input arguments into tells
         if (doitNode.hasOwnProperty("ports") && doitNode.ports) {
             for (let portname in doitNode.ports) {
-                let new_port = window.newPort(doitNode.ports[portname])
-                new_port.name = portname
-                let inserted_port = insertVirtualNode(new_port, doitNode)
+                let new_port_id = window.newPort(doitNode.ports[portname], window.virtualNodeDict);
+                let inserted_port = window.virtualNodeDict[new_port_id]
+                inserted_port.name = portname
+                insertVirtualNode(new_port_id, doitNode.unique_id)
                 context.data_boxes[portname] = inserted_port
             }
         }
 
         // Find all called doit boxes and copy them locally
         // Then recursively call this function to convert them
-        let called_doits = findCalledDoits(doitNode, window.virtualNodeTree, context);
+        let called_doits = findCalledDoits(doitNode, window.virtualNodeDict, context);
         let called_doit_string = "";
         context.copied_doits = {};
 
@@ -78,7 +83,8 @@ function _convertFunctionNode(doitNode) {
             if (called_doit.node.parent == doitNode.unique_id) {
                 continue
             }
-            let vnode = insertVirtualNode(called_doit.node, doitNode);
+            let vnode = called_doit.node;
+            insertVirtualNode(vnode.unique_id, doitNode);
             // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
                 node: vnode,
@@ -139,13 +145,13 @@ function _convertFunctionNode(doitNode) {
 // StartBoxNode itself is included
 // It first looks inside startBoxNode using getContainedNames
 // Then it searches outward
-function findNamedBoxesInScope(startBoxNode, base_node, name_list=null, current_turtle_id=null) {
+function findNamedBoxesInScope(startBoxNode, node_dict, name_list=null, current_turtle_id=null) {
     let named_nodes = [];
     if (!name_list) {
         name_list = []
     }
     if (container_kinds.includes(startBoxNode.kind) || startBoxNode.kind == "port") {
-        let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(startBoxNode, base_node, name_list, current_turtle_id);
+        let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(startBoxNode, node_dict, name_list, current_turtle_id);
         name_list = name_list.concat(sub_names);
         named_nodes = named_nodes.concat(sub_nodes);
         current_turtle_id = new_current_turtle_id
@@ -154,12 +160,12 @@ function findNamedBoxesInScope(startBoxNode, base_node, name_list=null, current_
     if (startBoxNode.parent == null) {
         return [named_nodes, current_turtle_id]
     }
-    let parentLine = _getMatchingNode(startBoxNode.parent, base_node);
+    let parentLine = node_dict[startBoxNode.parent];
     if (!parentLine) {
         return [named_nodes, current_turtle_id]
     }
-    let parentBox = _getMatchingNode(parentLine.parent, base_node);
-    let [new_named_nodes, new_current_turtle_id] = findNamedBoxesInScope(parentBox, base_node, name_list, current_turtle_id);
+    let parentBox = node_dict[parentLine.parent];
+    let [new_named_nodes, new_current_turtle_id] = findNamedBoxesInScope(parentBox, node_dict, name_list, current_turtle_id);
     named_nodes = named_nodes.concat(new_named_nodes);
     current_turtle_id = new_current_turtle_id;
     return [named_nodes, current_turtle_id]
@@ -170,7 +176,7 @@ function findNamedBoxesInScope(startBoxNode, base_node, name_list=null, current_
 // It builds lists of the names and nodes found, including a port name and port node
 // If theNode is a port then it looks for named nodes inside the port, but ignores the name of the targeted box.
 // If it discovers a transparent box then it is called recursively.
-function getContainedNames(theNode, base_node, name_list, current_turtle_id) {
+function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
 
     let new_names = [];
     let new_nodes = [];
@@ -186,21 +192,22 @@ function getContainedNames(theNode, base_node, name_list, current_turtle_id) {
         }
     }
     if (theNode.kind == "port") {
-        theNode = getPortTarget(theNode, base_node)
+        theNode = getPortTarget(theNode, node_dict)
     }
 
     if (theNode.closetLine) {
-        processContainedLine(theNode.closetLine)
+        processContainedLine(node_dict[theNode.closetLine])
     }
 
     if (container_kinds.includes(theNode.kind)) {
-        for (let lin of theNode.line_list) {
-            processContainedLine(lin)
+        for (let lin_id of theNode.line_list) {
+            processContainedLine(node_dict[lin_id])
         }
     }
 
     function processContainedLine(lin) {
-        for (let node of lin.node_list) {
+        for (let node_id of lin.node_list) {
+            let node = node_dict[node_id];
             if (!current_turtle_id && (node.kind == "sprite")) {
                 current_turtle_id = node.unique_id;
             }
@@ -214,7 +221,7 @@ function getContainedNames(theNode, base_node, name_list, current_turtle_id) {
                 node = getPortTarget(node, base_node)
             }
             if (container_kinds.includes(node.kind) && node.transparent) {
-                let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, base_node, name_list.concat(new_names), current_turtle_id);
+                let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, node_dict, name_list.concat(new_names), current_turtle_id);
                 new_names = new_names.concat(sub_names);
                 new_nodes = new_nodes.concat(sub_nodes);
                 current_turtle_id = new_current_turtle_id
@@ -226,82 +233,76 @@ function getContainedNames(theNode, base_node, name_list, current_turtle_id) {
 }
 
 
-function insertVirtualNode(nodeToInsert, boxToInsertIn) {
-    let lnodeToInsert = _.cloneDeep(nodeToInsert);
-    let new_id = guid();
-    lnodeToInsert.unique_id = new_id;
-    if (container_kinds.includes(lnodeToInsert.kind)) {
-        window.updateIds(lnodeToInsert.line_list);
-        for (let lin of lnodeToInsert.line_list) {
-            lin.parent = new_id
-        }
-        if (lnodeToInsert.closetLine) {
-            lnodeToInsert.closetLine.unique_id = guid();
-            lnodeToInsert.closetLine.parent = new_id
-        }
-    }
-    lnodeToInsert.virtual = true;
+function insertVirtualNode(nodeToInsertId, boxToInsertInId) {
+    let boxToInsertIn = window.virtualNodeDict[boxToInsertInId];
+    let cline_id;
     if (!boxToInsertIn.closetLine) {
-        boxToInsertIn.closetLine = window.newClosetLine();
-        boxToInsertIn.closetLine.parent = boxToInsertIn.unique_id;
+        [cline_id, window.virtualNodeDict] = window.newClosetLine(window.virtualNodeDict);
+        window.virtualNodeDict[cline_id].parent = boxToInsertInId;
+        boxToInsertIn.closetLine = cline_id;
     }
-    lnodeToInsert.parent = boxToInsertIn.closetLine.unique_id;
-    boxToInsertIn.closetLine.node_list.push(lnodeToInsert)
-    window.healLine(boxToInsertIn.closetLine)
+    else {
+        cline_id = boxToInsertIn.closetLine;
+    }
+    window.virtualNodeDict[nodeToInsertId].parent = window.virtualNodeDict[cline_id].unique_id;
+    window.virtualNodeDict[cline_id].node_list.push(nodeToInsertId);
+    window.virtualNodeDict = window.healLine(cline_id, false, window.virtualNodeDict)
 
-    makeChildrenVirtual(lnodeToInsert);
+    makeChildrenVirtual(nodeToInsertId);
 
-    return lnodeToInsert;
+    return window.virtualNodeDict[nodeToInsertId]
 }
 
-function makeChildrenVirtual(node) {
+function makeChildrenVirtual(node_id) {
+    let node = window.virtualNodeDict[node_id];
     if (container_kinds.includes(node.kind)) {
-        for (let line of node.line_list) {
-            line.virtual = true;
-            for (let lnode of line.node_list) {
-                lnode.virtual = true;
-                makeChildrenVirtual(lnode)
+        for (let line_id of node.line_list) {
+            let the_line = window.virtualNodeDict[line_id];
+            the_line.virtual = true;
+            for (let lnode_id of the_line.node_list) {
+                window.virtualNodeDict[lnode_id].virtual = true;
+                makeChildrenVirtual(lnode_id)
             }
         }
         if (node.closetLine) {
             node.closetLine.virtual = true;
-            for (let lnode of node.closetLine.node_list) {
-                lnode.virtual = true;
-                makeChildrenVirtual(lnode)
+            for (let lnode_id of node.closetLine.node_list) {
+                window.virtualNodeDict[lnode_id].virtual= true;
+                makeChildrenVirtual(lnode_id)
             }
         }
     }
 }
 
-function makeChildrenNonVirtual(node) {
-    if (container_kinds.includes(node.kind)) {
-        for (let line of node.line_list) {
-            line.virtual = false;
-            for (let lnode of line.node_list) {
-                lnode.virtual = false;
-                makeChildrenVirtual(lnode)
+function makeChildrenNonVirtual(lin_id, nd) {
+    let the_line = nd[lin_id];
+    for (let nd_id in the_line.node_list) {
+        let anode = temp_dict[nd_id];
+        if (container_kinds.includes(anode.kind)) {
+            for (let line_id of anode.line_list) {
+                aline = nd[line_id];
+                aline.virtual = false;
             }
-        }
-        if (node.closetLine) {
-            node.closetLine.virtual = false;
-            for (let lnode of node.closetLine.node_list) {
-                lnode.virtual = true;
-                makeChildrenVirtual(lnode)
+            if (anode.closetLine) {
+                nd[anode.closetLine].virtual = false;
+                makeChildrenNonVirtual(anode.closetLine, nd)
             }
         }
     }
+
 }
 
 
 // Finds doit boxes that are called
 // The names are adjusted if we have a portal to a doit box
-function findCalledDoits(doitNode, virtualNodeTree, context, called_doits = []) {
-    for (let line of doitNode.line_list){
-        let tline = tokenizeLine(line);
+function findCalledDoits(doitNode, nd, context, called_doits = []) {
+    for (let line_id of doitNode.line_list){
+        let line = nd[line_id];
+        let tline = tokenizeLine(line_id, nd);
         for (let token of tline) {
             if (typeof(token) == "object") {
                 if (token.name == null && token.kind == "doitbox") {
-                    called_doits = called_doits.concat(findCalledDoits(token, virtualNodeTree, context, called_doits))
+                    called_doits = called_doits.concat(findCalledDoits(token, nd, context, called_doits))
                 }
             }
             else {
@@ -322,20 +323,20 @@ function findCalledDoits(doitNode, virtualNodeTree, context, called_doits = []) 
 // building three dictionaries, indexed by name, data_boxes, doit_boxes, js_boxes
 // All data kinds are treated the same way
 // If we get a port, then we index by the port name, but put the node context as thevalue
-function preprocessNamedBoxes(namedNodes, virtualNodeTree) {
+function preprocessNamedBoxes(namedNodes, virtualNodeDict) {
     let doit_boxes = {};
     let data_boxes = {};
     let js_boxes = {};
     for (let node of namedNodes) {
         let name = node.name;
         if (node.kind == "port") {
-            node = getPortTarget(node, virtualNodeTree)
+            node = getPortTarget(node, virtualNodeDict)
         }
         if (data_kinds.includes(node.kind)) {
             data_boxes[name] = node;
         }
         else if (node.kind == "doitbox") {
-            let first_tokenized = tokenizeLine(node.line_list[0]);
+            let first_tokenized = tokenizeLine(node.line_list[0], virtualNodeDict);
             let arglist;
             if (first_tokenized[0] == "input") {
                 arglist = first_tokenized.slice(1,);
@@ -378,11 +379,13 @@ function preprocessNamedBoxes(namedNodes, virtualNodeTree) {
 
 // Loop over a list of lines converting them
 function convertStatementList(line_list, context, return_last_line=false) {
+    let nd = window.virtualNodeDict;
     let converted_string = "";
     let counter = 0;
-    for (let line of line_list) {
+    for (let line_id of line_list) {
+        let line = nd[line_id];
         if (line.amCloset) continue;
-        let token_list = tokenizeLine(line);
+        let token_list = tokenizeLine(line_id, nd);
         counter += 1;
         let is_last_line = return_last_line && counter == line_list.length;
         converted_string += convertStatementLine(token_list, context, is_last_line) + ";\n"
@@ -505,8 +508,8 @@ function convertStatementLine(token_list, context, is_last_line=false) {
 }
 
 function findNamedNode(name, starting_id) {
-    let start_node = _getMatchingNode(starting_id, window.virtualNodeTree);
-    let [named_nodes, tid] = findNamedBoxesInScope(start_node, window.virtualNodeTree);
+    let start_node = window.virtualNodeDict[starting_id];
+    let [named_nodes, tid] = findNamedBoxesInScope(start_node, window.virtualNodeDict);
     for (let node of named_nodes) {
         if (node.name == name) {
             return node
@@ -524,14 +527,18 @@ function convertTell(token_list, context) {
     // the context built earlier. There's nothing special to do
     let startBox = findNamedNode(token_list[1], context.doitId);
     let box_id = startBox.unique_id;
-    let the_node;
+    let node_id, the_node;
     if (typeof(token_list[2]) == "object") {
         the_node = token_list[2]
+        node_id = the_node.unique_id;
     }
     else {
-        the_node = window.newTextNode(token_list[2]);
+        [node_id, window.virtualNodeDict] = window.newTextNode(token_list[2], window.virtualNodeDict);
+        the_node = window.virtualNodeDict[node_id]
     }
-    let the_code_line = window.newLineNode([the_node]);
+    let the_code_line_id, the_code_line;
+    [the_code_line_id, window.virtualNodeDict] = window.newLineNode([node_id]);
+    the_code_line = window.virtualNodeDict[the_code_line_id];
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes);
 
     return _inserted_start_node
@@ -546,11 +553,12 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
     let first_token;
     let tokens_consumed = 1;
     let new_consuming_line = _.cloneDeep(consuming_line);
+    let nd = window.virtualNodeDict;
 
     // If the first token is an object, then it is treated as the next argument in its entirety
     if (typeof(first_node) == "object") {
         if (first_node.kind == "port") {
-            first_node = getPortTarget(first_node, window.virtualNodeTree)
+            first_node = getPortTarget(first_node, nd)
         }
         if (first_node.kind == "doitbox") {
             let fstring = convertStatementList(first_node.line_list, context, true);
@@ -558,9 +566,9 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
         }
         // If we have a one line databox, then we can attempt to extract the contents as a string or number
         else if (first_node.kind == "databox" && first_node.line_list.length == 1) {
-            let first_line = first_node.line_list[0];
+            let first_line = nd[first_node.line_list[0]];
             if (first_line.node_list.length == 1) {
-                let the_text = first_line.node_list[0].the_text.trim();
+                let the_text = nd[first_line.node_list[0]].the_text.trim();
                 if (!the_text) {
                     first_token = '""';
                 }
@@ -625,7 +633,7 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
                             throw `Not enough arguments for ${first_node}`
                         }
                     }
-                    let consume_result = consumeAndConvertNextArgument(new_consuming_line, virtualNodeTree, context);
+                    let consume_result = consumeAndConvertNextArgument(new_consuming_line, context);
                     new_consuming_line = new_consuming_line.slice(consume_result[1]);
                     tokens_consumed += consume_result[1];
                     converted_args.push(consume_result[0])
@@ -695,30 +703,31 @@ function consumeAndConvertNextStatementList(consuming_line, context) {
     }
 }
 
-function jsBoxToString(jsbox, alt_name) {
-    let var_name;
-    if (alt_name == null) {
-        var_name = jsbox.name
-    }
-    else {
-        var_name = alt_name
-    }
-    return `
-    async function ${var_name} {${jsbox.the_code}}
-    `
-}
-
-function boxObjectToString(dbox, alt_name=null) {
-    let var_name;
-    if (alt_name == null) {
-        var_name = dbox.name
-    }
-    else {
-        var_name = alt_name
-    }
-    let dbstring = JSON.stringify(dbox);
-    return `var ${var_name} = ${dbstring}`
-}
+// function jsBoxToString(jsbox, alt_name) {
+//     let var_name;
+//     if (alt_name == null) {
+//         var_name = jsbox.name
+//     }
+//     else {
+//         var_name = alt_name
+//     }
+//     return `
+//     async function ${var_name} {${jsbox.the_code}}
+//     `
+// }
+//
+// // not used
+// function boxObjectToString(dbox, alt_name=null) {
+//     let var_name;
+//     if (alt_name == null) {
+//         var_name = dbox.name
+//     }
+//     else {
+//         var_name = alt_name
+//     }
+//     let dbstring = JSON.stringify(dbox);
+//     return `var ${var_name} = ${dbstring}`
+// }
 
 function boxObjectToValue(dbox) {
     let dbstring = JSON.stringify(dbox);
@@ -728,10 +737,11 @@ function boxObjectToValue(dbox) {
 }
 
 function dataBoxToValue(dbox) {
+    let nd = window.virtualNodeDict;
     if (dbox.line_list.length == 1){
-        let the_line = dbox.line_list[0];
+        let the_line = nd[dbox.line_list[0]];
         if (the_line.node_list.length == 1) {
-            let the_text = the_line.node_list[0].the_text.trim();
+            let the_text = nd[the_line.node_list[0]].the_text.trim();
             if (!the_text) {
                 return null
             }
@@ -751,46 +761,48 @@ function dataBoxToValue(dbox) {
     }
 }
 
-function dataBoxToString(dbox, alt_name=null) {
-    let var_name;
-    if (alt_name == null) {
-        var_name = dbox.name
-    }
-    else {
-        var_name = alt_name
-    }
-    if (dbox.line_list.length == 1){
-        let the_line = dbox.line_list[0];
-        if (the_line.node_list.length == 1) {
-            let the_text = the_line.node_list[0].the_text.trim();
-            if (!the_text) {
-                return `var ${var_name} = null`
-            }
-            if (isNaN(the_text)) {
-                return `var ${var_name} = "${the_text}"`
-            }
-            else {
-                return `var ${var_name} = ${the_text}`
-            }
-        }
-        else {
-            return boxObjectToString(dbox, var_name)
-        }
-    }
-    else {
-        return boxObjectToString(dbox, var_name)
-    }
-}
+
+// // this doesn't seem to be used
+// function dataBoxToString(dbox, alt_name=null) {
+//     let var_name;
+//     if (alt_name == null) {
+//         var_name = dbox.name
+//     }
+//     else {
+//         var_name = alt_name
+//     }
+//     if (dbox.line_list.length == 1){
+//         let the_line = dbox.line_list[0];
+//         if (the_line.node_list.length == 1) {
+//             let the_text = the_line.node_list[0].the_text.trim();
+//             if (!the_text) {
+//                 return `var ${var_name} = null`
+//             }
+//             if (isNaN(the_text)) {
+//                 return `var ${var_name} = "${the_text}"`
+//             }
+//             else {
+//                 return `var ${var_name} = ${the_text}`
+//             }
+//         }
+//         else {
+//             return boxObjectToString(dbox, var_name)
+//         }
+//     }
+//     else {
+//         return boxObjectToString(dbox, var_name)
+//     }
+// }
 
 
-function getPortTarget(portNode, base_node) {
+function getPortTarget(portNode, node_dict) {
     if (portNode.target == null) return null;
-    let targetNode = _getMatchingNode(portNode.target, base_node);
+    let targetNode = node_dict(portNode.target);
     return targetNode
 }
 
 function extractArgs(doitBoxNode) {
-    let first_tokenized = tokenizeLine(doitBoxNode.line_list[0]);
+    let first_tokenized = tokenizeLine(doitBoxNode.line_list[0], window.virtualNodeDict);
     let arglist;
     if (first_tokenized[0] == "input") {
         arglist = first_tokenized.slice(1,);
@@ -809,9 +821,11 @@ let eval_in_place_string = `async function eval_in_place(estring) {
     }
 `;
 
-function tokenizeLine(line) {
+function tokenizeLine(line_id, nd) {
+    let line = nd[line_id];
     let token_list = [];
-    for (let node of line.node_list) {
+    for (let node_id of line.node_list) {
+        let node = nd[node_id]
         if (node.kind == "text") {
             let ttext = node.the_text.trim();
             if (ttext.length != 0) {

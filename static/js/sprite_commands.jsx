@@ -34,7 +34,7 @@ class SpriteNode {
     }
 
     getContainingGraphicsNode() {
-        let base_id = window.getBaseNode().unique_id;
+        let base_id = "world";
         function getGBox(the_id) {
             if (the_id == base_id) {
                 return null
@@ -55,16 +55,18 @@ class SpriteNode {
     }
 
     getParam(pname) {
-        for (let lin of this.line_list) {
-            for (let nd of lin.node_list) {
+        for (let lin_id of this.line_list) {
+            for (let nd_id of window.getNode(lin_id).node_list) {
+                let nd = window.getNode(nd_id);
                 if (nd.name == pname) {
-                    return _extractValue(nd)
+                    return _extractValue(nd_id)
                 }
             }
         }
-        for (let nd of mnode.closetLine.node_list) {
+        for (let nd_id of window.getNode(mnode.closetLine).node_list) {
+            let nd = window.getNode(nd_id);
             if (nd.name == pname) {
-                return _extractValue(nd)
+                return _extractValue(nd_id)
             }
         }
         return null
@@ -74,21 +76,23 @@ class SpriteNode {
     getAllParams() {
         let pdict = {};
         for (let lin of this.line_list) {
-            for (let nd of lin.node_list) {
+            for (let nd_id of window.getNode(lin).node_list) {
+                let nd = window.getNode(nd_id);
                 if (sprite_params.includes(nd.name)) {
-                    pdict[nd.name]  = _extractValue(nd)
+                    pdict[nd.name]  = _extractValue(nd_id)
                 }
                 if (nd.name == "shape") {
                     pdict["shape_components"] = nd.drawn_components
                 }
             }
         }
-        for (let nd of this.closetLine.node_list) {
+        for (let nd_id of window.getNode(this.closetLine).node_list) {
+            let nd = window.getNode(nd_id);
             if (sprite_params.includes(nd.name)) {
-                pdict[nd.name] = _extractValue(nd)
+                pdict[nd.name] = _extractValue(nd_id)
             }
             if (nd.name == "penColor") {
-                let color_string = nd.line_list[0].node_list[0].the_text;
+                let color_string = window.getNode(window.getln(nd_id, 0, 0)).the_text;
                 if (this.useSvg()) {
                     pdict.penColor = _svgConvertColorArg(color_string)
                 }
@@ -413,8 +417,8 @@ class SpriteNode {
 }
 
 
-function _extractValue(nd) {
-    let the_text = nd.line_list[0].node_list[0].the_text;
+function _extractValue(nd_id) {
+    let the_text = window.getNode(window.getln(nd_id, 0, 0)).the_text
     if (isNaN(the_text)){
         if (the_text.toLowerCase() == "false") {
             return false

@@ -22,7 +22,7 @@ import {withErrorDrawer} from "./error_drawer.js";
 import {container_kinds, graphics_kinds} from "./shared_consts.js";
 import {shape_classes} from "./pixi_shapes.js";
 import {svg_shape_classes} from "./svg_shapes.js"
-import {mutatorMixin, _getMatchingNode} from "./mutators.js";
+import {mutatorMixin} from "./mutators.js";
 import {nodeCreatorMixin} from "./node_creators.js";
 import {copySelectMixin} from "./copy_select.js";
 
@@ -76,44 +76,30 @@ function _main_main() {
     }
 }
 
-function _rehydrateComponents(nd) {
-    if (nd.kind == "graphics") {
-        nd.drawn_components = [];
-        if (nd.hasOwnProperty("component_specs")) {
-            for (let comp of nd.component_specs) {
-                let Dcomp = shape_classes[comp.type];
-                let new_comp = <Dcomp {...comp.props}/>;
-                nd.drawn_components.push(new_comp)
+function _rehydrateComponents(ndict) {
+    for (let nd in ndict) {
+        if (nd.kind == "graphics") {
+            nd["drawn_components"] = [];
+            if (nd.hasOwnProperty("component_specs")) {
+                for (let comp of nd.component_specs) {
+                    let Dcomp = shape_classes[comp.type];
+                    let new_comp = <Dcomp {...comp.props}/>;
+                    nd.drawn_components.push(new_comp)
+                }
+                nd.component_specs = [];
             }
-            nd.component_specs = [];
         }
-    }
-    else if (nd.kind == "svggraphics") {
-        nd.drawn_components = [];
-        if (nd.hasOwnProperty("component_specs")) {
-            for (let comp of nd.component_specs) {
-                let Dcomp = svg_shape_classes[comp.type];
-                let new_comp = <Dcomp {...comp.props}/>;
-                nd.drawn_components.push(new_comp)
+        else if (nd.kind == "svggraphics") {
+            nd["drawn_components"] = [];
+            if (nd.hasOwnProperty("component_specs")) {
+                for (let comp of nd.component_specs) {
+                    let Dcomp = svg_shape_classes[comp.type];
+                    let new_comp = <Dcomp {...comp.props}/>;
+                    nd.drawn_components.push(new_comp)
+                }
+                nd.component_specs = [];
             }
-            nd.component_specs = [];
         }
-    }
-    if (container_kinds.includes(nd.kind)) {
-        for (let lin of nd.line_list) {
-            _rehydrateComponents(lin)
-        }
-    }
-    else if (nd.kind == "line") {
-        let new_node_list = [];
-        for (let cnode of nd.node_list) {
-            _rehydrateComponents(cnode)
-            if (Object.keys(node_classes).includes(cnode.kind)) {
-                cnode = new node_classes[cnode.kind](cnode)
-            }
-            new_node_list.push(cnode)
-        }
-        nd.node_list = new_node_list
     }
 }
 
@@ -123,17 +109,23 @@ class MainApp extends React.Component {
         doBinding(this);
         this.state = {};
         if (props.world_state == null) {
-            this.state.node_dict = {}
-            let [world_node_id, temp_dict] = this._newDataBoxNode([], false, temp_dict);
+            this.state.node_dict = {};
+            this.clipboard_dict = {};
+            let [world_node_id, temp_dict] = this._newDataBoxNode([], false, {});
             this.state.node_dict = {}
             for (let nid in temp_dict) {
                 if (nid == world_node_id) {
                     let updated_node = temp_dict[nid]
-                    updated_node["unique_id"] = "world"
+                    updated_node["unique_id"] = "world";
+                    updated_node["name"] = "world";
+
                     this.state.node_dict["world"] = updated_node
+                    for (let lin_id of this.state.node_dict["world"].line_list) {
+                        this.state.node_dict[lin_id].parent = "world"
+                    }
                 }
                 else {
-                    this.state.node_dict[nid] = temp_dict[nmid]
+                    this.state.node_dict[nid] = temp_dict[nid]
                 }
             }
         }
@@ -142,7 +134,7 @@ class MainApp extends React.Component {
             this._healStructure(base_node);
             this.state.base_node = base_node;
         }
-        this.state.zoomed_node_id = this.state.base_node.unique_id;
+        this.state.zoomed_node_id = "world";
         this.state.boxer_selected = false;
         this.state.select_parent = null;
         this.state.select_range = null;
@@ -176,17 +168,21 @@ class MainApp extends React.Component {
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
-        window.getBaseNode = this._getBaseNode;
-        window.getNode = this._getNode;
+        window.getNodeDict = this._getNodeDict;
+        window.getNthLine = this._getNthLine;
+        window.getNthNode = this._getNthNode;
+        window.getln = this._getln;
+        window.cloneNode = this._cloneNode;
+        window.cloneLine = this._cloneLine;
+        window.cloneNodetoTrueND = this._cloneNodeToTrueND;
         window.setSpriteParams = this._setSpriteParams
     }
 
     componentDidMount() {
         window.addEventListener("resize", this._update_window_dimensions);
-        this.state.history = [_.cloneDeep(this.state.base_node)];
-        let new_base = _.cloneDeep(this.state.base_node);
-        new_base.line_list[0].node_list[0].setFocus = ["root", 0];
-        this.setState({base_node: new_base})
+        this.state.history = [_.cloneDeep(this.state.node_dict)];
+
+        this._changeNode(this._getln("world", 0, 0, this.state.node_dict), "setFocus", ["root", 0])
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
@@ -195,15 +191,15 @@ class MainApp extends React.Component {
         }
         if (this.undoing) {
             this.undoing = false;
-            this.present = _.cloneDeep(this.state.base_node);
+            this.present = _.cloneDeep(this.state.node_dict);
         }
         else {
-            if (!this._eqTest(this.state.base_node, this.present)) {
+            if (!this._eqTest(this.state.node_dict, this.present)) {
                 this.history.unshift(this.present);
                 if (this.history.length > MAX_UNDO_SAVES) {
                     this.history = this.history.slice(0, MAX_UNDO_SAVES)
                 }
-                this.present = this.state.base_node
+                this.present = this.state.node_dict
             }
         }
     }
@@ -211,7 +207,7 @@ class MainApp extends React.Component {
     _undo() {
         if (this.history.length > 0) {
             this.undoing = true;
-            this.setState({"base_node": this.history.shift()})
+            this.setState({"node_dict": this.history.shift()})
         }
     }
 
@@ -222,72 +218,30 @@ class MainApp extends React.Component {
         })
     }
 
-    _renumberNodes(line_id, target_dict) {
-        let counter = 0;
-
-        for (let nodeid of target_dict[line_id].node_list) {
-            target_dict = this.changeNodeAndReturn(nodeid, "position", counter, target_dict)
-            counter += 1
-        }
-        return target_dict
-    }
-
-    _renumberLines(node_id, target_dict) {
-        let counter = 0;
-
-        for (let lineid of target_dict[line_id].linelist) {
-            target_dict = this.changeNodeAndReturn(lineid, "position", counter, target_dict)
-            counter += 1
-        }
-        return target_dict
-    }
-
-    _getMainState() {
-        return this.state
-    }
-
     _getStateForSave() {
         let new_state = _.cloneDeep(this.state);
-        this._dehydrateComponents(new_state.base_node);
+        this._dehydrateComponents(new_state.node_dict);
         return new_state
     }
 
-    _dehydrateComponents(nd) {
-        if (nd.kind == "graphics") {
-            nd.component_specs = [];
-            for (let comp of nd.drawn_components) {
-                let new_spec = {type: comp.type, props: comp.props};
-                nd.component_specs.push(new_spec)
-            }
-            nd.drawn_components = [];
-        }
-        else if (nd.kind == "svggraphics"){
-            nd.component_specs = [];
-            for (let comp of nd.drawn_components) {
-                let new_spec = {type: comp.type.type_name, props: comp.props};
-                nd.component_specs.push(new_spec)
-            }
-            nd.drawn_components = [];
-        }
-        if (container_kinds.includes(nd.kind)) {
-            for (let lin of nd.line_list) {
-                this._dehydrateComponents(lin)
-            }
-        }
-        else if (nd.kind == "line") {
-            let new_node_list = [];
-            for (let cnode of nd.node_list) {
-                if (Object.keys(node_classes).includes(cnode.kind)) {
-                    let new_node = {};
-                    for (let param of cnode.saveParams) {
-                        new_node[param] = cnode[param]
-                    }
-                    cnode = new_node
+    _dehydrateComponents(ndict) {
+        for (let nd of ndict) {
+             if (nd.kind == "graphics") {
+                nd.component_specs = [];
+                for (let comp of nd.drawn_components) {
+                    let new_spec = {type: comp.type, props: comp.props};
+                    nd.component_specs.push(new_spec)
                 }
-                this._dehydrateComponents(cnode)
-                new_node_list.push(cnode)
+                nd.drawn_components = [];
             }
-            nd.node_list = new_node_list
+            else if (nd.kind == "svggraphics"){
+                nd.component_specs = [];
+                for (let comp of nd.drawn_components) {
+                    let new_spec = {type: comp.type.type_name, props: comp.props};
+                    nd.component_specs.push(new_spec)
+                }
+                nd.drawn_components = [];
+            }
         }
     }
 
@@ -327,41 +281,45 @@ class MainApp extends React.Component {
     }
 
     _toggleBoxTransparency(boxId) {
-        let new_base = this.state.base_node;
-        let mnode = _getMatchingNode(boxId, new_base);
-        let mline = _getMatchingNode(mnode.parent, new_base);
+        let mnode = this.state.node_dict[boxId];
+        let mline = this.state.node_dict[mnode.parent];
         if (mline.parent == null) return;
-        let mbox = _getMatchingNode(mline.parent, new_base);
+        let mbox = this.state.node_dict[mline.parent];
         if (mbox.name == "world") return;
         this._changeNode(mbox.unique_id, "transparent", !mbox.transparent)
 
     }
 
     _toggleCloset(boxId) {
-        let new_base = this.state.base_node;
-        let mnode = _getMatchingNode(boxId, new_base);
-        let mline = _getMatchingNode(mnode.parent, new_base);
+        let mnode = this.state.node_dict[boxId];
+        let mline = this.state.node_dict[mnode.parent];
         if (mline.parent == null) return;
-        let mbox = _getMatchingNode(mline.parent, new_base);
+        let mbox = this.state.node_dict[mline.parent];
+        let new_dict = this.state.node_dict;
         if (!mbox.closetLine) {
-            let closetLine = this._newClosetLine();
-            closetLine.parent = mbox.unique_id;
-            this._changeNodeMulti(mbox.unique_id, {closetLine: closetLine, showCloset: !mbox.showCloset})
+            let closetLineId;
+            [closetLineId, new_dict] = this._newClosetLine(new_dict);
+            new_dict = this.changeNodeAndReturn(closetLineId, "parent", mbox.unique_id, new_dict);
+            this._changeNodeMulti(mbox.unique_id, {closetLine: closetLineId, showCloset: !mbox.showCloset},
+                null, new_dict)
         }
         else {
-            this._changeNode(mbox.unique_id, "showCloset", !mbox.showCloset)
+            this._changeNode(mbox.unique_id, "showCloset", !mbox.showCloset, null, new_dict)
         }
 
     }
 
     _containsPort(boxId) {
-        let mnode = _getMatchingNode(boxId, this.state.base_node);
+        let mnode = this.state.node_dict[boxId];
+        let self = this;
         return checkNode(mnode);
 
         function checkNode(the_node) {
             if (container_kinds.includes(the_node.kind)) {
-                for (let lin of the_node.line_list) {
-                    for (let nd of lin.node_list) {
+                for (let lin_id of the_node.line_list) {
+                    let lin = self.state.node_dict[lin_id];
+                    for (let nd_id of lin.node_list) {
+                        let nd = self.state.node_dict[nd_id];
                         if (nd.kind == "port") {
                             return true
                         }
@@ -398,52 +356,27 @@ class MainApp extends React.Component {
         })
     }
 
-    _mergeTextNodes(n1, n2, line_id, target_dict) {
-        let id1 = target_dict[line_id].node_list[n1];
-        let id2 = target_dict[line_id].node_list[id2]
-        target_dict = this.changeNodeAndReturn(id1, "the_text",
-            target_dict[id1].the_text + target_dict[id2].the_text);
-        target_dict = this._removeNodeAndReturn(id2, target_dict)
-        return target_dict
+    _compareNode(n1, n2, fields) {
+        for (let field of fields) {
+            if (n1[field] != n2[field]) {
+                return false
+            }
+        }
+        return true
     }
 
     _comparePortboxes(db1, db2) {
         let fields = ["name", "am_zoomed", "closed", "target"];
-        for (let field of fields) {
-            if (db1[field] != db2[field]) {
-                return false
-            }
-        }
-        return true
+        return this._compareNode(db1, db2, fields)
     }
-    _compareDataboxes(db1, db2) {
-        let fields = ["name", "am_zoomed", "closed"];
-        for (let field of fields ) {
-            if (db1[field] != db2[field]) {
-                return false
-            }
-        }
-        if (db1.line_list.length != db2.line_list.length) {
-            return false
-        }
-        for (let i=0; i < db1.line_list.length; ++i) {
-            if (!this._compareLines(db1.line_list[i], db2.line_list[i])) {
-                return false
-            }
-        }
-        return true
+    _compareDataboxes(db1, db2_id) {
+        let fields = ["name", "am_zoomed", "closed", "line_list"];
+        return this._compareNode(db1, db2, fields)
     }
 
-    _compareLines(l1, l2) {
-        if (l1.node_list.length != l2.node_list.length) {
-            return false
-        }
-        for (let i=0; i < l1.node_list.length; ++i) {
-            if (!this._eqTest(l1.node_list[i], l2.node_list[i])) {
-                return false
-            }
-        }
-        return true
+    _compareLines(l1_id, l2_id) {
+        let fields = ["line_list"];
+        return this._compareNode(l1_id, db2, fields)
     }
 
     _compareTexts(t1, t2) {
@@ -459,31 +392,40 @@ class MainApp extends React.Component {
     }
 
 
-    _eqTest(obj1, obj2) {
-        if (obj1.kind != obj2.kind) {
-            return false
+    _eqTest(ndict1, ndict2) {
+        for (let nid in ndict1) {
+            let obj1 = ndict1[nid];
+            if (!Object.hasOwnProperty(ndict2, nid)) {
+                return false
+            }
+            let obj2 = ndict2[nid]
+            if (obj1.kind != obj2.kind) {
+                return false
+            }
+            if (container_kinds.includes(obj1.kind)){
+                if (!this._compareDataboxes(obj1, obj2)) {
+                    return false
+                }
+            }
+            if (obj2.kind == "text") {
+                if (!this._compareTexts(obj1, obj2)) {
+                    return false
+                }
+            }
+            if (obj2.kind == "jsbox" || obj2.kind == "htmlbox") {
+                if (!this._compareJsBoxes(obj1, obj2)) return false
+            }
+            if (obj2.kind == "port") {
+                 if (!this._comparePortboxes(obj1, obj2)) return false
+            }
         }
-        if (container_kinds.includes(obj1.kind)){
-            return this._compareDataboxes(obj1, obj2)
-        }
-        if (obj2.kind == "text") {
-            return this._compareTexts(obj1, obj2)
-        }
-        if (obj2.kind == "jsbox" || obj2.kind == "htmlbox") {
-            return this._compareJsBoxes(obj1, obj2)
-        }
-        if (obj2.kind == "port") {
-            return this._comparePortboxes(obj1, obj2)
-        }
-        else {
-            return this._compareLines(obj1, obj2)
-        }
+
     }
 
     _positionAfterBox(databox_id, portal_root) {
-        let mnode = _getMatchingNode(databox_id, this.state.base_node);
-        let parent_node = _getMatchingNode(mnode.parent, this.state.base_node);
-        let target_id = parent_node.node_list[mnode.position + 1].unique_id;
+        let mnode = this.state.node_dict[databox_id];
+
+        let target_id = this._getNthNode(mnode.parent, mnode.position + 1, this.state.node_dict).unique_id
         this._changeNode(target_id, "setFocus", [portal_root, 0])
     }
 
@@ -516,15 +458,15 @@ class MainApp extends React.Component {
         let val_dict = {};
         val_dict.graphics_fixed_width = new_width;
         val_dict.graphics_fixed_height = new_height;
-        his._changeNodeMulti(uid, val_dict, callback)
+        this._changeNodeMulti(uid, val_dict, callback)
     }
     
     _getParentId(uid) {
-        return _getMatchingNode(uid, this.state.base_node).parent
+        return this.state.target_dict[uid].parent
     }
 
     _getNode(uid) {
-        return _getMatchingNode(uid, this.state.base_node)
+        return this.state.node_dict[uid]
     }
 
 
@@ -539,30 +481,11 @@ class MainApp extends React.Component {
         this._insertBoxInText(kind, document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
     }
 
-
     _focusNameLastFocus() {
         this._focusName(this.last_focus_id)
     }
 
-    _updateIds(line_list) {
-        for (let lin of line_list) {
-            lin.unique_id = guid();
-            for (let node of lin.node_list) {
-                node.unique_id = guid();
-                node.parent = lin.unique_id;
-                if (container_kinds.includes(node.kind)) {
-                    for (let lin2 of node.line_list) {
-                        lin2.parent = node.unique_id;
-                    }
-                    this._updateIds(node.line_list);
-                    if (node.closetLine) {
-                        node.closetLine.parent = node.unique_id;
-                        this._updateIds([node.closetLine]);
-                    }
-                }
-            }
-        }
-    }
+
 
      _insertClipboardFromKey() {
         this._insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
@@ -573,26 +496,25 @@ class MainApp extends React.Component {
     }
 
     _unfixSizeLastFocus() {
-        let new_base = this.state.base_node;
-        let mnode = _getMatchingNode(this.last_focus_id, new_base);
-        let parentLine = _getMatchingNode(mnode.parent, new_base);
+        let mnode = this.state.node_dict[this.last_focus_id];
+        let parentLine = this.state.node_dict[mnode.parent];
         this._changeNode(parentLine.parent, "fixed_size", false)
     }
 
-    _getBaseNode() {
-        return this.state.base_node
+    _getNodeDict() {
+        return this.state.node_dict
     }
 
-    _findParents(node_id, base_node=null) {
-        if (!base_node) {
-            base_node = this.state.base_node
+    _findParents(node_id, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
         }
-        let mnode = _getMatchingNode(node_id, base_node);
+        let mnode = target_dict[node_id];
         let parents = [mnode.unique_id];
         let par = mnode.parent;
         while (par) {
             parents.push(par);
-            mnode = _getMatchingNode(par, base_node);
+            mnode = target_dict[par];
             par = mnode.parent
         }
         return parents
@@ -623,10 +545,11 @@ class MainApp extends React.Component {
             newDataBox: this._newDataBoxNode,
             newLineNode: this._newLineNode,
             addToClipboardStart: this._addToClipboardStart,
+            addTextToClipboardStart: this._addTextToClipBoardStart,
             insertClipboardLastFocus: this._insertClipboardLastFocus,
             handleCodeChange: this._handleCodeChange,
-            getBaseNode: this._getBaseNode,
-            insertNode: this._insertNodeIh,
+            getNodeDict: this._getNodeDict,
+            insertNode: this._insertNode,
             openErrorDrawer: this.props.openErrorDrawer,
             updateIds: this._updateIds,
             setNodeSize: this._setNodeSize,
@@ -668,8 +591,8 @@ class MainApp extends React.Component {
             </React.Fragment>
         );
 
-        this.state.base_node.am_zoomed = true;
-        let zoomed_node = _getMatchingNode(this.state.zoomed_node_id, this.state.base_node);
+        this.state.node_dict["world"].am_zoomed = true;
+        let zoomed_node = this.state.node_dict[this.state.zoomed_node_id];
         let key_bindings = [
             [["{"], (e)=> {
                 e.preventDefault();

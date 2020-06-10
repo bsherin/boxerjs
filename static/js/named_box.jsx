@@ -34,13 +34,13 @@ function withName(WrappedComponent) {
             };
         }
 
-        shouldComponentUpdate(nextProps, nextState) {
-            if (window.freeze && window._running > 0){
-                return false
-            }
-            return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-                || this.props.funcs.containsPort(this.props.unique_id)
-        }
+        // shouldComponentUpdate(nextProps, nextState) {
+        //     if (window.freeze && window._running > 0){
+        //         return false
+        //     }
+        //     return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
+        //         || this.props.funcs.containsPort(this.props.unique_id)
+        // }
 
         _flipMe() {
             this.boxRef = React.createRef();
@@ -459,11 +459,13 @@ class EditableTag extends React.Component {
                 this.props.funcs.changeNode(this.props.boxId, "setFocus", [this.props.portal_root, 0]);
             }
             else if (myDataBox.showCloset) {
-                let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
+                let closet = this.props.funcs.getNode(myDataBox.closetLine)
+                let firstTextNodeId = this.props.funcs.getNode(closet.node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             else {
-                let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
+                let the_line = this.props.funcs.getNode(myDataBox.line_list[0])
+                let firstTextNodeId = this.props.funcs.getNode(the_line.node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
 

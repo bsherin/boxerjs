@@ -32,7 +32,7 @@ function extractText(abox) {
     if (typeof(abox) != "object" || !data_kinds.includes(abox.kind)) {
         return null
     }
-    return abox.line_list[0].node_list[0].the_text
+    return window.getNode(window.getNode(abox.line_list[0]).node_list[0]).the_text
 }
 
 function isEqualOmit(p1, p2) {

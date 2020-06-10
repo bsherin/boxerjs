@@ -15,7 +15,6 @@ import * as PIXI from "pixi.js";
 import {data_kinds} from "./shared_consts.js";
 
 import {withName, NamedBox_propTypes, NamedBox_defaultProps} from "./named_box.js";
-import {_getMatchingNode} from "./mutators.js";
 import {Button} from "@blueprintjs/core";
 
 export {DataBox, PortBox, JsBox, loader}
@@ -229,12 +228,13 @@ class GraphicsBoxRaw extends React.Component {
             else {
                 let sprite_components = [];
                 let acindex = 0;
-                let temp_ll = _.cloneDeep(this.props.line_list);
+                let temp_ll = [...this.props.line_list];
                 if (this.props.closetLine) {
                     temp_ll.push(this.props.closetLine)
                 }
-                for (let lin of temp_ll) {
-                    for (let nd of lin.node_list) {
+                for (let lin_id of temp_ll) {
+                    for (let nd_id of this.props.funcs.getNode(lin_id).node_list) {
+                        let nd = this.props.funcs.getNode(nd_id)
                         if (nd.kind == "sprite") {
                             let new_comp = (
                                 <SpriteBox {...nd}
@@ -325,12 +325,13 @@ class SvgGraphicsBoxRaw extends React.Component {
             let gheight = this.props.graphics_fixed_height;
             let sprite_components = [];
             let acindex = 0;
-            let temp_ll = _.cloneDeep(this.props.line_list);
+            let temp_ll = [...this.props.line_list];
             if (this.props.closetLine) {
                 temp_ll.push(this.props.closetLine)
             }
-            for (let lin of temp_ll) {
-                for (let nd of lin.node_list) {
+            for (let lin_id of temp_ll) {
+                for (let nd_id of this.props.funcs.getNode(lin_id).node_list) {
+                    let nd = this.props.funcs.getNode(nd_id)
                     if (nd.kind == "sprite") {
                         let new_comp = (
                             <SpriteBox {...nd}
@@ -438,28 +439,29 @@ class TextNode extends React.Component {
     async _runMe() {
         let parent_line = this._myLine();
 
-        let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getBaseNode());
+        let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getNodeDict());
         if (result == null) {
             return
         }
+        let new_node_id, new_line_id, new_databox_id, new_dict;
         if (typeof(result) != "object") {
-            let new_node = this.props.funcs.newTextNode(String(result));
-            let new_line = this.props.funcs.newLineNode([new_node]);
-            let new_databox = this.props.funcs.newDataBox([new_line]);
-            this.props.funcs.insertNode(new_databox, parent_line.unique_id, parent_line.node_list.length)
+            let new_node, new_line, new_databox, new_dict;
+            [new_node_id, new_dict] = this.props.funcs.newTextNode(String(result), this.props.funcs.getNodeDict());
+            [new_line_id, new_dict] = this.props.funcs.newLineNode([new_node_id], new_dict);
+            [new_databox_id, new_dict] = this.props.funcs.newDataBox([new_line_id], false, new_dict);
+            this.props.funcs.insertNode(new_databox_id, parent_line.unique_id, parent_line.node_list.length, null, new_dict)
         }
         else {
-            let updated_result = _.cloneDeep(result);
-            updated_result.unique_id = guid();
-            if (data_kinds.includes(updated_result.kind)) {
-                updated_result.name = null;
-                this.props.funcs.updateIds(updated_result.line_list);
-                if (updated_result.closetLine) {
-                    this.props.funcs.updateIds([updated_result.closetLine])
-                }
+            let vid;
+            [vid, target_dict] = this.props.funcs.cloneNode(result.vid, window.virtualNodeDict,
+                this.props.funcs.getNodeDict(), true)
+
+
+            if (data_kinds.includes(target_dict[vid].kind)) {
+                target_dict[vid].name = null;
             }
-            repairCopiedDrawnComponents(updated_result, true);
-            this.props.funcs.insertNode(updated_result, parent_line.unique_id, parent_line.node_list.length)
+            repairCopiedDrawnComponents(target_dict[vid], true, target_dict);
+            this.props.funcs.insertNode(vid, parent_line.unique_id, parent_line.node_list.length, null, target_dict)
         }
     }
 
@@ -529,7 +531,7 @@ class TextNode extends React.Component {
                 }
                 else {
                     let new_node = this.props.funcs.newTextNode(this.props.the_text.charAt(caret_pos - 1));
-                    this.props.funcs.addToClipboardStart(new_node, !currentlyDeleting);
+                    this.props.funcs.addTextToClipboardStart(new_node, !currentlyDeleting);
                 }
             }
             currentlyDeleting = true;
@@ -541,11 +543,12 @@ class TextNode extends React.Component {
             let my_line = this._myLine();
             let myDataBox = this._myBox();
             if (my_line.amCloset) {
-                let firstTextNodeId = myDataBox.line_list[0].node_list[0].unique_id;
+                let firstTextNodeId =
+                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[0]).node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             if (my_line.position < (myDataBox.line_list.length - 1)) {
-                let firstTextNodeId = myDataBox.line_list[my_line.position + 1].node_list[0].unique_id;
+                let firstTextNodeId = this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[my_line.position + 1]).node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             return
@@ -558,7 +561,7 @@ class TextNode extends React.Component {
             }
             let myLine = this._myLine();
             for (let pos = myNode.position - 1; pos >=0; --pos) {
-                let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
+                let candidate = this.props.funcs.getNode(this.props.funcs.getNode(myLine.node_list[pos]).unique_id);
                 if (candidate.kind == "text") {
                     this.props.funcs.changeNode(candidate.unique_id, "setFocus",
                         [this.props.portal_root, candidate.the_text.length]);
@@ -576,7 +579,7 @@ class TextNode extends React.Component {
                 return
             }
             for (let pos = myNode.position + 1; pos < nnodes; ++pos) {
-                let candidate = this.props.funcs.getNode(myLine.node_list[pos].unique_id);
+                let candidate = this.props.funcs.getNode(this.props.funcs.getNode(myLine.node_list[pos]).unique_id);
                 if (candidate.kind == "text") {
                     this.props.funcs.changeNode(candidate.unique_id, "setFocus", [this.props.portal_root, 0]);
                     return
@@ -609,11 +612,13 @@ class TextNode extends React.Component {
                 }
             }
             else if (my_line.position == 0) {
-                let firstTextNodeId = myDataBox.closetLine.node_list[0].unique_id;
+                let firstTextNodeId =
+                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.closetLine).node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
             else {
-                let firstTextNodeId = myDataBox.line_list[my_line.position - 1].node_list[0].unique_id;
+                let firstTextNodeId =
+                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[my_line.position - 1]).node_list[0]).unique_id;
                 this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
             }
         }
@@ -625,7 +630,7 @@ class TextNode extends React.Component {
     }
 
     _myLineId() {
-        return this.props.funcs.getParentId(this.props.unique_id);
+        return this._myNode().parent;
     }
 
     _myLine() {
@@ -767,7 +772,7 @@ class PortBoxRaw extends React.Component {
             inner_content = <div>You can now target this port</div>;
         }
         else {
-            tnode = _.cloneDeep(this.props.funcs.getNode(this.props.target));
+            tnode = this.props.funcs.getNode(this.props.target);
             if (!tnode) {
                 inner_content = <Button onClick={()=>{this.props.funcs.retargetPort(this.props.unique_id)}}>Target is missing</Button>;
             }
@@ -829,13 +834,13 @@ class DataBoxRaw extends React.Component {
         doBinding(this);
     }
 
-    shouldComponentUpdate(nextProps, nextState) {
-        if (window.freeze && window._running > 0){
-                return false
-            }
-        return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-            || this.props.funcs.containsPort(this.props.unique_id)
-    }
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     if (window.freeze && window._running > 0){
+    //             return false
+    //         }
+    //     return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
+    //         || this.props.funcs.containsPort(this.props.unique_id)
+    // }
 
     render() {
         let dbclass;
@@ -843,7 +848,8 @@ class DataBoxRaw extends React.Component {
             return null;
         }
 
-        let the_content = this.props.line_list.map((the_line, index) => {
+        let the_content = this.props.line_list.map((the_line_id, index) => {
+            let the_line = this.props.funcs.getNodeDict()[the_line_id];
             return (
                 <DataboxLine key={the_line.unique_id}
                              am_in_portal={this.props.am_in_portal}
@@ -862,7 +868,7 @@ class DataBoxRaw extends React.Component {
         });
 
         if (this.props.showCloset) {
-            let cline = this.props.closetLine;
+            let cline = this.props.funcs.getNodeDict()[this.props.closetLine];
             let clinenode = (
                 <DataboxLine key={cline.unique_id}
                              am_in_portal={this.props.am_in_portal}
@@ -1143,22 +1149,23 @@ class DataboxLine extends React.Component {
     // If I have shouldComponentUpdate here I run into focus problems
     // When a new box is created it doesn't clear the setFocus in the text node
 
-    shouldComponentUpdate(nextProps, nextState) {
-        if (window.freeze && window._running > 0){
-                return false
-            }
-        return true
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     if (window.freeze && window._running > 0){
+    //             return false
+    //         }
+    //     return true
         // let pequal = propsAreEqual(nextProps, this.props);
         // let sequal = propsAreEqual(nextState, this.state);
         // return !pequal || !sequal
-    }
+    // }
 
     _handleSelection(selectedKeys) {
         this.props.funcs.setSelected(selectedKeys);
     }
 
     render() {
-        let the_content = this.props.node_list.map((the_node, index) => {
+        let the_content = this.props.node_list.map((the_node_id, index) => {
+            let the_node = this.props.funcs.getNode(the_node_id);
             if (the_node.kind == "text") {
                 return (
                     <TextNode key={the_node.unique_id}

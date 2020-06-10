@@ -43,13 +43,14 @@ let nodeCreatorMixin = {
         [n2_id, target_dict] = this._newTextNode("", target_dict);
 
         let node_list = [
-            target_dict[n1_id],
+            n1_id,
             closet_box_id,
-            target_dict[n2_id]
+            n2_id
         ];
-        [ncloset_id, target_dict] = this._newLineNode(node_list, target_dict);
-        target_dict = this.changeNodeAndReturn(ncloset_id, "amCloset", true, target_dict);
-        return [ncloset_id, target_dict]
+        let ncloset_line_id;
+        [ncloset_line_id, target_dict] = this._newLineNode(node_list, target_dict);
+        target_dict = this.changeNodeAndReturn(ncloset_line_id, "amCloset", true, target_dict);
+        return [ncloset_line_id, target_dict]
     },
 
      _newLineNode(node_list=[], target_dict={}) {
@@ -79,14 +80,14 @@ let nodeCreatorMixin = {
         let uid = guid();
         if (line_list.length == 0) {
             let ntext_id;
-            [ntext_id, target_dict] = this._newTextNode(" ", target_dict)
+            [ntext_id, target_dict] = this._newTextNode("", target_dict)
             let node_list = [ntext_id];
             let new_line_id;
             [new_line_id, target_dict] = this._newLineNode(node_list, target_dict);
             line_list = [new_line_id]
         }
         for (let lnodeid of line_list) {
-            target_dict = this.changeNodeAndReturn(lnodeid, "parent", uid)
+            target_dict = this.changeNodeAndReturn(lnodeid, "parent", uid, target_dict)
         }
 
         let new_box = {kind: "doitbox",
@@ -110,17 +111,17 @@ let nodeCreatorMixin = {
         return [uid, target_dict]
     },
 
-    _newDataBoxNode(line_list=[], amClosetBox=false, target_dict={}) {
+    _newDataBoxNode(line_list=[], amClosetBox=false, new_dict={}) {
         let uid = guid();
-        let text_id, line_id, new_dict;
+        let text_id, line_id;
         if (line_list.length == 0) {
-            [text_id, new_dict] = this._newTextNode(" ", target_dict)
+            [text_id, new_dict] = this._newTextNode("", new_dict)
             let node_list = [text_id];
             [line_id, new_dict] = this._newLineNode(node_list, new_dict);
             line_list = [line_id]
         }
         for (let lnodeid of line_list) {
-            new_dict = this.changeNodeAndReturn(lnodeid, "parent", uid)
+            new_dict = this.changeNodeAndReturn(lnodeid, "parent", uid, new_dict)
         }
         let new_box = {
             kind: "databox",
@@ -141,7 +142,7 @@ let nodeCreatorMixin = {
             closetLine: null,
             unique_id: uid};
         new_dict = this._createEntryAndReturn(new_box, new_dict)
-        new_dict = this._renumberLines(uid, target_dict)
+        new_dict = this._renumberLines(uid, new_dict)
         return [uid, new_dict]
     },
 
@@ -169,7 +170,7 @@ let nodeCreatorMixin = {
         let uid = guid();
         if (line_list.length == 0) {
             let ntext_id, new_line_id;
-            [ntext_id, target_dict] = this._newTextNode(" ", target_dict)
+            [ntext_id, target_dict] = this._newTextNode("", target_dict)
             let node_list = [ntext_id];
             [new_line_id, target_dict] = this._newLineNode(node_list, target_dict);
             line_list = [new_line_id]
@@ -260,7 +261,7 @@ let nodeCreatorMixin = {
         [ntext_id, target_dict] = this._newTextNode(" ", target_dict)
         let node_list = [ntext_id];
         [new_line_id, target_dict] = this._newLineNode(node_list, target_dict);
-        line_list = [new_line_id]
+        let line_list = [new_line_id]
         for (let lnodeid of line_list) {
             target_dict = this.changeNodeAndReturn(lnodeid, "parent", uid, target_dict);
         }
@@ -289,17 +290,17 @@ let nodeCreatorMixin = {
         };
         let newgnode = new GraphicsNode(new_node_params)
         target_dict = this._createEntryAndReturn(newgnode, target_dict)
-        target_dict = this._renumberNodes(uid, target_dict);
+        target_dict = this._renumberLines(uid, target_dict);
         return [uid, target_dict]
     },
     _newValueBox(name, value, target_dict={}) {
          let ntextid, nlineid, vboxid;
          [ntextid, target_dict] = this._newTextNode(String(value), target_dict)
-        let node_list = [ntext_id];
+        let node_list = [ntextid];
         [nlineid, target_dict] = this._newLineNode(node_list, target_dict);
-        let line_list = [new_line];
-        [vboxid, target-dict] = this._newDataBoxNode(line_list, target_dict);
-        target_dict = this.changeNodeAndReturn(vboxid, "name", String(name))
+        let line_list = [nlineid];
+        [vboxid, target_dict] = this._newDataBoxNode(line_list, false, target_dict);
+        target_dict = this.changeNodeAndReturn(vboxid, "name", String(name), target_dict);
         return [vboxid, target_dict]
     },
 
@@ -308,7 +309,7 @@ let nodeCreatorMixin = {
         const th = 15;
         const turtleColor = 0x008000;
         let shape_boxid;
-        [shape_boxid, target_dict] = this._newGraphicsBox(target_dict);
+        [shape_boxid, target_dict] = this._newGraphicsBox([], target_dict);
         let tshape = <Triangle tw={tw} th={th} tcolor={turtleColor}/>;
         target_dict = this._changeNodeMultiAndReturn(shape_boxid,
             {name: "shape", graphics_fixed_width: 50, graphics_fixed_height: 50, drawn_components: [tshape]},
@@ -371,7 +372,7 @@ let nodeCreatorMixin = {
         let main_lineid;
         [main_lineid, target_dict] = this._newLineNode(main_node_list, target_dict);
 
-        tid = this._newTextNode(" ", target_dict)
+        [tid, target_dict] = this._newTextNode(" ", target_dict)
         let closet_node_list = [tid];
         for (let param of closet_params) {
             [tid, target_dict] = this._newTextNode(" ", target_dict);
@@ -391,7 +392,7 @@ let nodeCreatorMixin = {
         let line_list = [main_lineid];
         for (let lnodeid of line_list) {
             target_dict = this.changeNodeAndReturn(lnodeid, "parent", uid, target_dict)
-            target_dict = this._renumberLines(lnodeid, target_dict)
+            target_dict = this._renumberNodes(lnodeid, target_dict)
         }
         target_dict = this.changeNodeAndReturn(closet_lineid, "parent", uid, target_dict)
 
@@ -412,7 +413,7 @@ let nodeCreatorMixin = {
             line_list: line_list,
             closed: false,
             showCloset: false,
-            closetLine: closet_line,
+            closetLine: closet_lineid,
             unique_id: uid
 
         };
@@ -424,38 +425,37 @@ let nodeCreatorMixin = {
     },
 
     _newTurtleBox(target_dict={}) {
-        let uid = guid();
         let spriteid;
-        [spriteId, target_dict] = this._newSpriteBox(false, target_dict);
-        target_dict = this.changeNodeAndReturn(spriteId, "transparent", true, target_dict);
+        [spriteid, target_dict] = this._newSpriteBox(false, target_dict);
+        target_dict = this.changeNodeAndReturn(spriteid, "transparent", true, target_dict);
         let node_list = [spriteid];
         let new_lineid;
         [new_lineid, target_dict] = this._newLineNode(node_list, target_dict);
         let line_list = [new_lineid];
-        for (let lnodeid of line_list) {
-            target_dict[lnodeid].parent = uid;
-        }
+
         let new_nodeid;
         [new_nodeid, target_dict] = this._newGraphicsBox(line_list, target_dict);
-        target_dict = this.changeNodeAndReturn(uid, "transparent", true);
+        for (let lnodeid of target_dict[new_nodeid].line_list) {
+            target_dict[lnodeid].parent = new_nodeid;
+        }
+        target_dict = this.changeNodeAndReturn(new_nodeid, "transparent", true, target_dict);
         return [new_nodeid, target_dict]
     },
 
     _newSvgTurtleBox(target_dict={}) {
-        let uid = guid();
         let spriteid;
-        [spriteId, target_dict] = this._newSpriteBox(false, target_dict);
-        target_dict = this.changeNodeAndReturn(spriteId, "transparent", true, target_dict);
+        [spriteid, target_dict] = this._newSpriteBox(false, target_dict);
+        target_dict = this.changeNodeAndReturn(spriteid, "transparent", true, target_dict);
         let node_list = [spriteid];
         let new_lineid;
         [new_lineid, target_dict] = this._newLineNode(node_list, target_dict);
         let line_list = [new_lineid];
-        for (let lnodeid of line_list) {
-            target_dict[lnodeid].parent = uid;
-        }
         let new_nodeid;
         [new_nodeid, target_dict] = this._newSvgGraphicsBox(line_list, target_dict);
-        target_dict = this.changeNodeAndReturn(uid, "transparent", true);
+        for (let lnodeid of target_dict[new_nodeid].line_list) {
+            target_dict[lnodeid].parent = new_nodeid;
+        }
+        target_dict = this.changeNodeAndReturn(new_nodeid, "transparent", true, target_dict);
         return [new_nodeid, target_dict]
     },
 
