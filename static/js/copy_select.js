@@ -1,4 +1,4 @@
-import {_getMatchingNode} from "./mutators.js";
+
 import {container_kinds} from "./shared_consts.js";
 import _ from "lodash";
 
@@ -52,6 +52,7 @@ let copySelectMixin = {
             let first_line = this.clipboard_dict[this.clipboard[0]];
             first_line.node_list.unshift(new_node_id);
             this.clipboard_dict[new_node_id].parent = first_line.unique_id
+            this.clipboard_dict = this._renumberNodes(first_line.unique_id, this.clipboard_dict);
             if (first_line.node_list.length > 1) {
                 if (this.clipboard_dict[first_line.node_list[0]].kind == "text"
                     && this.clipboard_dict[first_line.node_list[1]].kind == "text") {
@@ -66,27 +67,55 @@ let copySelectMixin = {
             target_dict = this.state.node_dict
         }
         if (clear) {
-            let new_line_id;
+            let new_line_id, cnode_id;
             this.clipboard_dict = {};
-            this.clipboard_dict[new_node_id] = _.cloneDeep(target_dict[new_node_id]);
-            [new_line_id, target_dict] = this._newLineNode([new_node_id], this.clipboard_dict);
-            this.clipboard = [new_line_id];
-            this.clipboard_dict[new_line_id] = new_node_id;
-            this.clipboard_dict[new_node_id].parent = new_line_id
-        }
-        else {
-            this.clipboard_dict[new_node_id] = _.cloneDeep(target_dict[new_node_id]);
-            let first_line = this.clipboard_dict[this.clipboard[0]];
-            first_line.node_list.unshift(new_node_id);
-            this.clipboard_dict[new_node_id].parent = first_line.unique_id;
-            if (first_line.node_list.length > 1) {
-                if (this.clipboard_dict[first_line.node_list[0]].kind == "text"
-                    && this.clipboard_dict[first_line.node_list[1]].kind == "text") {
-                    target_dict = this._mergeTextNodes(0, 1, first_line.unique_id, this.clipboard_dict, false)
-                }
+            if (target_dict[new_node_id].kind == "line") {
+                [cnode_id, this.clipboard_dict] = this._cloneLine(new_node_id, target_dict, this.clipboard_dict)
+                this.clipboard = [cnode_id];
+            }
+            else{
+                [cnode_id, this.clipboard_dict] = this._cloneNode(new_node_id, target_dict, this.clipboard_dict);
+                [new_line_id, this.clipboard_dict] = this._newLineNode([cnode_id], this.clipboard_dict);
+                this.clipboard = [new_line_id];
+                this.clipboard_dict[cnode_id].parent = new_line_id
             }
         }
+        else {
+            let cnode_id;
+            if (target_dict[new_node_id].kind == "line") {
+                [cnode_id, this.clipboard_dict] = this._cloneLine(new_node_id, target_dict, this.clipboard_dict)
+                this.clipboard.unshift(cnode_id)
+            }
+            else {
+                [cnode_id, this.clipboard_dict] = this._cloneNode(new_node_id, target_dict, this.clipboard_dict);
+                let first_line = this.clipboard_dict[this.clipboard[0]];
+                first_line.node_list.unshift(cnode_id);
+                this.clipboard_dict[cnode_id].parent = first_line.unique_id;
+                this.clipboard_dict = this._renumberNodes(first_line.unique_id, this.clipboard_dict);
+                if (first_line.node_list.length > 1) {
+                    if (this.clipboard_dict[first_line.node_list[0]].kind == "text"
+                        && this.clipboard_dict[first_line.node_list[1]].kind == "text") {
+                        target_dict = this._mergeTextNodes(0, 1, first_line.unique_id, this.clipboard_dict, false)
+                    }
+                }
+            }
+
+        }
         return target_dict
+    },
+
+    _setClipboardToNodeList(node_list, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
+        }
+        this.clipboard_dict = {};
+        for (let nid of node_list) {
+            let _discard;
+            [_discard, target_dict] = this._cloneNode(nid, target_dict, this.clipboard_dict)
+        }
+        let nline_id;
+        [nline_id, target_dict] = this._newLineNode(node_list);
+        this.clipboard = [nline_id]
     },
 
    _insertClipboard(text_id, cursor_position, portal_root, target_dict=null) {
@@ -193,7 +222,7 @@ let copySelectMixin = {
 
         function positionCursor(){
             if (focus_type == "text") {
-                self._changeNode(focus_node_id, "setFocus", [portal_root, focus_text_pos], null, target_dict)
+                self._setFocus(focus_node_id, portal_root, focus_text_pos, null, target_dict)
             }
             else  {
                 self._positionAfterBox(focus_node_id, target_dict)
@@ -204,7 +233,7 @@ let copySelectMixin = {
 
     _startNewClipboardLine(clear=false){
         let new_line1_id, new_line2_id;
-        [new_line1_id, this.clipboard_dict] = this._newLineNode();
+        [new_line1_id, this.clipboard_dict] = this._newLineNode([], this.clipboard_dict);
         if (clear) {
             [new_line2_id, this.clipboard_dict] = this._newLineNode();
             this.clipboard = [new_line1_id, new_line2_id];
@@ -216,11 +245,11 @@ let copySelectMixin = {
 
     _setSelected(id_list) {
         this._clearSelected(null, true,()=>{
-            let new_base = this.state.base_node;
+            let new_dict = this.state.node_dict;
             for (let uid of id_list) {
-                new_base = this.changeNodeAndReturn(uid, "selected", true, new_base)
+                new_dict = this.changeNodeAndReturn(uid, "selected", true, new_dict)
             }
-            this.setState({base_node: new_base})
+            this.setState({node_dict: new_dict})
         })
     },
     _cutSelected() {
@@ -382,26 +411,21 @@ let copySelectMixin = {
             if (target_dict[this.state.select_parent].line_list.length == 0) {
                 let new_line_id;
                 [new_line_id, target_dict] = this._newLineNode([], target_dict);
-                target_dict = this._changeNodeMultiAndReturn(new_line_id,
-                    {parent: this.state.select_parent, position: 0}, target_dict);
-
-                target_dict = this.changeNodeAndReturn(this.state.select, "line_list",
-                    [new_line_id], target_dict)
+                target_dict = this._setLineListAndReturn(this.state.select, [new_line_id], target_dict);
 
                 focus_node_id = target_dict[new_line_id].node_list[0];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus", [this.last_focus_portal_root, 0])
+                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root, 0, target_dict);
             }
             if (this.state.select_range[0] >= target_dict[this.state.select_parent].line_list.length) {
                 let focus_line_id = target_dict[this.state.select_parent].line_list[this.state.select_range[0] - 1];
                 let focus_node_id = _.last(target_dict[focus_line_id].node_list);
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
-                    [this.last_focus_portal_root, focus_node.the_text.length])
-                focus_node.setFocus = [this.last_focus_portal_root, target_dict[focus_node_id].the_text.length]
+                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root,
+                    target_dict[focus_node_id].the_text.length, target_dict);
             }
             else {
                 let focus_line_id = target_dict[this.state.select_parent].line_list[this.state.select_range[0]];
                 focus_node_id = target_dict[focus_line_id].node_list[0];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus", [this.last_focus_portal_root, 0])
+                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root, 0, target_dict);
             }
             for (let lin_id of target_dict[this.state.select_parent].line_list) {
                 target_dict = this._healLine(lin_id, true, target_dict);

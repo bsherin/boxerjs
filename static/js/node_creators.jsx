@@ -163,7 +163,7 @@ let nodeCreatorMixin = {
             selected: false,
             closed: false,
             unique_id: uid};
-        new_dict = this._createEntryAndReturn(new_box, target_dict)
+        let new_dict = this._createEntryAndReturn(new_box, target_dict)
         return [uid, new_dict]
     },
     _newSvgGraphicsBox(line_list=[], target_dict={}) {
@@ -258,7 +258,7 @@ let nodeCreatorMixin = {
             color_string = "0 0 0"
         }
         let ntext_id, new_line_id;
-        [ntext_id, target_dict] = this._newTextNode(" ", target_dict)
+        [ntext_id, target_dict] = this._newTextNode(color_string, target_dict)
         let node_list = [ntext_id];
         [new_line_id, target_dict] = this._newLineNode(node_list, target_dict);
         let line_list = [new_line_id]

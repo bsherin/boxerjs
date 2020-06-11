@@ -4,7 +4,7 @@ import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget, makeChildrenNonVirtual,
     dataBoxToValue, boxObjectToValue, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {shape_classes} from "./pixi_shapes.js";
-import {data_kinds, container_kinds} from "./shared_consts.js";
+import {data_kinds, container_kinds, graphics_kinds} from "./shared_consts.js";
 import {isKind, degreesToRadians, radiansToDegrees} from "./utilities.js"
 
 export {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics}
@@ -14,14 +14,6 @@ var _base_node;
 
 let delay_amount = 1;
 
-
-// function changeNodePromise(uid, param_name, new_val) {
-//     return new Promise(function(resolve, reject) {
-//         window.changeNode(uid, param_name, new_val, (data)=>{
-//             resolve(data)
-//         })
-//     })
-// }
 
 function delay(msecs) {
     return new Promise(resolve => setTimeout(resolve, msecs));
@@ -126,7 +118,7 @@ function repairCopiedDrawnComponents(node, recursive = true, target_dict) {
         }
     }
     function repairTrueNode(anode) {
-        if (anode.kind == "graphics") {
+        if (graphics_kinds.includes(anode.kind)) {
             let new_drawn_components = [];
             for (let comp of anode.drawn_components) {
                 let Dcomp = shape_classes[comp.type];
@@ -136,7 +128,8 @@ function repairCopiedDrawnComponents(node, recursive = true, target_dict) {
             anode.drawn_components = new_drawn_components;
         }
         if (recursive && container_kinds.includes(anode.kind)) {
-            for (let lin of target_dict[anode.line_list]) {
+            for (let lin_id of anode.line_list) {
+                let lin = target_dict[lin_id];
                 for (let ndid of lin.node_list) {
                     repairCopiedDrawnComponents(target_dict[ndid], true);
                 }
@@ -150,7 +143,8 @@ function repairCopiedDrawnComponents(node, recursive = true, target_dict) {
     }
 }
 
-async function changeGraphics(boxname, newval, my_node_id, eval_in_place=null) {
+async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=null) {
+    let newval = window.virtualNodeDict(newvalstud.vid)
     if (!isKind(newval, "graphics")) return;
     let estring;
     if (!eval_in_place) {
@@ -215,15 +209,16 @@ async function change(boxname, newval, my_node_id) {
         })
     }
     if (typeof(newval) == "object") {
-        if (!data_kinds.includes(mnode.kind) || !data_kinds.includes(newval.kind)) {
+        let the_node = window.virtualNodeDict[newval.vid];
+        if (!data_kinds.includes(mnode.kind) || !data_kinds.includes(the_node.kind)) {
             return new Promise(function (resolve, reject) {
                 resolve()
             })
         }
 
         let new_line_list = [];
-        let target_dict = this.getNodeDict();
-        for (let lin_id of _newval.line_list) {
+        let target_dict = window.getNodeDict();
+        for (let lin_id of the_node.line_list) {
             let new_line_id;
             [new_line_id, window.virtualNodeDict] = window.cloneLine(lin_id, window.virtualNodeDict, window.virtualNodeDict, true)
             new_line_list.push(new_line_id)
@@ -234,16 +229,16 @@ async function change(boxname, newval, my_node_id) {
         if (!mnode.virtual) {
 
             let temp_dict = {};
-            for (let lin_id in new_line_list) {
+            for (let lin_id of new_line_list) {
                 [lin_id, temp_dict] = window.cloneLine(lin_id, window.virtualNodeDict, temp_dict, false);
                 makeChildrenNonVirtual(lin_id, temp_dict)
             }
             let target_dict =window.getNodeDict();
-            for (let lin_id in new_line_list) {
+            for (let lin_id of new_line_list) {
                 [lin_id, target_dict] = window.cloneLine(lin_id, temp_dict, target_dict, false);
             }
             return new Promise(function (resolve, reject) {
-                window.changeNode(mnode.unique_id, "line_list", new_line_list, async (data) => {
+                window.setLineList(mnode.unique_id, new_line_list, async (data) => {
                     await delay(delay_amount);
                     resolve(data)
                 }, target_dict)
@@ -253,13 +248,13 @@ async function change(boxname, newval, my_node_id) {
     }
     else {
 
-        let newtext, newline;
+        let newtext_id, newline_id;
         [newtext_id, window.virtualNodeDict] = window.newTextNode(String(newval), window.virtualNodeDict);
         [newline_id, window.virtualNodeDict] = window.newLineNode([newtext_id], window.virtualNodeDict);
         window.virtualNodeDict[newline_id].parent = mnode.unique_id;
         mnode.line_list = [newline_id];
         if (!mnode.virtual) {
-            window.cloneNodetoTrueND(newline_id, window.virtualNodeDict, false, ()=>{
+            window.cloneLinetoTrueND(newline_id, window.virtualNodeDict, false, ()=>{
                 return new Promise(function (resolve, reject) {
                     window.changeNode(mnode.unique_id, "line_list",
                         [newline_id], async (data) => {
@@ -281,8 +276,10 @@ async function makeColor(r, g, b) {
 }
 
 async function snap(gbox) {
-    let newbox = window.newGraphicsBox();
-    if (gbox.kind != "graphics") return;
+    if (!graphics_kinds.includes(gbox.kind)) return;
+    let newboxid;
+    [newboxid, window.virtualNodeDict] = window.newGraphicsBox([], window.virtualNodeDict);
+    let newbox = window.virtualNodeDict[newboxid];
     newbox.drawn_components = gbox.drawn_components;
     newbox.graphics_fixed_height = gbox.graphics_fixed_height;
     newbox.graphics_fixed_width = gbox.graphics_fixed_width;
@@ -291,16 +288,19 @@ async function snap(gbox) {
 }
 
 async function turtleShape() {
-    return window.newTurtleShape()
+
+    let newboxid;
+    [newboxid, window.virtualNodeDict] = window.newTurtleShape(window.virtualNodeDict)
+    let newbox = window.virtualNodeDict[newboxid];
+    return newbox
 }
 
 async function redisplay() {
     await delay(delay_amount)
 }
 
-
 function getSprite(current_turtle_id) {
-    return _getMatchingNode(current_turtle_id, window.getBaseNode())
+    return window.getNodeDict()[current_turtle_id]
 }
 
 async function getMousePosition(current_turtle_id) {
@@ -308,9 +308,10 @@ async function getMousePosition(current_turtle_id) {
     if (the_sprite) {
         let mpos = the_sprite.getMousePosition();
         let mpos_string = `${Math.round(mpos.x)} ${Math.round(mpos.y)}`;
-        return window.newValueBox(null, mpos_string)
+        let new_id;
+        [new_id, window.virtualNodeDict] = window.newValueBox(null, mpos_string, window.virtualNodeDict)
     }
-    return window.newValueBox(null, "not found")
+    return window.virtualNodeDict[new_id]
 
 }
 

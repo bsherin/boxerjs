@@ -1,9 +1,7 @@
 
 import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
-import {guid} from "./utilities.js";
-import {container_kinds, data_kinds, graphics_kinds} from "./shared_consts.js";
-import {_getMatchingNode} from "./mutators.js";
+import {container_kinds, data_kinds} from "./shared_consts.js";
 
 export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, getPortTarget, makeChildrenNonVirtual,
     findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
@@ -53,7 +51,7 @@ function _convertFunctionNode(doitNode) {
         // This makes them easy to refer to
         let inserted_lines = 0;
         for (let input_name of input_names) {
-            let new_node;
+            let new_node_id;
             [new_node_id, window.virtualNodeDict] = window.newDataBoxNode([], false, window.virtualNodeDict);
             let inserted_node = window.virtualNodeDict[new_node_id];
             inserted_node.name = input_name;
@@ -84,7 +82,7 @@ function _convertFunctionNode(doitNode) {
                 continue
             }
             let vnode = called_doit.node;
-            insertVirtualNode(vnode.unique_id, doitNode);
+            insertVirtualNode(vnode.unique_id, doitNode.unique_id);
             // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
                 node: vnode,
@@ -232,18 +230,16 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
     return [new_names, new_nodes, current_turtle_id]
 }
 
-
+// Insert the node nodeToInsertId in the closet of boxToInsertInId
+// Assumes both nodes already exist in virtualNodeDict
 function insertVirtualNode(nodeToInsertId, boxToInsertInId) {
     let boxToInsertIn = window.virtualNodeDict[boxToInsertInId];
     let cline_id;
     if (!boxToInsertIn.closetLine) {
-        [cline_id, window.virtualNodeDict] = window.newClosetLine(window.virtualNodeDict);
-        window.virtualNodeDict[cline_id].parent = boxToInsertInId;
-        boxToInsertIn.closetLine = cline_id;
+        window.virtualNodeDict = window.createClosetAndReturn(boxToInsertInId, window.virtualNodeDict)
     }
-    else {
-        cline_id = boxToInsertIn.closetLine;
-    }
+    cline_id = window.virtualNodeDict[boxToInsertInId].closetLine;
+
     window.virtualNodeDict[nodeToInsertId].parent = window.virtualNodeDict[cline_id].unique_id;
     window.virtualNodeDict[cline_id].node_list.push(nodeToInsertId);
     window.virtualNodeDict = window.healLine(cline_id, false, window.virtualNodeDict)
@@ -276,11 +272,11 @@ function makeChildrenVirtual(node_id) {
 
 function makeChildrenNonVirtual(lin_id, nd) {
     let the_line = nd[lin_id];
-    for (let nd_id in the_line.node_list) {
-        let anode = temp_dict[nd_id];
+    for (let nd_id of the_line.node_list) {
+        let anode = nd[nd_id];
         if (container_kinds.includes(anode.kind)) {
             for (let line_id of anode.line_list) {
-                aline = nd[line_id];
+                let aline = nd[line_id];
                 aline.virtual = false;
             }
             if (anode.closetLine) {
@@ -294,7 +290,7 @@ function makeChildrenNonVirtual(lin_id, nd) {
 
 
 // Finds doit boxes that are called
-// The names are adjusted if we have a portal to a doit box
+// The names are adjusted if we have a port to a doit box
 function findCalledDoits(doitNode, nd, context, called_doits = []) {
     for (let line_id of doitNode.line_list){
         let line = nd[line_id];
@@ -310,7 +306,7 @@ function findCalledDoits(doitNode, nd, context, called_doits = []) {
                     break;
                 if (Object.keys(context.doit_boxes).includes(token)) {
                     let called_doit = _.cloneDeep(context.doit_boxes[token]);
-                    called_doit.node.name = token;  // In portal case these won't be the same
+                    called_doit.node.name = token;  // In port case these won't be the same
                     called_doits = called_doits.concat(called_doit)
                 }
             }
@@ -580,11 +576,11 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
                 }
             }
             else {
-                first_token = JSON.stringify(first_node);
+                first_token = JSON.stringify({vid: first_node.unique_id});
             }
         }
         else {
-            first_token = JSON.stringify(first_node);
+            first_token = JSON.stringify({vid: first_node.unique_id});
         }
         new_consuming_line = new_consuming_line.slice(1,)
 
@@ -682,7 +678,7 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
     return [result_string, tokens_consumed]
 }
 
-// This is for consuming a statement list that appear as an argument
+// This is for consuming a statement list that appears as an argument
 // To a boxer statement that expects a statement list
 function consumeAndConvertNextStatementList(consuming_line, context) {
     let first_node = consuming_line[0];
@@ -703,34 +699,9 @@ function consumeAndConvertNextStatementList(consuming_line, context) {
     }
 }
 
-// function jsBoxToString(jsbox, alt_name) {
-//     let var_name;
-//     if (alt_name == null) {
-//         var_name = jsbox.name
-//     }
-//     else {
-//         var_name = alt_name
-//     }
-//     return `
-//     async function ${var_name} {${jsbox.the_code}}
-//     `
-// }
-//
-// // not used
-// function boxObjectToString(dbox, alt_name=null) {
-//     let var_name;
-//     if (alt_name == null) {
-//         var_name = dbox.name
-//     }
-//     else {
-//         var_name = alt_name
-//     }
-//     let dbstring = JSON.stringify(dbox);
-//     return `var ${var_name} = ${dbstring}`
-// }
 
 function boxObjectToValue(dbox) {
-    let dbstring = JSON.stringify(dbox);
+    let dbstring = JSON.stringify({vid: dbox.unique_id});
     let cdbstring = null;
     eval("cdbstring = " + dbstring)
     return cdbstring
@@ -760,39 +731,6 @@ function dataBoxToValue(dbox) {
         return boxObjectToValue(dbox)
     }
 }
-
-
-// // this doesn't seem to be used
-// function dataBoxToString(dbox, alt_name=null) {
-//     let var_name;
-//     if (alt_name == null) {
-//         var_name = dbox.name
-//     }
-//     else {
-//         var_name = alt_name
-//     }
-//     if (dbox.line_list.length == 1){
-//         let the_line = dbox.line_list[0];
-//         if (the_line.node_list.length == 1) {
-//             let the_text = the_line.node_list[0].the_text.trim();
-//             if (!the_text) {
-//                 return `var ${var_name} = null`
-//             }
-//             if (isNaN(the_text)) {
-//                 return `var ${var_name} = "${the_text}"`
-//             }
-//             else {
-//                 return `var ${var_name} = ${the_text}`
-//             }
-//         }
-//         else {
-//             return boxObjectToString(dbox, var_name)
-//         }
-//     }
-//     else {
-//         return boxObjectToString(dbox, var_name)
-//     }
-// }
 
 
 function getPortTarget(portNode, node_dict) {

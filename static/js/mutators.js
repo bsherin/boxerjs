@@ -1,7 +1,6 @@
 import update from "immutability-helper";
 import _ from "lodash";
 import {container_kinds, text_kinds} from "./shared_consts.js";
-import {repairCopiedDrawnComponents} from "./eval_space.js";
 import {guid} from "./utilities";
 
 export {mutatorMixin}
@@ -39,35 +38,6 @@ let mutatorMixin = {
         return [new_base_id, target_dict]
     },
 
-    _cloneNodeToTrueND(nd_id, source_dict=null, update_ids=false, callback=null) {
-        if (!source_dict) {
-            source_dict = this.state.node_dict
-        }
-        target_dict = this.state.node_dict;
-        let new_base_id;
-        if (update_ids) {
-            new_base_id = guid();
-        }
-        else {
-            new_base_id = nd_id;
-        }
-        let copied_node = _.cloneDeep(source_dict[nd_id]);
-        copied_node.unique_id = new_base_id;
-        target_dict = this._createEntryAndReturn(copied_node, target_dict)
-        if (container_kinds.includes(target_dict[new_base_id].kind)) {
-            let new_line_list = [];
-            for (let lin_id of source_dict[nd_id].line_list) {
-                let new_line_id;
-                [new_line_id, target_dict] = this._cloneLine(lin_id, source_dict, target_dict, update_ids)
-
-                new_line_list.push(new_line_id)
-            }
-            target_dict = this.changeNodeAndReturn(new_base_id, "line_list", new_line_list, target_dict);
-        }
-
-        this.setState({node_dict: target_dict}, callback)
-    },
-
     _cloneLine(line_id, source_dict=null, target_dict=null, update_ids=false) {
         if (!source_dict) {
             source_dict = this.state.node_dict
@@ -95,6 +65,16 @@ let mutatorMixin = {
         return [new_base_id, target_dict]
     },
 
+    _cloneLineToTrueND(line_id, source_dict=null, update_ids=false, callback=null) {
+        if (!source_dict) {
+            source_dict = this.state.node_dict
+        }
+        let target_dict = this.state.node_dict;
+        let new_base_id;
+        [new_base_id, target_dict] = this._cloneLine(line_id, source_dict, target_dict, update_ids)
+        this.setState({node_dict: target_dict}, callback)
+    },
+
     _createEntryAndReturn(new_node, new_dict=null){
         if (!new_dict) {
             new_dict = this.state.node_dict
@@ -104,19 +84,55 @@ let mutatorMixin = {
     },
 
     _changeNode(uid, param_name, new_val, callback=null, new_dict=null) {
-        let node_dict = this.changeNodeAndReturn(uid, param_name, new_val)
+        let node_dict = this.changeNodeAndReturn(uid, param_name, new_val, new_dict);
         this.setState({node_dict: node_dict}, callback)
     },
 
     changeNodeAndReturn(uid, param_name, input_val, new_dict=null){
          let new_val = _.cloneDeep(input_val)
-         repairCopiedDrawnComponents(new_val, true);
+         // repairCopiedDrawnComponents(new_val, true);
          if (!new_dict) {
             new_dict = this.state.node_dict
          }
          let query = {[uid]: {[param_name]: {$set: new_val}}}
          new_dict = update(new_dict, query)
          return new_dict
+    },
+
+    _setLineList(uid, new_line_list, callback=null, target_dict=null) {
+        let node_dict = this._setLineListAndReturn(uid, new_line_list, target_dict);
+        this.setState({node_dict: node_dict}, callback)
+    },
+
+    _setLineListAndReturn(uid, new_line_list, target_dict=null) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict
+        }
+        target_dict = this.changeNodeAndReturn(uid, "line_list", new_line_list, target_dict)
+        for (let lin_id of new_line_list) {
+            target_dict = this.changeNodeAndReturn(lin_id, "parent", uid, target_dict);
+        }
+        target_dict = this._renumberLines(uid, target_dict)
+        return target_dict
+    },
+
+    _setFocus(focus_node_id, portal_root, pos, target_dict=null) {
+        let dict_to_use
+        if (!target_dict) {
+            dict_to_use = this.state.node_dict
+        }
+        else {
+            dict_to_use = target_dict
+        }
+        dict_to_use = this.changeNodeAndReturn(focus_node_id, "setFocus", [portal_root, pos], dict_to_use);
+        if (!target_dict) {
+            this.setState({node_dict: dict_to_use})
+
+        }
+        else {
+            return dict_to_use
+        }
+
     },
 
     _changeNodeMulti(uid, valdict, callback=null, target_dict=null) {
@@ -133,7 +149,7 @@ let mutatorMixin = {
         }
         for (let param in valdict) {
             let new_val = valdict[param]
-            repairCopiedDrawnComponents(new_val, true, new_dict);
+            // repairCopiedDrawnComponents(new_val, true, new_dict);
             let query = {[uid]: {[param]: {$set: new_val}}}
             new_dict = update(new_dict, query)
         }
@@ -315,7 +331,7 @@ let mutatorMixin = {
         target_dict = this._splitLineAndReturn(linid, pos + 1, target_dict);
 
         let nd_for_focus = this._getln(parent_line.parent, parent_line_pos + 1, 0, target_dict);
-        target_dict = this.changeNodeAndReturn(nd_for_focus, "setFocus", [portal_root, 0], target_dict);
+        target_dict = this._setFocus(nd_for_focus, portal_root, 0, target_dict);
 
         if (update) {
             this.setState({node_dict: target_dict})
@@ -369,11 +385,10 @@ let mutatorMixin = {
             }
         }
         if (["databox", "doitbox"].includes(kind)) {
-            target_dict = this.changeNodeAndReturn(this._getln(new_node_id, 0, 0, target_dict), "setFocus", [portal_root, 0], target_dict
-                )
+            target_dict = this._setFocus(this._getln(new_node_id, 0, 0, target_dict), portal_root, 0, target_dict)
         }
         else if (text_kinds.includes(kind)) {
-            target_dict = this.changeNodeAndReturn(new_node_id, "setFocus", [portal_root, 0])
+            target_dict = this._setFocus(new_node_id, portal_root, 0)
         }
 
         let self = this;
@@ -423,16 +438,33 @@ let mutatorMixin = {
         return target_dict
     },
 
+    _createCloset(boxId, target_dict=null, show=false, callback=null) {
+        target_dict = this._createClosetAndReturn(boxId, target_dict, show);
+        this.setState({node_dict: target_dict}, callback)
+    },
+
+    _createClosetAndReturn(boxId, target_dict=null, show=false) {
+        if (!target_dict) {
+            target_dict = this.state.node_dict;
+        }
+        let new_closet_line_id;
+        [new_closet_line_id, target_dict] = this._newClosetLine(target_dict);
+        target_dict[new_closet_line_id].parent = boxId;
+        target_dict[boxId].closetLine = new_closet_line_id;
+        target_dict[boxId].showCloset = show
+        return target_dict
+    },
+
     _deleteToLineEnd(text_id, caret_pos) {
         let target_dict = this.state.node_dict;
+        let mnode = target_dict[text_id];
         if (caret_pos == 0) {
             if (mnode.position == 0)  {
-                this.clipboard = [_.cloneDeep(parent_line)];
-                if (parent_line.amCloset) {
-                    [newnode_id, target_dict] = this._newTextNode(target_dict);
-                    target_dict = this.changeNodeAndReturn(newnode_id, "parent", target_dict[text_id].parent, target_dict)
-                    // parent_line.node_list = [new_node]
-                    this._changeNode(parent_line.unique_id, "node_list", [target_dict[new_node_id]], ()=>{
+                this._addToClipboardStart(mnode.parent);
+                let parentLine = target_dict[mnode.parent];
+                if (parentLine.amCloset) {
+                    target_dict = this._createCloset(parentLine.parent, target_dict,
+                        target_dict[parentLine.parent].showCloset, ()=>{
                         this._clearSelected()
                     })
                 }
@@ -454,9 +486,7 @@ let mutatorMixin = {
         let deleted_nodes = target_dict[target_dict[text_id].parent].node_list.slice(target_dict[text_id].position + 1,);
         target_dict = this.changeNodeAndReturn(target_dict[target_dict[text_id].parent], "node_list",
             [...target_dict[target_dict[text_id].parent].node_list.slice(0, target_dict[text_id].position)], target_dict);
-        let nline_id;
-        [nline_id, target_dict] = this._newLineNode(deleted_nodes)
-        this.clipboard = [nline_id];
+        this._setClipboardToNodeList(deleted_nodes, target_dict);
         this.setState({node_dict: target_dict},()=>{
             this._clearSelected()
         })
@@ -522,27 +552,28 @@ let mutatorMixin = {
         }
 
         function positionCursor(){
-            self._changeNode(focus_node, "setFocus", [portal_root, focus_pos])
+            self._setFocus(focus_node, portal_root, focus_pos)
         }
     },
 
     _addGraphicsComponent(uid, the_comp, callback=null) {
+        let mnode = this.state.node_dict[uid];
         let new_drawn_components = [...mnode.drawn_components, the_comp];
         this._changeNode(uid, "drawn_components", new_drawn_components, callback)
     },
 
     _getVirtualNode(uid) {
-        if (window.virtualNodeDict && window.VirtualNodeDict.hasOwnProperty(uid)) {
-            return window.virtualNodeDict(uid)
+        if (window.virtualNodeDict && window.virtualNodeDict.hasOwnProperty(uid)) {
+            return window.virtualNodeDict[uid]
         }
     },
 
     _setSpriteParams(uid, pdict, callback=null) {
-        let target_dict = this.state.base_node;
+        let target_dict = this.state.node_dict;
         let mnode = target_dict[uid];
         let vnode = this._getVirtualNode(uid);
         for (let lin_id of mnode.line_list) {
-            let lin = target_dict[line_id];
+            let lin = target_dict[lin_id];
             for (let nd_id of lin.node_list) {
                 let nd = target_dict[nd_id];
                 if (nd.name && pdict.hasOwnProperty(nd.name)) {
@@ -554,19 +585,22 @@ let mutatorMixin = {
             for (let lin_id of vnode.line_list) {
                 let lin = window.virtualNodeDict[lin_id];
                 for (let nd_id of lin.node_list) {
+                    let nd = window.virtualNodeDict[nd_id];
                     if (nd.name && pdict.hasOwnProperty(nd.name)) {
                         window.virtualNodeDict = this._setln(nd_id, 0, 0, "the_text", String(pdict[nd.name]), window.virtualNodeDict)
                     }
                 }
             }
         }
-        for (let nd_id of mnode.closetLine.node_list) {
+        for (let nd_id of target_dict[mnode.closetLine].node_list) {
+            let nd = target_dict[nd_id]
             if (nd.name && pdict.hasOwnProperty(nd.name)) {
                 target_dict = this._setln(nd_id, 0, 0, "the_text", String(pdict[nd.name]), target_dict)
             }
         }
         if (vnode) {
-            for (let nd_id of vnode.closetLine.node_list) {
+            for (let nd_id of window.virtualNodeDict[vnode.closetLine].node_list) {
+                let nd = window.virtualNodeDict[nd_id];
                 if (nd.name && pdict.hasOwnProperty(nd.name)) {
                     window.virtualNodeDict = this._setln(nd_id, 0, 0, "the_text", String(pdict[nd.name]), window.virtualNodeDict)
                 }
@@ -577,12 +611,12 @@ let mutatorMixin = {
 
      _zoomBox(uid) {
         let target_dict = this.changeNodeAndReturn(uid, "am_zoomed", true);
-        this.setState({base_node: newBase, zoomed_node_id: uid})
+        this.setState({node_dict: target_dict, zoomed_node_id: uid})
     },
 
     _unzoomBox(uid) {
         let target_dict = this.state.node_dict;
-        let mnode = target_dict(uid);
+        let mnode = target_dict[uid];
         if (mnode.parent == null) {
             return
         }
@@ -664,30 +698,29 @@ let mutatorMixin = {
         if (target_dict[start_node_id].kind.includes("turtle")) {
             let new_turtle_box_id;
             [new_turtle_box_id, target_dict] = this._newTurtleBox();
-            new_dict = this._replaceNodeAndReturn(new_turtle_box_id, target_dict[start_node_id].parent,
-                target_dict[start_node_id].position, target_dict)
-            return
+            new_dict = this._replaceNodeAndReturn(new_turtle_box_id, new_dict[start_node_id].parent,
+                target_dict[start_node_id].position, new_dict)
         }
-        this._addMissingParams(start_node);
+        // this._addMissingParams(start_node);
 
         if (start_node.kind == "line") {
-            new_dict = this._healLine(start_node, true, new_dict)
+            new_dict = this._healLine(start_node_id, true, new_dict)
         }
         else if (container_kinds.includes(start_node.kind)) {
             for (let lin_id of new_dict[start_node_id].line_list) {
                 // noinspection JSPrimitiveTypeWrapperUsage
-                new_dict = this.changeNodeAndReturn(line_id, "parent", start_node_id)
+                new_dict = this.changeNodeAndReturn(lin_id, "parent", start_node_id, new_dict)
                 new_dict = this._healStructure(lin_id, new_dict)
             }
-            new_dict = this._renumberNodes(new_dict[start_node_id], new_dict);
+            new_dict = this._renumberLines(start_node_id, new_dict);
             if (new_dict[start_node_id].closetLine) {
                 new_dict = this._changeNodeMultiAndReturn(new_dict[start_node_id].closetLine,
                     {"parent": start_node_id, "amCloset": true}, new_dict)
 
                 new_dict = this._healStructure(start_node.closetLine, new_dict)
             }
-            return new_dict
         }
+        return new_dict
     },
 
     _healLine(line_id, recursive=false, target_dict) {

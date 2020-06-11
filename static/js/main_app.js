@@ -64,7 +64,11 @@ function _main_main() {
     function got_data(result) {
         if (result.success) {
             let world_state = result.project_dict.world_state;
-            _rehydrateComponents(world_state.base_node);
+            if (world_state.hasOwnProperty("base_node")) {
+                world_state.node_dict = convertLegacySave(world_state.base_node);
+                world_state.base_node = null;
+            }
+            _rehydrateComponents(world_state.node_dict);
             loader.load(() => {
                 ReactDOM.render(React.createElement(MainAppPlus, { world_state: world_state }), domContainer);
             });
@@ -72,8 +76,39 @@ function _main_main() {
     }
 }
 
+function convertLegacySave(base_node) {
+    base_node.unique_id = "world";
+
+    return convertNode(base_node, {});
+
+    function convertNode(the_node, ndict) {
+        if (container_kinds.includes(the_node.kind)) {
+            let llist = [];
+            for (let line of the_node.line_list) {
+                llist.push(line.unique_id);
+                ndict = convertNode(line, ndict);
+            }
+            the_node.line_list = llist;
+        } else if (the_node.kind == "line") {
+            let nlist = [];
+            for (let nd of the_node.node_list) {
+                nlist.push(nd.unique_id);
+                nd = convertNode(nd.unique_id);
+            }
+            the_node.node_list = nlist;
+        }
+        ndict[the_node.unique_id] = the_node;
+        return ndict;
+    }
+}
+
 function _rehydrateComponents(ndict) {
-    for (let nd in ndict) {
+    for (let nd_id in ndict) {
+        let nd = ndict[nd_id];
+        if (node_classes.hasOwnProperty(nd.kind)) {
+            ndict[nd_id] = new node_classes[nd.kind](nd);
+            nd = ndict[nd_id];
+        }
         if (nd.kind == "graphics") {
             nd["drawn_components"] = [];
             if (nd.hasOwnProperty("component_specs")) {
@@ -123,9 +158,9 @@ class MainApp extends React.Component {
                 }
             }
         } else {
-            let base_node = _.cloneDeep(props.world_state.base_node);
-            this._healStructure(base_node);
-            this.state.base_node = base_node;
+            let node_dict = _.cloneDeep(props.world_state.node_dict);
+            node_dict = this._healStructure("world", node_dict);
+            this.state.node_dict = node_dict;
         }
         this.state.zoomed_node_id = "world";
         this.state.boxer_selected = false;
@@ -138,13 +173,14 @@ class MainApp extends React.Component {
         this.state.innerHeight = window.innerHeight;
         this.clipboard = [];
         this.history = [];
-        this.present = this.state.base_node;
+        this.present = this.state.node_dict;
         this.undoing = false;
         this.exportFuncs();
     }
 
     exportFuncs() {
         window.changeNode = this._changeNode;
+        window.setLineList = this._setLineList;
         window.newDataBoxNode = this._newDataBoxNode;
         window.newClosetLine = this._newClosetLine;
         window.healLine = this._healLine;
@@ -161,6 +197,7 @@ class MainApp extends React.Component {
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
         window.updateIds = this._updateIds;
+        window.getNode = this._getNode;
         window.getNodeDict = this._getNodeDict;
         window.getNthLine = this._getNthLine;
         window.getNthNode = this._getNthNode;
@@ -168,6 +205,8 @@ class MainApp extends React.Component {
         window.cloneNode = this._cloneNode;
         window.cloneLine = this._cloneLine;
         window.cloneNodetoTrueND = this._cloneNodeToTrueND;
+        window.cloneLinetoTrueND = this._cloneLineToTrueND;
+        window.createClosetAndReturn = this._createClosetAndReturn;
         window.setSpriteParams = this._setSpriteParams;
     }
 
@@ -175,7 +214,7 @@ class MainApp extends React.Component {
         window.addEventListener("resize", this._update_window_dimensions);
         this.state.history = [_.cloneDeep(this.state.node_dict)];
 
-        this._changeNode(this._getln("world", 0, 0, this.state.node_dict), "setFocus", ["root", 0]);
+        this._setFocus(this._getln("world", 0, 0, this.state.node_dict), "root", 0);
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
@@ -217,7 +256,8 @@ class MainApp extends React.Component {
     }
 
     _dehydrateComponents(ndict) {
-        for (let nd of ndict) {
+        for (let nd_id in ndict) {
+            let nd = ndict[nd_id];
             if (nd.kind == "graphics") {
                 nd.component_specs = [];
                 for (let comp of nd.drawn_components) {
@@ -283,14 +323,10 @@ class MainApp extends React.Component {
         let mline = this.state.node_dict[mnode.parent];
         if (mline.parent == null) return;
         let mbox = this.state.node_dict[mline.parent];
-        let new_dict = this.state.node_dict;
         if (!mbox.closetLine) {
-            let closetLineId;
-            [closetLineId, new_dict] = this._newClosetLine(new_dict);
-            new_dict = this.changeNodeAndReturn(closetLineId, "parent", mbox.unique_id, new_dict);
-            this._changeNodeMulti(mbox.unique_id, { closetLine: closetLineId, showCloset: !mbox.showCloset }, null, new_dict);
+            this._createCloset(mbox.unique_id, null, !mbox.showCloset);
         } else {
-            this._changeNode(mbox.unique_id, "showCloset", !mbox.showCloset, null, new_dict);
+            this._changeNode(mbox.unique_id, "showCloset", !mbox.showCloset, null, null);
         }
     }
 
@@ -408,7 +444,7 @@ class MainApp extends React.Component {
         let mnode = this.state.node_dict[databox_id];
 
         let target_id = this._getNthNode(mnode.parent, mnode.position + 1, this.state.node_dict).unique_id;
-        this._changeNode(target_id, "setFocus", [portal_root, 0]);
+        this._setFocus(target_id, portal_root, 0);
     }
 
     _handleTextChange(uid, new_html) {
@@ -500,12 +536,15 @@ class MainApp extends React.Component {
         let funcs = {
             handleTextChange: this._handleTextChange,
             changeNode: this._changeNode,
+            cloneNode: this._cloneNode,
+            setFocus: this._setFocus,
             insertBoxInText: this._insertBoxInText,
             deletePrecedingBox: this._deletePrecedingBox,
             deleteToLineEnd: this._deleteToLineEnd,
             splitLineAtTextPosition: this._splitLineAtTextPosition,
             getParentId: this._getParentId,
             getNode: this._getNode,
+            getln: this._getln,
             zoomBox: this._zoomBox,
             focusName: this._focusName,
             focusNameLastFocus: this._focusNameLastFocus,

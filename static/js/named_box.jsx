@@ -444,29 +444,29 @@ class EditableTag extends React.Component {
             if (myDataBox.kind == "port") {
                 let targetBox = this.props.funcs.getNode(myDataBox.target);
                 if (targetBox.kind == "jsbox") {
-                    this.props.funcs.changeNode(targetBox.unique_id, "setFocus", [this.props.boxId, 0]);
+                    this.props.funcs.setFocus(targetBox.unique_id, this.props.boxId, 0);
                 }
                 else if (targetBox.showCloset) {
                     let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
-                    this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.boxId, 0]);
+                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
                 }
                 else {
                     let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
-                    this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.boxId, 0]);
+                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
                 }
             }
             else if (myDataBox.kind == "jsbox") {
-                this.props.funcs.changeNode(this.props.boxId, "setFocus", [this.props.portal_root, 0]);
+                this.props.funcs.setFocus(this.props.boxId, this.props.portal_root, 0);
             }
             else if (myDataBox.showCloset) {
                 let closet = this.props.funcs.getNode(myDataBox.closetLine)
                 let firstTextNodeId = this.props.funcs.getNode(closet.node_list[0]).unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
+                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
             else {
                 let the_line = this.props.funcs.getNode(myDataBox.line_list[0])
                 let firstTextNodeId = this.props.funcs.getNode(the_line.node_list[0]).unique_id;
-                this.props.funcs.changeNode(firstTextNodeId, "setFocus", [this.props.portal_root, 0]);
+                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
 
         }
