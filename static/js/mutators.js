@@ -324,7 +324,13 @@ let mutatorMixin = {
         }
         target_dict = this._splitTextAtPosition(text_id, cursor_position, target_dict);
         let mnode = target_dict[text_id];
-        let pos = mnode.position;
+        let pos;
+        if (cursor_position == 0) {
+            pos = mnode.position - 1
+        }
+        else {
+            pos = mnode.position
+        }
         let linid = mnode.parent;
         let parent_line = target_dict[linid];
         let parent_line_pos = parent_line.position;
@@ -392,7 +398,14 @@ let mutatorMixin = {
         }
 
         let self = this;
-        target_dict = this._insertNodeAndReturn(new_node_id, target_dict[text_id].parent, target_dict[text_id].position + 1, target_dict, true);
+        let pos;
+        if (cursor_position == 0) {
+            pos = target_dict[text_id].position
+        }
+        else {
+            pos = target_dict[text_id].position + 1
+        }
+        target_dict = this._insertNodeAndReturn(new_node_id, target_dict[text_id].parent, pos, target_dict, true);
         this.setState({node_dict: target_dict}, ()=>{
              self._clearSelected();
              if (kind == "port") {
@@ -484,8 +497,8 @@ let mutatorMixin = {
             return
         }
         let deleted_nodes = target_dict[target_dict[text_id].parent].node_list.slice(target_dict[text_id].position + 1,);
-        target_dict = this.changeNodeAndReturn(target_dict[target_dict[text_id].parent], "node_list",
-            [...target_dict[target_dict[text_id].parent].node_list.slice(0, target_dict[text_id].position)], target_dict);
+        target_dict = this.changeNodeAndReturn(target_dict[text_id].parent, "node_list",
+            [...target_dict[target_dict[text_id].parent].node_list.slice(0, target_dict[text_id].position + 1)], target_dict);
         this._setClipboardToNodeList(deleted_nodes, target_dict);
         this.setState({node_dict: target_dict},()=>{
             this._clearSelected()

@@ -324,6 +324,7 @@ let boxer_statements = {
         converter: (arglist) => {
             return `
                 for (let _i = 0; _i < ${arglist[0]}; ++_i) {
+                    if (window.user_aborted) break;
                     ${arglist[1]}
                     await delay(1)
                 } 
@@ -486,6 +487,15 @@ let boxer_statements = {
         allow_return: true,
         converter: (arglist) => {
             return `atan(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    sqrt:  {
+        args:[
+            ["x", "number"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `sqrt(${arglist[0]})`
         }
     },
 };
