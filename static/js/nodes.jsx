@@ -67,7 +67,9 @@ class SpriteBox extends React.Component {
     }
 
     // shouldComponentUpdate(nextProps, nextState, nextContext) {
-    //     return !propsAreEqual(nextProps, this.props, ["funcs"])
+    //     let pequal = propsAreEqual(nextProps, this.props);
+    //     let sequal = propsAreEqual(nextState, this.state);
+    //     return !pequal || !sequal
     // }
 
     _myNode() {
@@ -437,6 +439,7 @@ class TextNode extends React.Component {
 
     async _runMe() {
         let parent_line = this._myLine();
+
 
         let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getNodeDict());
         if (result == null) {
@@ -1232,7 +1235,7 @@ class DataboxLine extends React.Component {
                 }
                 else {
                     let target_node = this.props.funcs.getNodeDict()[the_node.target];
-                    if (data_kinds.includes(target_node.kind)) {
+                    if (!target_node || data_kinds.includes(target_node.kind)) {
                         type_label = "Data"
                     }
                     else if (target_node.kind == "jsbox") {

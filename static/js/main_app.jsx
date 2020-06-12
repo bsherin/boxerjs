@@ -52,6 +52,8 @@ const MAX_UNDO_SAVES = 20;
 function _main_main() {
     console.log("entering start_post_load");
     window._running = 0;
+    window.update_on_ticks = false;
+    window.tick_received = false;
     tsocket = new BoxerSocket("boxer", 5000);
 
     let MainAppPlus = withErrorDrawer(withStatus(MainApp, tsocket), tsocket);
@@ -93,12 +95,17 @@ function convertLegacySave(base_node) {
                 ndict = convertNode(line, ndict)
             }
             the_node.line_list = llist;
+            if (the_node.closetLine) {
+                let saved_id = the_node.closetLine.unique_id;
+                ndict = convertNode(the_node.closetLine, ndict);
+                the_node.closetLine = saved_id;
+            }
 
         } else if (the_node.kind == "line") {
             let nlist = [];
             for (let nd of the_node.node_list) {
                 nlist.push(nd.unique_id);
-                nd = convertNode(nd.unique_id)
+                ndict = convertNode(nd, ndict)
             }
             the_node.node_list = nlist
         }
@@ -170,6 +177,7 @@ class MainApp extends React.Component {
             node_dict = this._healStructure("world", node_dict);
             this.state.node_dict= node_dict;
         }
+        this.state.executing = false;
         this.state.zoomed_node_id = "world";
         this.state.boxer_selected = false;
         this.state.select_parent = null;
@@ -186,10 +194,29 @@ class MainApp extends React.Component {
         this.exportFuncs();
     }
 
+    shouldComponentUpdate(nextProps, nextState) {
+        if (window._running > 0 && window.update_on_ticks) {
+            if (window.tick_received) {
+                window.tick_received = false;
+                return true
+            }
+            else {
+                return false
+            }
+        }
+        return true
+    }
+
+    _setExecuting(abool) {
+        this.setState({executing: abool})
+    }
+
     exportFuncs() {
+        window.setExecuting = this._setExecuting;
         window.changeNode = this._changeNode;
         window.setLineList = this._setLineList;
         window.newDataBoxNode = this._newDataBoxNode;
+        window.newErrorNode = this._newErrorNode;
         window.newClosetLine = this._newClosetLine;
         window.healLine = this._healLine;
         window.newLineNode = this._newLineNode;
@@ -243,6 +270,7 @@ class MainApp extends React.Component {
             }
         }
     }
+
 
     _undo() {
         if (this.history.length > 0) {

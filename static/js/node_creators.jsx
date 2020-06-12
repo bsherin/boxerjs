@@ -53,6 +53,24 @@ let nodeCreatorMixin = {
         return [ncloset_line_id, target_dict]
     },
 
+    _newErrorNode(first_part, body, target_dict={}) {
+         let body_list = body.split("\n")
+         let ttext_id, tline_id, bline_id;
+         let line_ids = [];
+         [ttext_id, target_dict] = this._newTextNode(first_part, target_dict);
+         [tline_id, target_dict] = this._newLineNode([ttext_id], target_dict);
+         line_ids.push(tline_id)
+         for (let btext of body_list) {
+             let btext_id, bline_id;
+            [btext_id, target_dict] = this._newTextNode(body, target_dict);
+            [bline_id, target_dict] = this._newLineNode([btext_id], target_dict);
+            line_ids.push(bline_id)
+         }
+
+         return this._newDataBoxNode(line_ids, false, target_dict)
+    },
+
+
      _newLineNode(node_list=[], target_dict={}) {
         let uid = guid();
         if (node_list.length == 0) {
@@ -521,19 +539,20 @@ let nodeCreatorMixin = {
         }
     },
 
-    _healers() {
+    _nodeModels() {
         return {
-            jsbox: null,
-            text: null,
-            htmlbox: null,
-            doitbox: this._newDoitBoxNode,
-            databox: this._newDataBoxNode,
-            sprite: this._newSpriteBox,
-            graphics: this._newGraphicsBox,
-            svggraphics: this._newSvgGraphicsBox,
-            color: this._newColorBox,
-            port: this._newPort,
-            line: this._healLine
+            jsbox: (target_dict)=>{return this._newJsBoxNode(null, target_dict)},
+            htmlbox: (target_dict)=>{return this._newHtmlBoxNode(null, target_dict)},
+            text: (target_dict)=>{return this._newTextNode("", target_dict)},
+            doitbox: (target_dict)=>{return this._newDoitBoxNode([], target_dict)},
+            databox: (target_dict)=>{return this._newDataBoxNode([], false, target_dict)},
+            sprite: (target_dict)=>{return this._newSpriteBox(false, target_dict)},
+            graphics: (target_dict)=>{return this._newGraphicsBox([], target_dict)},
+            svggraphics: (target_dict)=>{return this._newSvgGraphicsBox([], target_dict)},
+            line: (target_dict)=>{return this._newLineNode([], target_dict)},
+            color: (target_dict)=>{return this._newColorBox(null, target_dict)},
+            port: (target_dict)=>{return this._newPort(null, target_dict)},
         }
     }
+
 }

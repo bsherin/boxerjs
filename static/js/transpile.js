@@ -11,16 +11,28 @@ export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, g
 // from the interface or a tell statement
 // It creates a temporary doit node, wrapped around the line of code, then inserts it
 // as a virtual doit node in the hierarchy.
-function _createLocalizedFunctionCall(the_code_line, box_id, ports=null) {
+function _createLocalizedFunctionCall(the_code_line, box_id, ports=null, use_virtual_source=false) {
     let temp_dict = {};
     let local_code_line_id, _tempDoitNodeId;
-    [local_code_line_id, window.virtualNodeDict] = window.cloneNode(the_code_line.unique_id, null, window.virtualNodeDict, true);
+    let line_source = null
+    if (use_virtual_source) {
+        line_source = window.virtualNodeDict
+    }
+    [local_code_line_id, window.virtualNodeDict] = window.cloneNode(the_code_line.unique_id, line_source, window.virtualNodeDict, true);
     [_tempDoitNodeId, window.virtualNodeDict] = window.newDoitNode([local_code_line_id], window.virtualNodeDict);
     window.virtualNodeDict[_tempDoitNodeId].name = "_tempFunc";
     window.virtualNodeDict[_tempDoitNodeId].virtual = true
     let _inserted_start_node = insertVirtualNode(_tempDoitNodeId, box_id);
     _inserted_start_node.ports = ports
     return _inserted_start_node
+}
+
+class TranspileError extends Error {
+    constructor(doit_name = "Transpile Error", body = "", ...params) {
+        super(...params)
+        this.title = `Error transpiling doit box '${doit_name}'`;
+        this.body = body;
+    }
 }
 
 // This takes a doit node, and transpiles it to javascript
@@ -63,7 +75,8 @@ function _convertFunctionNode(doitNode) {
         // This is a mechanism for getting input arguments into tells
         if (doitNode.hasOwnProperty("ports") && doitNode.ports) {
             for (let portname in doitNode.ports) {
-                let new_port_id = window.newPort(doitNode.ports[portname], window.virtualNodeDict);
+                let new_port_id;
+                [new_port_id, window.virtualNodeDict] = window.newPort(doitNode.ports[portname], window.virtualNodeDict);
                 let inserted_port = window.virtualNodeDict[new_port_id]
                 inserted_port.name = portname
                 insertVirtualNode(new_port_id, doitNode.unique_id)
@@ -81,7 +94,9 @@ function _convertFunctionNode(doitNode) {
             if (called_doit.node.parent == doitNode.unique_id) {
                 continue
             }
-            let vnode = called_doit.node;
+            let new_doit_id;
+            [new_doit_id, window.virtualNodeDict] = window.cloneNode(called_doit.node.unique_id, window.virtualNodeDict, window.virtualNodeDict, true);
+            let vnode = window.virtualNodeDict[new_doit_id];
             insertVirtualNode(vnode.unique_id, doitNode.unique_id);
             // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
@@ -132,8 +147,8 @@ function _convertFunctionNode(doitNode) {
         return
     }
     catch(error) {
-        let title = `Error transpiling doit box '${doitNode.name}'`;
-        window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
+        throw new TranspileError(doitNode.name, `${error}`);
+        //window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
 
     }
 }
@@ -216,9 +231,9 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
                 }
             }
             if (node.kind == "port") {
-                node = getPortTarget(node, base_node)
+                node = getPortTarget(node, node_dict)
             }
-            if (container_kinds.includes(node.kind) && node.transparent) {
+            if (node && container_kinds.includes(node.kind) && node.transparent) {
                 let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(node, node_dict, name_list.concat(new_names), current_turtle_id);
                 new_names = new_names.concat(sub_names);
                 new_nodes = new_nodes.concat(sub_nodes);
@@ -239,11 +254,12 @@ function insertVirtualNode(nodeToInsertId, boxToInsertInId) {
         window.virtualNodeDict = window.createClosetAndReturn(boxToInsertInId, window.virtualNodeDict)
     }
     cline_id = window.virtualNodeDict[boxToInsertInId].closetLine;
+    window.virtualNodeDict[cline_id].virtual = true
 
     window.virtualNodeDict[nodeToInsertId].parent = window.virtualNodeDict[cline_id].unique_id;
     window.virtualNodeDict[cline_id].node_list.push(nodeToInsertId);
     window.virtualNodeDict = window.healLine(cline_id, false, window.virtualNodeDict)
-
+    window.virtualNodeDict[nodeToInsertId].virtual = true;
     makeChildrenVirtual(nodeToInsertId);
 
     return window.virtualNodeDict[nodeToInsertId]
@@ -533,9 +549,9 @@ function convertTell(token_list, context) {
         the_node = window.virtualNodeDict[node_id]
     }
     let the_code_line_id, the_code_line;
-    [the_code_line_id, window.virtualNodeDict] = window.newLineNode([node_id]);
+    [the_code_line_id, window.virtualNodeDict] = window.newLineNode([node_id], window.virtualNodeDict);
     the_code_line = window.virtualNodeDict[the_code_line_id];
-    let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes);
+    let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes, true);
 
     return _inserted_start_node
 }
@@ -735,7 +751,7 @@ function dataBoxToValue(dbox) {
 
 function getPortTarget(portNode, node_dict) {
     if (portNode.target == null) return null;
-    let targetNode = node_dict(portNode.target);
+    let targetNode = node_dict[portNode.target];
     return targetNode
 }
 

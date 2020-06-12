@@ -223,6 +223,16 @@ let boxer_statements = {
             return `await makeColor(${arglist[0]}, ${arglist[1]}, ${arglist[2]})`
         }
     },
+
+    "set-tick-interval": {
+        args: [
+            ["interval", "number"],
+        ],
+        converter: (arglist) => {
+            return `await setTickInterval(${arglist[0]})`
+        }
+    },
+
     snap: {
         args:[
             ["gbox", "graphics"]

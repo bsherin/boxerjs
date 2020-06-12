@@ -13,7 +13,7 @@ var _name_index;
 var _base_node;
 
 let delay_amount = 1;
-
+window.TICK_INTERVAL = 40;
 
 function delay(msecs) {
     return new Promise(resolve => setTimeout(resolve, msecs));
@@ -61,26 +61,42 @@ async function _mouseClickOnGraphics(graphics_box_id, base_node) {
 
 async function doExecution(the_code_line, box_id, node_dict) {
     // window.context_functions = {};
-    if (window._running == 0) {
-        window.virtualNodeDict = _.cloneDeep(node_dict);
+    window.virtualNodeDict = _.cloneDeep(node_dict);
+    startTicker();
+    if (window.TICK_INTERVAL >= 0) {
+        window.update_on_ticks = true;
     }
+    window.tick_received = false;
+    window.setExecuting(true);
     // window.tell_function_counter = 0;
     let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id);
-
+    let _result
     try {
         window._running += 1;
-        let _result = await getBoxValue(window.virtualNodeDict[_inserted_start_node.unique_id].name, box_id)()
+        _result = await getBoxValue(window.virtualNodeDict[_inserted_start_node.unique_id].name, box_id)()
         window._running -= 1;
-        return _result;
+        if (window._running == 0) {
+            window.setExecuting(false) // To force a refresh at the end
+        }
     } catch (error) {
-        window.addErrorDrawerEntry({title: error.message, content: `<pre>${error.stack}</pre>`})
+        window._running = 0;
+        window.setExecuting(false);  // This is to force a refresh
+        // window.addErrorDrawerEntry({title: error.message, content: `<pre>${error.stack}</pre>`})
+        let vid
+        [vid, window.virtualNodeDict]  = window.newErrorNode(error.title, error.body, window.virtualNodeDict);
+        _result = {vid: vid}
+    } finally {
+        window.clearInterval(window.ticker);
+
+        window.update_on_ticks = false;
     }
+    return _result
 }
 
 function getBoxValue(boxName, startId) {
     let _node = findNamedNode(boxName, startId);
     if (_node.kind == "port") {
-        _node = getPortTarget(_node, window.virtualNodeTree);
+        _node = getPortTarget(_node, window.virtualNodeDict);
         if (!_node) {
             return null;
         }
@@ -172,6 +188,19 @@ async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=nul
             resolve(data)
         })
     })
+}
+
+
+function startTicker() {
+    window.ticker = window.setInterval(generateTick, window.TICK_INTERVAL);
+}
+
+function setTickInterval(interval) {
+    window.TICK_INTERVAL = interval
+}
+
+async function generateTick() {
+    window.tick_received = true
 }
 
 async function sin(angle) {

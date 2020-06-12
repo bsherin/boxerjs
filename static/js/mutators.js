@@ -693,34 +693,33 @@ let mutatorMixin = {
     },
 
     _healStructure(start_node_id, target_dict) {
-        let new_dict = target_dict;
         let start_node = target_dict[start_node_id]
         if (target_dict[start_node_id].kind.includes("turtle")) {
             let new_turtle_box_id;
             [new_turtle_box_id, target_dict] = this._newTurtleBox();
-            new_dict = this._replaceNodeAndReturn(new_turtle_box_id, new_dict[start_node_id].parent,
-                target_dict[start_node_id].position, new_dict)
+            target_dict = this._replaceNodeAndReturn(new_turtle_box_id, target_dict[start_node_id].parent,
+                target_dict[start_node_id].position, target_dict)
         }
-        // this._addMissingParams(start_node);
+        target_dict = this._addMissingParams(start_node_id, target_dict);
 
         if (start_node.kind == "line") {
-            new_dict = this._healLine(start_node_id, true, new_dict)
+            target_dict = this._healLine(start_node_id, true, target_dict)
         }
         else if (container_kinds.includes(start_node.kind)) {
-            for (let lin_id of new_dict[start_node_id].line_list) {
+            for (let lin_id of target_dict[start_node_id].line_list) {
                 // noinspection JSPrimitiveTypeWrapperUsage
-                new_dict = this.changeNodeAndReturn(lin_id, "parent", start_node_id, new_dict)
-                new_dict = this._healStructure(lin_id, new_dict)
+                target_dict = this.changeNodeAndReturn(lin_id, "parent", start_node_id, target_dict)
+                target_dict = this._healStructure(lin_id, target_dict)
             }
-            new_dict = this._renumberLines(start_node_id, new_dict);
-            if (new_dict[start_node_id].closetLine) {
-                new_dict = this._changeNodeMultiAndReturn(new_dict[start_node_id].closetLine,
-                    {"parent": start_node_id, "amCloset": true}, new_dict)
+            target_dict = this._renumberLines(start_node_id, target_dict);
+            if (target_dict[start_node_id].closetLine) {
+                target_dict = this._changeNodeMultiAndReturn(target_dict[start_node_id].closetLine,
+                    {"parent": start_node_id, "amCloset": true}, target_dict)
 
-                new_dict = this._healStructure(start_node.closetLine, new_dict)
+                target_dict = this._healStructure(start_node.closetLine, target_dict)
             }
         }
-        return new_dict
+        return target_dict
     },
 
     _healLine(line_id, recursive=false, target_dict) {
@@ -780,11 +779,13 @@ let mutatorMixin = {
     },
 
     _addMissingParams(start_node_id, new_dict) {
-        let [model_node_id, temp_dict] = this._nodeCreators()[new_dict[start_node_id].kind]();
+        let model_node_id;
+        let temp_dict;
+        [model_node_id, temp_dict] = this._nodeModels()[new_dict[start_node_id].kind](temp_dict);
         let model_node = temp_dict[model_node_id];
         for (let param in model_node) {
             if (!new_dict[start_node_id].hasOwnProperty(param)) {
-                new_dict = this.changeNodeAndReturn(start_node_id, param, model_node[param])
+                new_dict = this.changeNodeAndReturn(start_node_id, param, model_node[param], new_dict)
             }
         }
         if (new_dict[start_node_id].kind == "sprite") {
@@ -800,28 +801,38 @@ let mutatorMixin = {
                     }
                 }
                 if (!found) {
-                    new_dict = this._createEntryAndReturn(mnd, new_dict);
-                    new_dict = this._insertNodeAndReturn(mnd_id, current_main_line_id,
+                    let new_id;
+                    [new_id, new_dict] = this._cloneNode(mnd_id, temp_dict, new_dict, false);
+                    new_dict = this._insertNodeAndReturn(new_id, current_main_line_id,
                         new_dict[current_main_line_id].node_list.length, new_dict)
                 }
             }
-            let model_closet_line = temp_dict[model_node.closetLine];
-            let current_closet_line_id = new_dict[start_node_id].closetLine;
-            for (let mnd_id of model_closet_line.node_list) {
-                let found = false;
-                let mnd = temp_dict[mnd_id]
-                for (let nd_id of new_dict[current_closet_line_id].node_list) {
-                    if (new_dict[nd_id].name == mnd.name) {
-                        found = true;
-                        break
+            if (!new_dict[start_node_id].closetLine) {
+                let cline_id;
+                [cline_id, new_dict] = this._cloneLine(model_node.closetLine, temp_dict, new_dict, false);
+                new_dict.closetLine = cline_id
+            }
+            else {
+                let model_closet_line = temp_dict[model_node.closetLine];
+                let current_closet_line_id = new_dict[start_node_id].closetLine;
+                for (let mnd_id of model_closet_line.node_list) {
+                    let found = false;
+                    let mnd = temp_dict[mnd_id]
+                    for (let nd_id of new_dict[current_closet_line_id].node_list) {
+                        if (new_dict[nd_id].name == mnd.name) {
+                            found = true;
+                            break
+                        }
+                    }
+                    if (!found) {
+                        let new_id;
+                        [new_id, new_dict] = this._cloneNode(mnd_id, temp_dict, new_dict, false);
+                        new_dict = this._insertNodeAndReturn(mnd_id, current_closet_line_id,
+                            new_dict[current_closet_line_id].node_list.length, new_dict)
                     }
                 }
-                if (!found) {
-                    new_dict = this._createEntryAndReturn(mnd, new_dict);
-                    new_dict = this._insertNodeAndReturn(mnd_id, current_closet_line_id,
-                        new_dict[current_closet_line_id].node_list.length, new_dict)
-                }
             }
+
         }
         return new_dict
     },
