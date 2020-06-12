@@ -111,10 +111,10 @@ let copySelectMixin = {
         this.clipboard_dict = {};
         for (let nid of node_list) {
             let _discard;
-            [_discard, target_dict] = this._cloneNode(nid, target_dict, this.clipboard_dict)
+            [_discard, this.clipboard_dict] = this._cloneNode(nid, target_dict, this.clipboard_dict)
         }
         let nline_id;
-        [nline_id, target_dict] = this._newLineNode(node_list);
+        [nline_id, this.clipboard_dict] = this._newLineNode(node_list, this.clipboard_dict);
         this.clipboard = [nline_id]
     },
 

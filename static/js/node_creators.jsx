@@ -378,6 +378,7 @@ let nodeCreatorMixin = {
             main_node_list.push(vid);
             main_node_list.push(tid)
         }
+
         let tshape;
         if (use_svg) {
             [tshape, target_dict] = this._newSvgTurtleShape(target_dict)
@@ -385,7 +386,9 @@ let nodeCreatorMixin = {
         else {
             [tshape, target_dict] = this._newTurtleShape(target_dict)
         }
-        main_node_list.push(tshape)
+        main_node_list.push(tshape);
+        [tid, target_dict] = this._newTextNode(" ", target_dict);
+        main_node_list.push(tid)
 
         let main_lineid;
         [main_lineid, target_dict] = this._newLineNode(main_node_list, target_dict);
@@ -398,6 +401,9 @@ let nodeCreatorMixin = {
             closet_node_list.push(vid);
             closet_node_list.push(tid)
         }
+        [tid, target_dict] = this._newTextNode(" ", target_dict);
+        closet_node_list.push(tid)
+
         let penColorBoxid;
         [penColorBoxid, target_dict] = this._newColorBox("0 0 0", target_dict);
         target_dict = this.changeNodeAndReturn(penColorBoxid, "name", "penColor", target_dict)
@@ -406,6 +412,7 @@ let nodeCreatorMixin = {
         let closet_lineid
         [closet_lineid, target_dict] = this._newLineNode(closet_node_list, target_dict);
         target_dict = this.changeNodeAndReturn(closet_lineid, "amCloset", true, target_dict)
+        target_dict = this._renumberNodes(closet_lineid, target_dict);
 
         let line_list = [main_lineid];
         for (let lnodeid of line_list) {
@@ -450,6 +457,7 @@ let nodeCreatorMixin = {
         let new_lineid;
         [new_lineid, target_dict] = this._newLineNode(node_list, target_dict);
         let line_list = [new_lineid];
+        target_dict = this._healLine(new_lineid, false, target_dict);
 
         let new_nodeid;
         [new_nodeid, target_dict] = this._newGraphicsBox(line_list, target_dict);
@@ -468,6 +476,7 @@ let nodeCreatorMixin = {
         let new_lineid;
         [new_lineid, target_dict] = this._newLineNode(node_list, target_dict);
         let line_list = [new_lineid];
+        target_dict = this._healLine(new_lineid, false, target_dict);
         let new_nodeid;
         [new_nodeid, target_dict] = this._newSvgGraphicsBox(line_list, target_dict);
         for (let lnodeid of target_dict[new_nodeid].line_list) {

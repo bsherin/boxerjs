@@ -14,6 +14,7 @@ var _base_node;
 
 let delay_amount = 1;
 window.TICK_INTERVAL = 40;
+window.user_aborted = false;
 
 function delay(msecs) {
     return new Promise(resolve => setTimeout(resolve, msecs));
@@ -26,6 +27,11 @@ function addConverted(cdict) {
     }
     return nstring
 }
+
+Mousetrap.bind(['ctrl+.', 'command+.'], function (e) {
+                window.user_aborted = true;
+                e.preventDefault();
+            });
 
 async function _mouseClickOnSprite(sprite_box_id, base_node) {
     let snode = _getMatchingNode(sprite_box_id, base_node);
@@ -73,6 +79,7 @@ async function doExecution(the_code_line, box_id, node_dict) {
     let _result
     try {
         window._running += 1;
+        window.user_aborted = false;
         _result = await getBoxValue(window.virtualNodeDict[_inserted_start_node.unique_id].name, box_id)()
         window._running -= 1;
         if (window._running == 0) {
@@ -87,7 +94,7 @@ async function doExecution(the_code_line, box_id, node_dict) {
         _result = {vid: vid}
     } finally {
         window.clearInterval(window.ticker);
-
+        window.user_aborted = false;
         window.update_on_ticks = false;
     }
     return _result
@@ -225,6 +232,10 @@ async function tan(angle) {
 
 async function atan(y, x) {
     return radiansToDegrees(Math.atan2(y, x))
+}
+
+async function sqrt(x) {
+    return Math.sqrt(x)
 }
 
 async function change(boxname, newval, my_node_id) {
