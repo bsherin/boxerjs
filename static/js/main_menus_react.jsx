@@ -3,12 +3,20 @@
 import React from "react";
 import PropTypes from 'prop-types';
 
+import {connect} from "react-redux";
+
 import { MenuItem, Menu, Popover, MenuDivider, PopoverPosition, Button } from "@blueprintjs/core";
 
 import {showModalReact} from "./modal_react.js";
 import {doFlash} from "./toaster.js"
 import {doBinding} from "./utilities.js";
 import {postAjax} from "./communication_react";
+
+import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+
+function mapStateToProps(state, ownProps){
+    return {stored_focus: state.stored_focus}
+}
 
 export {ProjectMenu, MakeMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
 
@@ -82,7 +90,7 @@ MenuComponent.defaultProps = {
     alt_button: null
 };
 
-class ProjectMenu extends React.Component {
+class ProjectMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -184,12 +192,14 @@ class ProjectMenu extends React.Component {
     }
 }
 
-ProjectMenu.propTypes = {
-    world_state: PropTypes.object,
+ProjectMenuRaw.propTypes = {
     hidden_items: PropTypes.array
 };
 
-class MakeMenu extends React.Component {
+
+let ProjectMenu = connect(mapStateToProps, mapDispatchToProps)(ProjectMenuRaw)
+
+class MakeMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -254,24 +264,26 @@ class MakeMenu extends React.Component {
     }
 }
 
-class BoxMenu extends React.Component {
+let MakeMenu = connect(mapStateToProps, mapDispatchToProps)(MakeMenuRaw)
+
+class BoxMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
     }
 
     _name_box() {
-        this.props.focusNameLastFocus()
+        this.props.focusName(this.props.stored_focus.last_focus_id)
     }
 
 
     get option_dict () {
         return {
             "Name": this._name_box,
-            "Unfix Box Size": this.props.unfixSizeLastFocus,
-            "Toggle Closet": this.props.toggleClosetLastFocus,
-            "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus,
-            "Retarget Port": this.props.retargetPortLastFocus
+            "Unfix Box Size": ()=>{this.props.unfixSize(this.props.stored_focus.last_focus_id)},
+            "Toggle Closet": ()=>{this.props.toggleCloset(this.props.stored_focus.last_focus_id)},
+            "Toggle Transparency": ()=>{this.props.toggleBoxTransparency(this.props.stored_focus.last_focus_id)},
+            "Retarget Port": ()=>{this.props.retargetPort(this.props.stored_focus.last_focus_id)}
         }
     }
 
@@ -306,10 +318,11 @@ class BoxMenu extends React.Component {
         )
     }
 }
-BoxMenu.propTypes = {
-};
 
-class EditMenu extends React.Component {
+let BoxMenu = connect(mapStateToProps, mapDispatchToProps)(BoxMenuRaw)
+
+
+class EditMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -374,8 +387,7 @@ class EditMenu extends React.Component {
         )
     }
 }
-EditMenu.propTypes = {
-};
+let EditMenu = connect(mapStateToProps, mapDispatchToProps)(EditMenuRaw)
 
 class ViewMenu extends React.Component {
     constructor(props) {

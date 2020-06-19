@@ -347,7 +347,7 @@ class TurtleBox extends React.Component {
     }
 
     _setSize(new_width, new_height) {
-        this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+        this.props.setNodeSize(this.props.unique_id, new_width, new_height)
     }
 
     _stopResize(e, ui, x, y, dx, dy) {

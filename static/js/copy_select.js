@@ -104,6 +104,19 @@ let copySelectMixin = {
         return target_dict
     },
 
+
+    _findParents(node_id, target_dict) {
+        let mnode = target_dict[node_id];
+        let parents = [mnode.unique_id];
+        let par = mnode.parent;
+        while (par) {
+            parents.push(par);
+            mnode = target_dict[par];
+            par = mnode.parent
+        }
+        return parents
+    },
+
     _setClipboardToNodeList(node_list, target_dict=null) {
         if (!target_dict) {
             target_dict = this.state.node_dict
@@ -377,20 +390,20 @@ let copySelectMixin = {
             let focus_node_id;
             if (start_spot >= select_parent_node.node_list.length) {
                 focus_node_id= select_parent_node.node_list[select_parent_node.node_list.length - 1];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
                     [this.last_focus_portal_root, target_dict[focus_node_id].the_text.length],
                     target_dict);
             }
             else if (select_parent_node.node_list[start_spot].kind != "text") {
                 focus_node_id = select_parent_node.node_list[start_spot + 1];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
                     [this.last_focus_portal_root, 0],
                     target_dict);
 
             }
             else {
                 focus_node_id = select_parent_node.node_list[start_spot];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
                     [this.last_focus_portal_root, target_dict[focus_node_id].the_text.length],
                     target_dict);
             }

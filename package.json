@@ -42,6 +42,7 @@
     "react-spring": "^8.0.27",
     "react-transition-group": "^4.3.0",
     "redux": "^4.0.5",
+    "redux-thunk": "^2.3.0",
     "sass-loader": "^8.0.2",
     "showdown": "^1.9.1",
     "socket.io-client": "^2.3.0",

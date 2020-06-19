@@ -1,11 +1,16 @@
 import React from "react";
 import ContentEditable from "react-contenteditable";
+import { Provider } from 'react-redux';
 import PropTypes from "prop-types";
+
+import {connect} from "react-redux";
 
 import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, propsAreEqual, _convertColorArg, _svgConvertColorArg} from "./utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics} from "./eval_space.js";
+
+import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
 
 import {SvgRect} from "./svg_shapes.js"
 // noinspection ES6CheckImport
@@ -38,8 +43,14 @@ PIXI.settings.RESOLUTION = 1;
 const loader = PIXI.Loader.shared;
 loader.add('turtle', "/static/assets/turtle_image.png");
 
+function mapStateToProps(state, ownProps){
 
-class SpriteBox extends React.Component {
+    return Object.assign({node_dict: state.node_dict, state_globals: state.state_globals},
+        ownProps, state.node_dict[ownProps["unique_id"]])
+}
+
+
+class SpriteBoxRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this);
@@ -73,7 +84,7 @@ class SpriteBox extends React.Component {
     // }
 
     _myNode() {
-        return this.props.funcs.getNode(this.props.unique_id)
+        return this.props.node_dict[this.props.unique_id]
     }
 
 
@@ -133,13 +144,7 @@ class SpriteBox extends React.Component {
 }
 
 
-SpriteBox.propTypes = {
-    in_svg: PropTypes.bool
-}
-
-SpriteBox.defaultProps = {
-    in_svg: false
-}
+var SpriteBox = connect(mapStateToProps, mapDispatchToProps)(SpriteBoxRaw)
 
 class GraphicsBoxRaw extends React.Component {
     constructor(props) {
@@ -173,7 +178,7 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     _onMouseDown(event) {
-        _mouseClickOnGraphics(this.props.unique_id, this.props.funcs.getBaseNode())
+        _mouseClickOnGraphics(this.props.unique_id, this.props.node_dict["world"])
     }
 
     componentDidMount () {
@@ -185,7 +190,7 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     _addComponent(new_comp, callback=null) {
-        this.props.funcs.addGraphicsComponent(this.props.unique_id, new_comp, callback);
+        this.props.addGraphicsComponent(this.props.unique_id, new_comp, callback);
         //this.setState({drawnComponents: [...this.state.drawnComponents, new_comp]})
     }
 
@@ -198,7 +203,7 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     _getColorBoxColor() {
-        let color_string = this.props.funcs.getNode(this.props.funcs.getln(this.props.unique_id, 0, 0)).the_text
+        let color_string = this.props.node_dict[this.props.funcs.getln(this.props.unique_id, 0, 0)].the_text
         return _convertColorArg(color_string)
     }
 
@@ -234,8 +239,8 @@ class GraphicsBoxRaw extends React.Component {
                     temp_ll.push(this.props.closetLine)
                 }
                 for (let lin_id of temp_ll) {
-                    for (let nd_id of this.props.funcs.getNode(lin_id).node_list) {
-                        let nd = this.props.funcs.getNode(nd_id)
+                    for (let nd_id of this.props.node_dict[lin_id].node_list) {
+                        let nd = this.props.node_dict[nd_id]
                         if (nd.kind == "sprite") {
                             let new_comp = (
                                 <SpriteBox {...nd}
@@ -262,17 +267,20 @@ class GraphicsBoxRaw extends React.Component {
                 let bgcolor = _convertColorArg(this.props.bgColor)
                 let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
                 let scalePoint = [-1, 1];  // This reflects over y axis
+                // I need the Provider hack below because of a react-pixi issue.
                 return (
                     <Stage options={{width: gwidth, height:gheight, antialias: true}}>
                         <Container position={offsetPoint} angle={180} scale={scalePoint}>
-                            <Sprite width={gwidth} height={gheight} key="bgsprite"
-                                    texture={PIXI.Texture.WHITE}
-                                    position={{x: -gwidth / 2, y: -gheight / 2}}
-                                    ref={this.graphicsRef}
-                                    interactive={true}
-                                    tint={bgcolor} />
-                            {sprite_components.length > 0 && sprite_components}
-                            {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                            <Provider store={window.store}>
+                                <Sprite width={gwidth} height={gheight} key="bgsprite"
+                                        texture={PIXI.Texture.WHITE}
+                                        position={{x: -gwidth / 2, y: -gheight / 2}}
+                                        ref={this.graphicsRef}
+                                        interactive={true}
+                                        tint={bgcolor} />
+                                {sprite_components.length > 0 && sprite_components}
+                                {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                            </Provider>
                         </Container>
                     </Stage>
                 )
@@ -292,7 +300,8 @@ GraphicsBoxRaw.propTypes = {
     app: PropTypes.object
 };
 
-const GraphicsBox = withApp(withName(GraphicsBoxRaw));
+const GraphicsBox = connect(mapStateToProps, mapDispatchToProps)(withApp(withName(GraphicsBoxRaw)));
+
 
 class SvgGraphicsBoxRaw extends React.Component {
     constructor(props) {
@@ -331,15 +340,14 @@ class SvgGraphicsBoxRaw extends React.Component {
                 temp_ll.push(this.props.closetLine)
             }
             for (let lin_id of temp_ll) {
-                for (let nd_id of this.props.funcs.getNode(lin_id).node_list) {
-                    let nd = this.props.funcs.getNode(nd_id)
+                for (let nd_id of this.props.node_dict[lin_id].node_list) {
+                    let nd = this.props.node_dict[nd_id]
                     if (nd.kind == "sprite") {
                         let new_comp = (
                             <SpriteBox {...nd}
                                        in_svg={true}
                                        key={nd.unique_id}
                                        app={this.props.app}
-                                       funcs={this.props.funcs}
                                        graphics_fixed_width={gwidth}
                                        graphics_fixed_height={gheight}
                                        do_wrap={this.do_wrap}
@@ -374,20 +382,10 @@ class SvgGraphicsBoxRaw extends React.Component {
     }
 }
 
-var SvgGraphicsBox = withName(SvgGraphicsBoxRaw)
-
-SvgGraphicsBox.propTypes = {
-    unique_id: PropTypes.string,
-    graphics_fixed_width: PropTypes.number,
-    graphics_fixed_height: PropTypes.number,
-    showGraphics: PropTypes.bool,
-    funcs: PropTypes.object,
-    app: PropTypes.object
-};
+var SvgGraphicsBox = connect(mapStateToProps, mapDispatchToProps)(withName(SvgGraphicsBoxRaw));
 
 
-
-class TextNode extends React.Component {
+class TextNodeRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
@@ -399,7 +397,7 @@ class TextNode extends React.Component {
         if (window.freeze && window._running > 0){
                 return false
             }
-        return !propsAreEqual(nextProps, this.props, ["funcs"]) || this.props.setFocus
+        return !propsAreEqual(nextProps, this.props, ["funcs"]) || this.props.setTextFocus
     }
 
     trimSpaces(string) {
@@ -419,7 +417,7 @@ class TextNode extends React.Component {
 
     _handleChange(event) {
         let txt = this.trimSpaces(event.target.value);  // Otherwise we end up with junk
-        this.props.funcs.handleTextChange(this.props.unique_id, txt)
+        this.props.changeNode(this.props.unique_id, "the_text", txt)
     }
 
     _displayMessage() {
@@ -434,14 +432,14 @@ class TextNode extends React.Component {
     _onBlur() {
         currentlyDeleting = false;
         let pos = getCaretPosition(this.iRef);
-        this.props.funcs.storeFocus(this.props.unique_id, pos, this.props.portal_root)
+        this.props.storeFocus(this.props.unique_id, pos, this.props.portal_root)
     }
 
     async _runMe() {
         let parent_line = this._myLine();
 
 
-        let result = await doExecution(parent_line, parent_line.parent, this.props.funcs.getNodeDict());
+        let result = await doExecution(parent_line, parent_line.parent, this.props.node_dict);
         if (result == null) {
             return
         }
@@ -472,24 +470,24 @@ class TextNode extends React.Component {
         }
         if (event.key == "F9") {
             event.preventDefault();
-            this.props.funcs.toggleCloset(this.props.unique_id);
+            this.props.toggleCloset(this.props.unique_id);
             return
         }
         if (event.key == "k") {
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
                 let caret_pos = getCaretPosition(this.iRef);
-                this.props.funcs.deleteToLineEnd(this.props.unique_id, caret_pos)
+                this.props.deleteToLineEnd(this.props.unique_id, caret_pos)
             }
             return
         }
         if (event.key == "|") {
             event.preventDefault();
             if (this.props.am_in_portal) {
-                this.props.funcs.focusName(null, this.props.am_in_portal)
+                this.props.focusName(null, this.props.am_in_portal)
             }
             else {
-                this.props.funcs.focusName(this.props.unique_id, null, this.props.portal_root)
+                this.props.focusName(this.props.unique_id, null, this.props.portal_root)
             }
         }
         if (event.key == "Enter") {
@@ -499,7 +497,7 @@ class TextNode extends React.Component {
             }
             else {
                 currentlyDeleting = false;
-                this.props.funcs.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef), this.props.portal_root);
+                this.props.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef), this.props.portal_root);
             }
             // this.props.funcs.clearSelected();
 
@@ -512,44 +510,44 @@ class TextNode extends React.Component {
 
         if (event.key == "Escape") {
             event.preventDefault();
-            this.props.funcs.clearSelected();
+            this.props.clearSelected();
         }
         if (event.key == "Backspace") {
-            if (this.props.funcs.boxer_selected) {
+            if (this.props.state_globals.boxer_selected) {
                 event.preventDefault();
-                this.props.funcs.deleteBoxerSelection();
+                this.props.deleteBoxerSelection();
                 return;
             }
             let caret_pos = getCaretPosition(this.iRef);
             if (caret_pos == 0){
                 event.preventDefault();
-                this.props.funcs.deletePrecedingBox(this.props.unique_id, !currentlyDeleting, this.props.portal_root);
+                this.props.deletePrecedingBox(this.props.unique_id, !currentlyDeleting, this.props.portal_root);
             }
             else {
                 let the_text = window.getSelection().toString();
                 if (the_text) {
-                    this.props.funcs.copySelected()
+                    this.props.copySelected()
                 }
                 else {
-                    this.props.funcs.addTextToClipboardStart(this.props.the_text.charAt(caret_pos - 1), !currentlyDeleting);
+                    this.props.addTextToClipboard(this.props.the_text.charAt(caret_pos - 1), !currentlyDeleting);
                 }
             }
             currentlyDeleting = true;
             return
         }
-        this.props.funcs.clearSelected();
+        this.props.clearSelected();
         if (event.key == "ArrowDown") {
             event.preventDefault();
             let my_line = this._myLine();
             let myDataBox = this._myBox();
             if (my_line.amCloset) {
                 let firstTextNodeId =
-                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[0]).node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                    this.props.node_dict[this.props.node_dict[myDataBox.line_list[0]].node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
             if (my_line.position < (myDataBox.line_list.length - 1)) {
-                let firstTextNodeId = this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[my_line.position + 1]).node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                let firstTextNodeId = this.props.node_dict[this.props.node_dict[myDataBox.line_list[my_line.position + 1]].node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
             return
         }
@@ -561,10 +559,9 @@ class TextNode extends React.Component {
             }
             let myLine = this._myLine();
             for (let pos = myNode.position - 1; pos >=0; --pos) {
-                let candidate = this.props.funcs.getNode(this.props.funcs.getNode(myLine.node_list[pos]).unique_id);
+                let candidate = this.props.node_dict[this.props.node_dict[myLine.node_list[pos]].unique_id];
                 if (candidate.kind == "text") {
-                    this.props.funcs.changeNode(candidate.unique_id, "setFocus",
-                        [this.props.portal_root, candidate.the_text.length]);
+                    this.props.setFocus(candidate.unique_id, this.props.portal_root, candidate.the_text.length);
                     return
                 }
             }
@@ -579,9 +576,9 @@ class TextNode extends React.Component {
                 return
             }
             for (let pos = myNode.position + 1; pos < nnodes; ++pos) {
-                let candidate = this.props.funcs.getNode(this.props.funcs.getNode(myLine.node_list[pos]).unique_id);
+                let candidate = this.props.node_dict[this.props.node_dict[myLine.node_list[pos]].unique_id];
                 if (candidate.kind == "text") {
-                    this.props.funcs.setFocus(candidate.unique_id, this.props.portal_root, 0);
+                    this.props.setFocus(candidate.unique_id, this.props.portal_root, 0);
                     return
                 }
             }
@@ -592,10 +589,10 @@ class TextNode extends React.Component {
         if (event.key =="]") {
             event.preventDefault();
             if (this.props.am_in_portal) {
-                this.props.funcs.positionAfterBox(this.props.portal_root, this.props.portal_parent);
+                this.props.positionAfterBox(this.props.portal_root, this.props.portal_parent);
             }
             else {
-                this.props.funcs.positionAfterBox(this._myLine().parent, this.props.portal_root);
+                this.props.positionAfterBox(this._myLine().parent, this.props.portal_root);
             }
             return
         }
@@ -605,28 +602,28 @@ class TextNode extends React.Component {
             let myDataBox = this._myBox();
             if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
                 if (this.props.am_in_portal) {
-                    this.props.funcs.focusName(null, this.props.am_in_portal, this.props.portal_parent)
+                    this.props.focusName(null, this.props.am_in_portal, this.props.portal_parent)
                 }
                 else {
-                    this.props.funcs.focusName(null, null, this.props.portal_root)
+                    this.props.focusName(null, null, this.props.portal_root)
                 }
             }
             else if (my_line.position == 0) {
                 let firstTextNodeId =
-                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.closetLine).node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                    this.props.node_dict[this.props.node_dict[myDataBox.closetLine].node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
             else {
                 let firstTextNodeId =
-                    this.props.funcs.getNode(this.props.funcs.getNode(myDataBox.line_list[my_line.position - 1]).node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                    this.props.node_dict[this.props.node_dict[myDataBox.line_list[my_line.position - 1]].node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
         }
 
     }
 
     _myNode() {
-        return this.props.funcs.getNode(this.props.unique_id)
+        return this.props.node_dict[this.props.unique_id]
     }
 
     _myLineId() {
@@ -634,11 +631,11 @@ class TextNode extends React.Component {
     }
 
     _myLine() {
-        return this.props.funcs.getNode(this._myLineId())
+        return this.props.node_dict[this._myLineId()]
     }
 
     _myBox() {
-        return this.props.funcs.getNode(this._myLine().parent)
+        return this.props.node_dict[this._myLine().parent]
     }
     _listen_for_clicks () {
         let self = this;
@@ -659,7 +656,7 @@ class TextNode extends React.Component {
                     event.preventDefault();
                     let start_id = sel[0];
                     let end_id = sel[1];
-                    self.props.funcs.selectSpan(start_id, end_id);
+                    self.props.selectSpan(start_id, end_id);
                 }
             }
             else if (event.detail > 1) {
@@ -697,13 +694,13 @@ class TextNode extends React.Component {
     }
 
     _setFocusIfRequired () {
-        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
+        if (this.props.setTextFocus != null && this.props.setTextFocus[0] == this.props.portal_root) {
             if (this.iRef) {
                 $(this.iRef).focus();
-                if (this.props.setFocus[1] != 0) {
-                    this._positionCursor(this.props.setFocus[1])
+                if (this.props.setTextFocus[1] != 0) {
+                    this._positionCursor(this.props.setTextFocus[1])
                 }
-                this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
+                this.props.changeNode(this.props.unique_id, "setTextFocus", null);
             }
         }
     }
@@ -740,7 +737,7 @@ class TextNode extends React.Component {
     }
 }
 
-TextNode.propTypes = {
+TextNodeRaw.propTypes = {
     the_text: PropTypes.string,
     setFocus: PropTypes.oneOfType([
         PropTypes.bool,
@@ -753,10 +750,12 @@ TextNode.propTypes = {
         PropTypes.string])
 };
 
-TextNode.defaultProps = {
+TextNodeRaw.defaultProps = {
     setFocus: false,
     am_in_portal: false
 };
+
+let TextNode = connect(mapStateToProps, mapDispatchToProps)(TextNodeRaw)
 
 class PortBoxRaw extends React.Component {
     constructor (props) {
@@ -772,7 +771,7 @@ class PortBoxRaw extends React.Component {
             inner_content = <div>You can now target this port</div>;
         }
         else {
-            tnode = this.props.funcs.getNode(this.props.target);
+            tnode = this.props.node_dict[this.props.target];
             if (!tnode) {
                 inner_content = <Button onClick={()=>{this.props.funcs.retargetPort(this.props.unique_id)}}>Target is missing</Button>;
             }
@@ -783,7 +782,7 @@ class PortBoxRaw extends React.Component {
                                               {...tnode} am_in_portal={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               portal_is_zoomed={this.props.am_zoomed}
-                                              clickable_label={false} funcs={this.props.funcs}
+                                              clickable_label={false}
                     />
                 }
                 else if (tnode.kind == "sprite") {
@@ -791,21 +790,21 @@ class PortBoxRaw extends React.Component {
                                               am_in_portal={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode} funcs={this.props.funcs}/>
+                                              {...tnode}/>
                 }
                 else if (tnode.kind == "graphics" || tnode.kind == "color") {
                     inner_content = <GraphicsBox portal_root={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode} funcs={this.props.funcs}/>
+                                              {...tnode}/>
                 }
                 else if (tnode.kind == "svggraphics") {
                     inner_content = <SvgGraphicsBox portal_root={this.props.unique_id}
                                               portal_parent={this.props.portal_root}
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode} funcs={this.props.funcs}/>
+                                              {...tnode}/>
                 }
                 else if (tnode.kind == "htmlbox") {
                     inner_content = <HtmlBox portal_root={this.props.unique_id}
@@ -813,7 +812,7 @@ class PortBoxRaw extends React.Component {
                                               am_in_portal={this.props.unique_id}
                                               portal_is_zoomed={this.props.am_zoomed}
                                               clickable_label={false}
-                                              {...tnode} funcs={this.props.funcs}/>
+                                              {...tnode}/>
                 }
             }
         }
@@ -826,7 +825,7 @@ class PortBoxRaw extends React.Component {
     }
 }
 
-var PortBox = withName(PortBoxRaw)
+var PortBox = connect(mapStateToProps, mapDispatchToProps)(withName(PortBoxRaw));
 
 class DataBoxRaw extends React.Component {
     constructor (props) {
@@ -842,6 +841,7 @@ class DataBoxRaw extends React.Component {
     //         || this.props.funcs.containsPort(this.props.unique_id)
     // }
 
+
     render() {
         let dbclass;
         if (this.props.closed) {
@@ -849,26 +849,23 @@ class DataBoxRaw extends React.Component {
         }
 
         let the_content = this.props.line_list.map((the_line_id, index) => {
-            let the_line = this.props.funcs.getNodeDict()[the_line_id];
+            let the_line = this.props.node_dict[the_line_id];
             return (
                 <DataboxLine key={the_line.unique_id}
                              am_in_portal={this.props.am_in_portal}
                              portal_parent={this.props.portal_parent}
                              portal_root={this.props.portal_root}
                              unique_id={the_line.unique_id}
-                             amCloset={the_line.amCloset}
-                             funcs={this.props.funcs}
                              do_wrap={this.props.do_wrap}
                              setWrap={this.props.setWrap}
                              setBgColor={this.props.setBgColor}
                              clearComponents={this.props.clearComponents}
-                             showGraphics={this.props.showGraphics}
-                             node_list={the_line.node_list}/>
+                             showGraphics={this.props.showGraphics}/>
             )
         });
 
         if (this.props.showCloset) {
-            let cline = this.props.funcs.getNodeDict()[this.props.closetLine];
+            let cline = this.props.node_dict[this.props.closetLine];
             let clinenode = (
                 <DataboxLine key={cline.unique_id}
                              am_in_portal={this.props.am_in_portal}
@@ -881,8 +878,7 @@ class DataBoxRaw extends React.Component {
                              setWrap={this.props.setWrap}
                              setBgColor={this.props.setBgColor}
                              clearComponents={this.props.clearComponents}
-                             showGraphics={this.props.showGraphics}
-                             node_list={cline.node_list}/>
+                             showGraphics={this.props.showGraphics}/>
             );
             the_content.unshift(clinenode)
         }
@@ -894,7 +890,7 @@ class DataBoxRaw extends React.Component {
     }
 }
 
-var DataBox = withName(DataBoxRaw)
+var DataBox = connect(mapStateToProps, mapDispatchToProps)(withName(DataBoxRaw))
 
 DataBox.propTypes = Object.assign({
     am_in_portal: PropTypes.oneOfType([
@@ -934,11 +930,11 @@ class HtmlBoxRaw extends React.Component {
 
 
     _handleCodeChange(new_code) {
-        this.props.funcs.handleCodeChange(this.props.unique_id, new_code)
+        this.props.changeNode(this.props.unique_id, "the_code", new_code)
     }
 
     _handleBlur() {
-        this.props.funcs.storeFocus(this.props.unique_id, 0, this.props.portal_root);
+        this.props.storeFocus(this.props.unique_id, 0, this.props.portal_root);
     }
 
 
@@ -955,22 +951,26 @@ class HtmlBoxRaw extends React.Component {
     }
 
     _setFocusIfRequired () {
-        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
+        if (this.props.setTextFocus != null && this.props.setTextFocus[0] == this.props.portal_root) {
             if (this.cmobject) {
                 this.cmobject.focus();
-                this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
+                this.props.changeNode(this.props.unique_id, "setTextFocus", null);
             }
         }
     }
 
+    _nameMe() {
+        this.props.focusName(null, this.props.unique_id, this.props.portal_root)
+    }
+
     _upArrow() {
-        // let head = this.cmobject.getCursor();
-        // if (head.line == 0) {
-        //     this._nameMe()
-        // }
-        // else {
-        //     this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
-        // }
+        let head = this.cmobject.getCursor();
+        if (head.line == 0) {
+            this._nameMe()
+        }
+        else {
+            this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        }
     }
 
     _extraKeys() {
@@ -1013,7 +1013,7 @@ class HtmlBoxRaw extends React.Component {
     }
 }
 
-var HtmlBox = withName(HtmlBoxRaw)
+var HtmlBox = connect(mapStateToProps, mapDispatchToProps)(withName(HtmlBoxRaw));
 
 HtmlBox.propTypes = {
     name: PropTypes.string,
@@ -1046,15 +1046,15 @@ class JsBoxRaw extends React.Component {
 
 
     _handleCodeChange(new_code) {
-        this.props.funcs.handleCodeChange(this.props.unique_id, new_code)
+        this.props.changeNode(this.props.unique_id, "the_code", new_code)
     }
 
     _handleBlur() {
-        this.props.funcs.storeFocus(this.props.unique_id, 0, this.props.portal_root);
+        this.props.storeFocus(this.props.unique_id, 0, this.props.portal_root);
     }
 
     _runMe() {
-        doExecution(this.props.the_code, this.props.unique_id, this.props.funcs.getBaseNode(), this.props.funcs)
+        doExecution(this.props.the_code, this.props.unique_id, this.props.node_dict)
     }
 
     _setCMObject(cmobject) {
@@ -1070,22 +1070,26 @@ class JsBoxRaw extends React.Component {
     }
 
     _setFocusIfRequired () {
-        if (this.props.setFocus != null && this.props.setFocus[0] == this.props.portal_root) {
+        if (this.props.setTextFocus != null && this.props.setTextFocus[0] == this.props.portal_root) {
             if (this.cmobject) {
                 this.cmobject.focus();
-                this.props.funcs.changeNode(this.props.unique_id, "setFocus", null);
+                this.props.changeNode(this.props.unique_id, "setTextFocus", null);
             }
         }
     }
 
+    _nameMe() {
+        this.props.focusName(null, this.props.unique_id, this.props.portal_root)
+    }
+
     _upArrow() {
-        // let head = this.cmobject.getCursor();
-        // if (head.line == 0) {
-        //     this._nameMe()
-        // }
-        // else {
-        //     this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
-        // }
+        let head = this.cmobject.getCursor();
+        if (head.line == 0) {
+            this._nameMe()
+        }
+        else {
+            this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        }
     }
 
     _extraKeys() {
@@ -1122,7 +1126,7 @@ class JsBoxRaw extends React.Component {
     }
 }
 
-var JsBox = withName(JsBoxRaw)
+var JsBox = connect(mapStateToProps, mapDispatchToProps)(withName(JsBoxRaw));
 
 JsBox.propTypes = {
     name: PropTypes.string,
@@ -1140,7 +1144,7 @@ JsBox.defaultProps = {
     innerHeight: 0
 };
 
-class DataboxLine extends React.Component {
+class DataboxLineRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
@@ -1160,12 +1164,12 @@ class DataboxLine extends React.Component {
     // }
 
     _handleSelection(selectedKeys) {
-        this.props.funcs.setSelected(selectedKeys);
+        this.props.setSelected(selectedKeys);
     }
 
     render() {
         let the_content = this.props.node_list.map((the_node_id, index) => {
-            let the_node = this.props.funcs.getNode(the_node_id);
+            let the_node = this.props.node_dict[the_node_id];
             if (the_node.kind == "text") {
                 return (
                     <TextNode key={the_node.unique_id}
@@ -1174,9 +1178,8 @@ class DataboxLine extends React.Component {
                               portal_root={this.props.portal_root}
                               selected={the_node.selected}
                               className="editable"
-                              funcs={this.props.funcs}
                               unique_id={the_node.unique_id}
-                              setFocus={the_node.setFocus}
+                              setTextFocus={the_node.setTextFocus}
                               setEndSelection={the_node.setEndSelection}
                               the_text={the_node.the_text}/>
                 )
@@ -1185,8 +1188,7 @@ class DataboxLine extends React.Component {
                 return (
                     <JsBox portal_root={this.props.portal_root}
                            {...the_node}
-                           key={the_node.unique_id}
-                           funcs={this.props.funcs}/>
+                           key={the_node.unique_id}/>
                 )
             }
             else if (the_node.kind == "htmlbox") {
@@ -1224,8 +1226,7 @@ class DataboxLine extends React.Component {
                 return (
                     <SvgGraphicsBox portal_root={this.props.portal_root}
                                     {...the_node}
-                                    key={the_node.unique_id}
-                                    funcs={this.props.funcs}/>
+                                    key={the_node.unique_id}/>
                 )
             }
             else if (the_node.kind == "port") {
@@ -1234,7 +1235,7 @@ class DataboxLine extends React.Component {
                     type_label = "Data"
                 }
                 else {
-                    let target_node = this.props.funcs.getNodeDict()[the_node.target];
+                    let target_node = this.props.node_dict[the_node.target];
                     if (!target_node || data_kinds.includes(target_node.kind)) {
                         type_label = "Data"
                     }
@@ -1248,31 +1249,16 @@ class DataboxLine extends React.Component {
                 return (<PortBox portal_root={this.props.portal_root}
                                  {...the_node}
                                  key={the_node.unique_id}
-                                  type_label={type_label}
-                                 funcs={this.props.funcs}/>
+                                  type_label={type_label}/>
                 )
             }
             else  {
                 return (
                     <DataBox portal_root={this.props.portal_root}
+                             {...the_node}
                              key={the_node.unique_id}
-                             kind={the_node.kind}
-                             showCloset={the_node.showCloset}
-                             closetLine={the_node.closetLine}
-                             selected={the_node.selected}
                              className="data-box-outer"
-                             fixed_size={the_node.fixed_size}
-                             fixed_width={the_node.fixed_width}
-                             fixed_height={the_node.fixed_height}
-                             name={the_node.name}
-                             funcs={this.props.funcs}
-                             unique_id={the_node.unique_id}
-                             closed={the_node.closed}
-                             transparent={the_node.transparent}
-                             am_zoomed={the_node.am_zoomed}
-                             focusName={the_node.focusName}
-                             clickable_label={false}
-                             line_list={the_node.line_list}/>
+                             clickable_label={false}/>
                 )
             }
         });
@@ -1291,7 +1277,7 @@ class DataboxLine extends React.Component {
     }
 }
 
-DataboxLine.propTypes = {
+DataboxLineRaw.propTypes = {
     unique_id: PropTypes.string,
     node_list: PropTypes.array,
     funcs: PropTypes.object,
@@ -1302,13 +1288,15 @@ DataboxLine.propTypes = {
     showGraphics: PropTypes.bool
 };
 
-DataboxLine.defaultProps = {
+DataboxLineRaw.defaultProps = {
     do_wrap: null,
     setWrap: null,
     setBgColor: null,
     clearComponents: null,
     showGraphics: false
 };
+
+let DataboxLine = connect(mapStateToProps, mapDispatchToProps)(DataboxLineRaw)
 
 
 // This isn't currently used. it creates a turtle sprite using an image

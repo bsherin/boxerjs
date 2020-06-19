@@ -4,9 +4,18 @@ import React from "react";
 import * as ReactDOM from 'react-dom'
 import PropTypes from 'prop-types';
 
+import { createStore, applyMiddleware } from 'redux';
+import { Provider } from 'react-redux';
+import thunk from 'redux-thunk';
+import {batch, connect} from 'react-redux';
+
 import _ from 'lodash';
 
 import "../css/boxer.scss";
+
+import {rootReducer} from './reducers.js'
+import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+import {_getln} from "./selectors.js"
 
 import {doBinding, guid} from "./utilities.js";
 import {DataBox, PortBox, JsBox, loader} from "./nodes.js";
@@ -19,12 +28,9 @@ import {KeyTrap} from "./key_trap.js";
 import {getCaretPosition} from "./utilities";
 import {withStatus} from "./toaster.js";
 import {withErrorDrawer} from "./error_drawer.js";
-import {container_kinds, graphics_kinds} from "./shared_consts.js";
+import {container_kinds} from "./shared_consts.js";
 import {shape_classes} from "./pixi_shapes.js";
 import {svg_shape_classes} from "./svg_shapes.js"
-import {mutatorMixin} from "./mutators.js";
-import {nodeCreatorMixin} from "./node_creators.js";
-import {copySelectMixin} from "./copy_select.js";
 
 import {SpriteNode} from "./sprite_commands.js"
 import {GraphicsNode} from "./graphics_box_commands.js"
@@ -46,6 +52,7 @@ $(document).on('mousedown', "button",
     }
 );
 
+var store;
 
 const MAX_UNDO_SAVES = 20;
 
@@ -56,12 +63,16 @@ function _main_main() {
     window.tick_received = false;
     tsocket = new BoxerSocket("boxer", 5000);
 
-    let MainAppPlus = withErrorDrawer(withStatus(MainApp, tsocket), tsocket);
-
     let domContainer = document.querySelector('#main-root');
     if (window.world_name == "") {
+        store = createStore(rootReducer, applyMiddleware(thunk));
+        window.store = store;
         loader.load(()=>{
-            ReactDOM.render(<MainAppPlus data={null}/>, domContainer)
+            ReactDOM.render(
+                <Provider store={store}>
+                    <MainAppPlus world_state={null}/>
+                </Provider>,
+                domContainer)
         })
     }
     else {
@@ -75,12 +86,17 @@ function _main_main() {
                 world_state.base_node = null
             }
             _rehydrateComponents(world_state.node_dict);
+            store = createStore(rootReducer, world_state, applyMiddleware(thunk));
+            window.store = store;
             loader.load(()=>{
-                 ReactDOM.render(<MainAppPlus world_state={world_state}/>, domContainer)
+                 ReactDOM.render(
+                     <MainAppPlus world_state={world_state}/>, domContainer)
             })
         }
     }
 }
+
+
 
 function convertLegacySave(base_node) {
     base_node.unique_id = "world"
@@ -150,46 +166,21 @@ class MainApp extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
-        this.state = {};
         if (props.world_state == null) {
-            this.state.node_dict = {};
             this.clipboard_dict = {};
-            let [world_node_id, temp_dict] = this._newDataBoxNode([], false, {});
-            this.state.node_dict = {}
-            for (let nid in temp_dict) {
-                if (nid == world_node_id) {
-                    let updated_node = temp_dict[nid]
-                    updated_node["unique_id"] = "world";
-                    updated_node["name"] = "world";
 
-                    this.state.node_dict["world"] = updated_node
-                    for (let lin_id of this.state.node_dict["world"].line_list) {
-                        this.state.node_dict[lin_id].parent = "world"
-                    }
-                }
-                else {
-                    this.state.node_dict[nid] = temp_dict[nid]
-                }
-            }
+            batch(()=>{
+                props.newDataBoxNode([], false, "world")
+                props.healStructure("world")
+                props.changeNodeMulti("world", {"am_zoomed": true, "name": "world"})
+            })
         }
         else {
-            let node_dict = _.cloneDeep(props.world_state.node_dict);
-            node_dict = this._healStructure("world", node_dict);
-            this.state.node_dict= node_dict;
+             props.healStructure("world");
         }
-        this.state.executing = false;
-        this.state.zoomed_node_id = "world";
-        this.state.boxer_selected = false;
-        this.state.select_parent = null;
-        this.state.select_range = null;
-        this.last_focus_id = null;
-        this.last_focus_pos = null;
-        this.last_focus_portal_root = null;
-        this.state.innerWidth = window.innerWidth;
-        this.state.innerHeight = window.innerHeight;
-        this.clipboard = [];
+
         this.history = [];
-        this.present = this.state.node_dict;
+        this.present = store.getState().node_dict;
         this.undoing = false;
         this.exportFuncs();
     }
@@ -212,44 +203,15 @@ class MainApp extends React.Component {
     }
 
     exportFuncs() {
-        window.setExecuting = this._setExecuting;
-        window.changeNode = this._changeNode;
-        window.setLineList = this._setLineList;
-        window.newDataBoxNode = this._newDataBoxNode;
-        window.newErrorNode = this._newErrorNode;
-        window.newClosetLine = this._newClosetLine;
-        window.healLine = this._healLine;
-        window.newLineNode = this._newLineNode;
-        window.newTextNode = this._newTextNode;
-        window.newDoitNode = this._newDoitBoxNode;
-        window.newPort = this._newPort;
-        window.newColorBox = this._newColorBox;
-        window.newGraphicsBox = this._newGraphicsBox;
-        window.newSvgGraphicsBox = this._newSvgGraphicsBox;
-        window.newTurtleShape = this._newTurtleShape;
-        window.newValueBox = this._newValueBox;
-        window.addGraphicsComponent = this._addGraphicsComponent;
         window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
         window.openErrorDrawer = this.props.openErrorDrawer;
-        window.updateIds = this._updateIds;
-        window.getNode = this._getNode;
-        window.getNodeDict = this._getNodeDict;
-        window.getNthLine = this._getNthLine;
-        window.getNthNode = this._getNthNode;
-        window.getln = this._getln;
-        window.cloneNode = this._cloneNode;
-        window.cloneLine = this._cloneLine;
-        window.cloneNodetoTrueND = this._cloneNodeToTrueND;
-        window.cloneLinetoTrueND = this._cloneLineToTrueND;
-        window.createClosetAndReturn = this._createClosetAndReturn;
-        window.setSpriteParams = this._setSpriteParams
     }
 
     componentDidMount() {
         window.addEventListener("resize", this._update_window_dimensions);
-        this.state.history = [_.cloneDeep(this.state.node_dict)];
+        this.history = [_.cloneDeep(store.getState().node_dict)];
 
-        this._setFocus(this._getln("world", 0, 0, this.state.node_dict), "root", 0)
+        this.props.setFocus(_getln("world", 0, 0, store.getState().node_dict), "root", 0)
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
@@ -258,15 +220,15 @@ class MainApp extends React.Component {
         }
         if (this.undoing) {
             this.undoing = false;
-            this.present = _.cloneDeep(this.state.node_dict);
+            this.present = _.cloneDeep(store.getState().node_dict);
         }
         else {
-            if (!this._eqTest(this.state.node_dict, this.present)) {
+            if (!this._eqTest(store.getState().node_dict, this.present)) {
                 this.history.unshift(this.present);
                 if (this.history.length > MAX_UNDO_SAVES) {
                     this.history = this.history.slice(0, MAX_UNDO_SAVES)
                 }
-                this.present = this.state.node_dict
+                this.present = store.getState().node_dict
             }
         }
     }
@@ -275,19 +237,19 @@ class MainApp extends React.Component {
     _undo() {
         if (this.history.length > 0) {
             this.undoing = true;
-            this.setState({"node_dict": this.history.shift()})
+            this.props.setNodeDict(this.history.shift())
         }
     }
 
     _update_window_dimensions() {
-        this.setState({
-            "innerWidth": window.innerWidth,
-            "innerHeight": window.innerHeight
+        batch(()=>{
+            this.props.setGlobal("innerWidth", window.innerWidth);
+            this.props.setGlobal("innerHeight", window.innerHeight);
         })
     }
 
     _getStateForSave() {
-        let new_state = _.cloneDeep(this.state);
+        let new_state = _.cloneDeep(store.getState());
         this._dehydrateComponents(new_state.node_dict);
         return new_state
     }
@@ -315,110 +277,20 @@ class MainApp extends React.Component {
     }
 
 
-    _getContainingGraphicsBox(start_id, target_dict) {
-        let base_id = "world";
-        let self = this;
-        function getGBox(the_id) {
-            if (the_id == base_id) {
-                return null
-            }
-            let cnode = target_dict[the_id]
-            if (graphics_kinds.includes(cnode.kind)) {
-                return cnode
-            }
-            else {
-                return getGBox(cnode.parent)
-            }
-        }
-        return getGBox(start_id);
+    get storedFocus() {
+        return store.getState().stored_focus
     }
 
-    _setPortTarget(port_id, target_id) {
-        this._changeNode(port_id, "target", target_id)
+    get nodeDict() {
+        return store.getState().node_dict
     }
+    // _toggleBoxTransparencyLastFocus() {
+    //     this._toggleBoxTransparency(this.storedFocus.last_focus_id)
+    // }
 
-    _enterPortTargetMode(port_id) {
-        let self = this;
-        document.addEventListener("click", gotClick);
-
-        function gotClick(event){
-            let target = event.target.closest(".targetable");
-            if (!target) return;
-                self._setPortTarget(port_id, target.id);
-                document.removeEventListener("click", gotClick)
-        }
-    }
-
-    _toggleBoxTransparency(boxId) {
-        let mnode = this.state.node_dict[boxId];
-        let mline = this.state.node_dict[mnode.parent];
-        if (mline.parent == null) return;
-        let mbox = this.state.node_dict[mline.parent];
-        if (mbox.name == "world") return;
-        this._changeNode(mbox.unique_id, "transparent", !mbox.transparent)
-
-    }
-
-    _toggleCloset(boxId) {
-        let mnode = this.state.node_dict[boxId];
-        let mline = this.state.node_dict[mnode.parent];
-        if (mline.parent == null) return;
-        let mbox = this.state.node_dict[mline.parent];
-        if (!mbox.closetLine) {
-            this._createCloset(mbox.unique_id, null, !mbox.showCloset);
-        }
-        else {
-            this._changeNode(mbox.unique_id, "showCloset", !mbox.showCloset, null, null)
-        }
-
-    }
-
-    _containsPort(boxId) {
-        let mnode = this.state.node_dict[boxId];
-        let self = this;
-        return checkNode(mnode);
-
-        function checkNode(the_node) {
-            if (container_kinds.includes(the_node.kind)) {
-                for (let lin_id of the_node.line_list) {
-                    let lin = self.state.node_dict[lin_id];
-                    for (let nd_id of lin.node_list) {
-                        let nd = self.state.node_dict[nd_id];
-                        if (nd.kind == "port") {
-                            return true
-                        }
-                        if (checkNode(nd)) {
-                            return true
-                        }
-                    }
-                }
-            }
-            return false
-        }
-
-    }
-
-    _toggleBoxTransparencyLastFocus() {
-        this._toggleBoxTransparency(this.last_focus_id)
-    }
-
-    _toggleClosetLastFocus() {
-        this._toggleCloset(this.last_focus_id)
-    }
-
-    _insertBoxLastFocus(kind) {
-        this._insertBoxInText(kind, this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
-    }
-
-    _retargetPortLastFocus() {
-        this._retargetPort(this.last_focus_portal_root)
-    }
-
-    _retargetPort(port_id) {
-        this._changeNode(port_id, "target", null, ()=> {
-            this._enterPortTargetMode(port_id)
-        })
-    }
+    // _toggleClosetLastFocus() {
+    //     this._toggleCloset(this.storedFocus.last_focus_id)
+    // }
 
     _compareNode(n1, n2, fields) {
         for (let field of fields) {
@@ -486,166 +358,50 @@ class MainApp extends React.Component {
 
     }
 
-    _positionAfterBox(databox_id, portal_root) {
-        let mnode = this.state.node_dict[databox_id];
-
-        let target_id = this._getNthNode(mnode.parent, mnode.position + 1, this.state.node_dict).unique_id
-        this._setFocus(target_id, portal_root, 0)
-    }
-
-
-    _handleTextChange(uid, new_html) {
-        this._changeNode(uid, "the_text", new_html)
-    }
-
-    _handleCodeChange(uid, new_code) {
-        this._changeNode(uid, "the_code", new_code)
-    }
-
-    _setNodeSize(uid, new_width, new_height, callback=null) {
-        
-        let val_dict = {};
-        if (!new_width) {
-            val_dict["fixed_size"] = false;
-            val_dict["fixed_width"] = null;
-            val_dict["fixed_height"] = null
-        }
-        else {
-            val_dict["fixed_size"] = true;
-            val_dict["fixed_width"] = new_width;
-            val_dict["fixed_height"] = new_height;
-        }
-        this._changeNodeMulti(uid, val_dict, callback)
-    }
-
-    _setGraphicsSize(uid, new_width, new_height, callback=null) {
-        let val_dict = {};
-        val_dict.graphics_fixed_width = new_width;
-        val_dict.graphics_fixed_height = new_height;
-        this._changeNodeMulti(uid, val_dict, callback)
-    }
-    
     _getParentId(uid) {
-        return this.state.target_dict[uid].parent
+        return store.getState().node_dict[uid].parent
     }
 
     _getNode(uid) {
-        return this.state.node_dict[uid]
-    }
-
-
-    _storeFocus(uid, position, portal_root) {
-        this.last_focus_id = uid;
-        this.last_focus_pos = position;
-        this.last_focus_portal_root = portal_root;
-
+        return store.getState().node_dict[uid]
     }
 
     _insertBoxFromKey(kind) {
-        this._insertBoxInText(kind, document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
+        this.props.insertBoxInText(kind, document.activeElement.id, getCaretPosition(document.activeElement),
+            this.storedFocus.last_focus_portal_root)
     }
-
-    _focusNameLastFocus() {
-        this._focusName(this.last_focus_id)
-    }
-
-
 
      _insertClipboardFromKey() {
-        this._insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement), this.last_focus_portal_root)
+        this.props.insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement),
+            this.storedFocus.last_focus_portal_root)
     }
 
     _insertClipboardLastFocus() {
-        this._insertClipboard(this.last_focus_id, this.last_focus_pos, this.last_focus_portal_root)
-    }
-
-    _unfixSizeLastFocus() {
-        let mnode = this.state.node_dict[this.last_focus_id];
-        let parentLine = this.state.node_dict[mnode.parent];
-        this._changeNode(parentLine.parent, "fixed_size", false)
+        this.props.insertClipboard(this.storedFocus.last_focus_id, this.storedFocus.last_focus_pos, this.storedFocus.last_focus_portal_root)
     }
 
     _getNodeDict() {
-        return this.state.node_dict
+        return store.getState().node_dict
     }
 
-    _findParents(node_id, target_dict=null) {
-        if (!target_dict) {
-            target_dict = this.state.node_dict
-        }
-        let mnode = target_dict[node_id];
-        let parents = [mnode.unique_id];
-        let par = mnode.parent;
-        while (par) {
-            parents.push(par);
-            mnode = target_dict[par];
-            par = mnode.parent
-        }
-        return parents
-    }
 
     get funcs () {
         let funcs = {
-            handleTextChange: this._handleTextChange,
-            changeNode: this._changeNode,
-            cloneNode: this._cloneNode,
-            setFocus: this._setFocus,
-            insertBoxInText: this._insertBoxInText,
-            deletePrecedingBox: this._deletePrecedingBox,
-            deleteToLineEnd: this._deleteToLineEnd,
-            splitLineAtTextPosition: this._splitLineAtTextPosition,
             getParentId: this._getParentId,
             getNode: this._getNode,
-            getln: this._getln,
-            zoomBox: this._zoomBox,
-            focusName: this._focusName,
-            focusNameLastFocus: this._focusNameLastFocus,
-            unzoomBox: this._unzoomBox,
-            storeFocus: this._storeFocus,
-            insertBoxLastFocus: this._insertBoxLastFocus,
-            positionAfterBox: this._positionAfterBox,
-            clearSelected: this._clearSelected,
-            setSelected: this._setSelected,
-            selectSpan: this._selectSpan,
-            copySelected: this._copySelected,
-            newTextNode: this._newTextNode,
-            newDataBox: this._newDataBoxNode,
-            newLineNode: this._newLineNode,
-            addToClipboardStart: this._addToClipboardStart,
-            addTextToClipboardStart: this._addTextToClipBoardStart,
-            insertClipboardLastFocus: this._insertClipboardLastFocus,
-            handleCodeChange: this._handleCodeChange,
-            getNodeDict: this._getNodeDict,
-            insertNode: this._insertNode,
             openErrorDrawer: this.props.openErrorDrawer,
-            updateIds: this._updateIds,
-            setNodeSize: this._setNodeSize,
-            setGraphicsSize: this._setGraphicsSize,
-            unfixSizeLastFocus: this._unfixSizeLastFocus,
-            boxer_selected: this.state.boxer_selected,
-            deleteBoxerSelection: this._deleteBoxerSelection,
-            cutSelected: this._cutSelected,
             undo: this._undo,
-            setSpriteParams: this._setSpriteParams,
-            addGraphicsComponent: this._addGraphicsComponent,
-            toggleBoxTransparencyLastFocus: this._toggleBoxTransparencyLastFocus,
-            toggleClosetLastFocus: this._toggleClosetLastFocus,
-            toggleCloset: this._toggleCloset,
             getStateForSave: this._getStateForSave,
-            containsPort: this._containsPort,
-            retargetPort: this._retargetPort,
-            retargetPortLastFocus: this._retargetPortLastFocus
         };
         return funcs
     }
 
     render() {
-
+        let node_dict = store.getState()["node_dict"]
         let menus = (
             <React.Fragment>
-                <ProjectMenu {...this.funcs}
-                             {...this.props.statusFuncs}
-                             world_state={this.props.world_state}
+                <ProjectMenu {...this.props.statusFuncs}
+                    getStateforSave={this._getStateForSave}
                 />
                 <EditMenu {...this.funcs}
                 />
@@ -658,8 +414,7 @@ class MainApp extends React.Component {
             </React.Fragment>
         );
 
-        this.state.node_dict["world"].am_zoomed = true;
-        let zoomed_node = this.state.node_dict[this.state.zoomed_node_id];
+        let zoomed_node = node_dict[store.getState().state_globals.zoomed_node_id];
         let key_bindings = [
             [["{"], (e)=> {
                 e.preventDefault();
@@ -670,7 +425,7 @@ class MainApp extends React.Component {
                 this._insertBoxFromKey("doitbox");
             }],
             [["esc"], (e)=> {
-                this._clearSelected()
+                this.props.clearSelected()
             }],
             [["ctrl+v", "command+v"], (e)=>{
                 e.preventDefault();
@@ -678,11 +433,11 @@ class MainApp extends React.Component {
             }],
             [["ctrl+c", "command+c"], (e)=>{
                 e.preventDefault();
-                this._copySelected()
+                this.props.copySelected()
             }],
             [["ctrl+x", "command+x"], (e)=>{
                 e.preventDefault();
-                this._cutSelected()
+                this.props.cutSelected()
             }],
             [["ctrl+z", "command+z"], (e)=>{
                 e.preventDefault();
@@ -691,25 +446,26 @@ class MainApp extends React.Component {
         ];
         if (zoomed_node.kind == "port") {
             return (
-                <React.Fragment>
+
+                <Provider store={store}>
                     <BoxerNavbar is_authenticated={window.is_authenticated}
                                   user_name={window.username}
                                   menus={menus}
                     />
                     <PortBox name={zoomed_node.name}
                              target={zoomed_node.target}
-                             focusName={false}
+                             focusNameTag={false}
                              am_zoomed={true}
                              closed={false}
                              selected={false}
                              portal_root="root"
                              portal_parent={null}
-                             innerHeight={this.state.innerHeight}
-                             innerWidth={this.state.innerWidth}
+                             innerHeight={store.getState().state_globals.innerHeight}
+                             innerWidth={store.getState().state_globals.innerWidth}
                              unique_id={this.state.zoomed_node_id}
                              funcs={this.funcs}/>
                      <KeyTrap global={true}  bindings={key_bindings} />
-             </React.Fragment>
+             </Provider>
             )
         }
         else if (zoomed_node.kind == "jsbox") {
@@ -720,7 +476,7 @@ class MainApp extends React.Component {
                                   menus={menus}
                     />
                     <JsBox name={zoomed_node.name}
-                           focusName={false}
+                           focusNameTag={false}
                            am_zoomed={true}
                            closed={false}
                            selected={false}
@@ -729,9 +485,9 @@ class MainApp extends React.Component {
                            className="data-box-outer"
                            portal_root="root"
                            portal_parent={null}
-                           innerHeight={this.state.innerHeight}
-                           innerWidth={this.state.innerWidth}
-                           unique_id={this.state.zoomed_node_id}
+                           innerHeight={store.getState().state_globals.innerHeight}
+                           innerWidth={store.getState().state_globals.innerWidth}
+                           unique_id={store.getState().state_globals.zoomed_node_id}
                            clickable_label={false}
                            funcs={this.funcs}/>
                      <KeyTrap global={true}  bindings={key_bindings} />
@@ -744,23 +500,16 @@ class MainApp extends React.Component {
                               user_name={window.username}
                               menus={menus}
                 />
-                <DataBox name={zoomed_node.name}
-                         funcs={this.funcs}
-                         showCloset={zoomed_node.showCloset}
-                         closetLine={zoomed_node.closetLine}
-                         kind={zoomed_node.kind}
-                         transparent={zoomed_node.transparent}
-                         className="data-box-outer"
-                         focusName={false}
+                <DataBox className="data-box-outer"
+                         focusNameTag={false}
                          am_zoomed={true}
                          closed={false}
                          portal_root="root"
                          portal_parent={null}
-                         innerHeight={this.state.innerHeight}
-                         innerWidth={this.state.innerWidth}
-                         unique_id={this.state.zoomed_node_id}
-                         clickable_label={false}
-                         line_list={zoomed_node.line_list}/>
+                         innerHeight={store.getState().state_globals.innerHeight}
+                         innerWidth={store.getState().state_globals.innerWidth}
+                         unique_id={store.getState().state_globals.zoomed_node_id}
+                         clickable_label={false}/>
                  <KeyTrap global={true}  bindings={key_bindings} />
              </React.Fragment>
         )
@@ -771,10 +520,15 @@ MainApp.propTypes = {
     world_state: PropTypes.object
 };
 
-Object.assign(MainApp.prototype, mutatorMixin)
-Object.assign(MainApp.prototype, nodeCreatorMixin)
-Object.assign(MainApp.prototype, copySelectMixin)
+// Object.assign(MainApp.prototype, mutatorMixin)
+// Object.assign(MainApp.prototype, nodeCreatorMixin)
+// Object.assign(MainApp.prototype, copySelectMixin)
 
+function mapStateToProps(state, ownProps) {
+    return {}
+}
+
+let MainAppPlus = connect(mapStateToProps, mapDispatchToProps)(withErrorDrawer(withStatus(MainApp, tsocket), tsocket));
 
 _main_main();
 

@@ -9,6 +9,8 @@ import {SvgRect, SvgLine, } from "./svg_shapes.js";
 import PIXI from "pixi.js";
 import {Container, Text} from "react-pixi-fiber";
 
+import {_getln} from "./selectors.js";
+
 export {SpriteNode}
 
 const sprite_params =[
@@ -23,6 +25,10 @@ const sprite_params =[
         "fontSize",
         "fontStyle"
 ];
+
+window.getNode = (uid) => {
+    return window.store.getState().node_dict[uid]
+}
 
 class SpriteNode {
     constructor(param_dict) {
@@ -51,7 +57,8 @@ class SpriteNode {
     }
 
     useSvg() {
-        return this.getContainingGraphicsNode().kind == "svggraphics";
+        let cgb = this.getContainingGraphicsNode()
+        return cgb && (this.getContainingGraphicsNode().kind == "svggraphics")
     }
 
     getParam(pname) {
@@ -92,7 +99,7 @@ class SpriteNode {
                 pdict[nd.name] = _extractValue(nd_id)
             }
             if (nd.name == "penColor") {
-                let color_string = window.getNode(window.getln(nd_id, 0, 0)).the_text;
+                let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
                 if (this.useSvg()) {
                     pdict.penColor = _svgConvertColorArg(color_string)
                 }
@@ -418,7 +425,7 @@ class SpriteNode {
 
 
 function _extractValue(nd_id) {
-    let the_text = window.getNode(window.getln(nd_id, 0, 0)).the_text
+    let the_text = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text
     if (isNaN(the_text)){
         if (the_text.toLowerCase() == "false") {
             return false

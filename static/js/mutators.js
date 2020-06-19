@@ -405,7 +405,7 @@ let mutatorMixin = {
         else {
             pos = target_dict[text_id].position + 1
         }
-        target_dict = this._insertNodeAndReturn(new_node_id, target_dict[text_id].parent, pos, target_dict, true);
+        target_dict = this._insertNodeAndReturn(new_node_id, target_dict[text_id].parent, target_dict[text_id].position, target_dict, true);
         this.setState({node_dict: target_dict}, ()=>{
              self._clearSelected();
              if (kind == "port") {

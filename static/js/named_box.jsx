@@ -9,6 +9,10 @@ import {DragHandle} from "./resizing_layouts.js";
 import {doBinding, propsAreEqual} from "./utilities.js";
 import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./sizing_tools.js";
 import {graphics_kinds} from "./shared_consts.js";
+import {connect} from "react-redux";
+import {mapDispatchToProps} from "./actions/dispatch_mapper";
+import {withErrorDrawer} from "./error_drawer";
+import {withStatus} from "./toaster";
 
 const resizeTolerance = 2;
 
@@ -44,12 +48,12 @@ function withName(WrappedComponent) {
 
         _flipMe() {
             this.boxRef = React.createRef();
-            this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+            this.props.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
         }
 
         _convertMe() {
             this.boxRef = React.createRef();
-            this.props.funcs.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
+            this.props.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
         }
 
         _closeMe() {
@@ -59,20 +63,20 @@ function withName(WrappedComponent) {
             }
             if (this.props.am_in_portal) {
                 if (this.props.portal_is_zoomed) {
-                    this.props.funcs.unzoomBox(this.props.am_in_portal)
+                    this.props.unzoomBox(this.props.am_in_portal)
                 } else {
                     let have_focus = this.boxRef.current.contains(document.activeElement);
-                    this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, () => {
+                    this.props.changeNode(this.props.am_in_portal, "closed", true, () => {
                         if (have_focus) {
-                            this.props.funcs.positionAfterBox(this.props.am_in_portal, this.props.portal_parent)
+                            this.props.positionAfterBox(this.props.am_in_portal, this.props.portal_parent)
                         }
                     });
                 }
             } else {
                 let have_focus = this.boxRef.current.contains(document.activeElement);
-                this.props.funcs.changeNode(this.props.unique_id, "closed", true, () => {
+                this.props.changeNode(this.props.unique_id, "closed", true, () => {
                     if (have_focus) {
-                        this.props.funcs.positionAfterBox(this.props.unique_id, this.props.portal_root)
+                        this.props.positionAfterBox(this.props.unique_id, this.props.portal_root)
                     }
                 })
             }
@@ -81,10 +85,10 @@ function withName(WrappedComponent) {
         _openMe() {
             this.setState({opening: true});
             if (this.props.am_in_portal) {
-                this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
+                this.props.changeNode(this.props.am_in_portal, "closed", false)
                 return
             }
-            this.props.funcs.changeNode(this.props.unique_id, "closed", false)
+            this.props.changeNode(this.props.unique_id, "closed", false)
         }
 
         _submitNameRef(the_ref) {
@@ -112,11 +116,11 @@ function withName(WrappedComponent) {
 
         componentDidUpdate() {
             let self = this;
-            if (this.props.focusName && this.props.focusName == this.props.portal_root) {
+            if (this.props.focusNameTag && this.props.focusNameTag == this.props.portal_root) {
                 if (this.nameRef) {
                     $(this.nameRef).focus();
                     this.setState({focusingName: true}, () => {
-                        self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                        self.props.changeNode(this.props.unique_id, "focusNameTag", false);
                     });
                 }
             }
@@ -132,22 +136,22 @@ function withName(WrappedComponent) {
 
         _zoomMe() {
             if (this.props.am_in_portal) {
-                this.props.funcs.zoomBox(this.props.am_in_portal)
+                this.props.zoomBox(this.props.am_in_portal)
             } else {
-                this.props.funcs.zoomBox(this.props.unique_id)
+                this.props.zoomBox(this.props.unique_id)
             }
 
         }
 
         _unzoomMe() {
-            this.props.funcs.unzoomBox(this.props.unique_id)
+            this.props.unzoomBox(this.props.unique_id)
 
         }
 
         getUsableDimensions() {
             return {
-                usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
-                usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
+                usable_width: this.props.state_globals.innerWidth - 2 * SIDE_MARGIN,
+                usable_height: this.props.state_globals.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
                 usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
                 body_height: window.innerHeight - BOTTOM_MARGIN
             };
@@ -170,9 +174,9 @@ function withName(WrappedComponent) {
 
         _setSize(new_width, new_height) {
             if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
-                this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
+                this.props.setGraphicsSize(this.props.unique_id, new_width, new_height)
             } else {
-                this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+                this.props.setNodeSize(this.props.unique_id, new_width, new_height)
             }
         }
 
@@ -320,7 +324,6 @@ function withName(WrappedComponent) {
                                  portal_parent={this.props.portal_parent}
                                  focusingMe={this.state.focusingName}
                                  boxWidth={this.state.boxWidth}
-                                 funcs={this.props.funcs}
                                  am_sprite={this.props.kind == "sprite"}
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
@@ -388,7 +391,6 @@ let NamedBox_propTypes = {
     label_function: PropTypes.func,
     unique_id: PropTypes.string,
     line_list: PropTypes.array,
-    funcs: PropTypes.object,
     selected: PropTypes.bool,
     am_zoomed: PropTypes.bool,
     fixed_size: PropTypes.bool,
@@ -420,7 +422,7 @@ let NamedBox_defaultProps = {
 
 };
 
-class EditableTag extends React.Component {
+class EditableTagRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
@@ -434,49 +436,49 @@ class EditableTag extends React.Component {
     }
 
     _handleChange(event) {
-        this.props.funcs.changeNode(this.props.boxId, "name", event.target.value)
+        this.props.changeNode(this.props.boxId, "name", event.target.value)
     }
 
     _handleKeyDown(event) {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
             event.preventDefault();
-            let myDataBox = this.props.funcs.getNode(this.props.boxId);
+            let myDataBox = this.props.node_dict[this.props.boxId];
             if (myDataBox.kind == "port") {
-                let targetBox = this.props.funcs.getNode(myDataBox.target);
+                let targetBox = this.props.node_dict[myDataBox.target];
                 if (targetBox.kind == "jsbox") {
-                    this.props.funcs.setFocus(targetBox.unique_id, this.props.boxId, 0);
+                    this.props.setFocus(targetBox.unique_id, this.props.boxId, 0);
                 }
                 else if (targetBox.showCloset) {
                     let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
-                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
+                    this.props.setFocus(firstTextNodeId, this.props.boxId, 0);
                 }
                 else {
                     let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
-                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
+                    this.props.setFocus(firstTextNodeId, this.props.boxId, 0);
                 }
             }
             else if (myDataBox.kind == "jsbox") {
-                this.props.funcs.setFocus(this.props.boxId, this.props.portal_root, 0);
+                this.props.setFocus(this.props.boxId, this.props.portal_root, 0);
             }
             else if (myDataBox.showCloset) {
-                let closet = this.props.funcs.getNode(myDataBox.closetLine)
-                let firstTextNodeId = this.props.funcs.getNode(closet.node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                let closet = this.props.node_dict[myDataBox.closetLine]
+                let firstTextNodeId = this.props.node_dict[closet.node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
             else {
-                let the_line = this.props.funcs.getNode(myDataBox.line_list[0])
-                let firstTextNodeId = this.props.funcs.getNode(the_line.node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
+                let the_line = this.props.node_dict[myDataBox.line_list[0]]
+                let firstTextNodeId = this.props.node_dict[the_line.node_list[0]].unique_id;
+                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
             }
 
         }
         if (event.key =="]") {
             event.preventDefault();
             if (this.props.am_in_portal) {
-                this.props.funcs.positionAfterBox(this.props.portal_root, this.props.portal_parent);
+                this.props.positionAfterBox(this.props.portal_root, this.props.portal_parent);
             }
             else {
-                this.props.funcs.positionAfterBox(this.props.boxId, this.props.portal_root);
+                this.props.positionAfterBox(this.props.boxId, this.props.portal_root);
             }
         }
     }
@@ -484,7 +486,7 @@ class EditableTag extends React.Component {
     _onBlur(event) {
         this.props.doneEditingName(()=>{
             if (this.props.the_name == "") {
-                this.props.funcs.changeNode(this.props.boxId, "name", null);
+                this.props.changeNode(this.props.boxId, "name", null);
 
             }
         })
@@ -538,7 +540,7 @@ class EditableTag extends React.Component {
     }
 }
 
-EditableTag.propTypes = {
+EditableTagRaw.propTypes = {
     the_name: PropTypes.string,
     funcs: PropTypes.object,
     boxId: PropTypes.string,
@@ -550,9 +552,15 @@ EditableTag.propTypes = {
     am_sprite: PropTypes.bool,
 };
 
-EditableTag.defaultProps = {
+EditableTagRaw.defaultProps = {
     am_sprite: false
 };
+
+function mapStateToPropsND(state, ownProps) {
+    return {node_dict: state.node_dict}
+}
+
+let EditableTag = connect(mapStateToPropsND, mapDispatchToProps)(EditableTagRaw);
 
 class CloseButton extends React.Component {
     constructor (props) {
