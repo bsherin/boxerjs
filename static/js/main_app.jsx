@@ -15,6 +15,11 @@ import "../css/boxer.scss";
 
 import {rootReducer} from './reducers.js'
 import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+
+import {newDataBoxNode} from "./actions/node_creator_actions.js";
+import {healStructure} from "./actions/composite_actions.js";
+import {changeNodeMulti} from "./actions/core_actions.js";
+
 import {_getln} from "./selectors.js"
 
 import {doBinding, guid} from "./utilities.js";
@@ -66,11 +71,16 @@ function _main_main() {
     let domContainer = document.querySelector('#main-root');
     if (window.world_name == "") {
         store = createStore(rootReducer, applyMiddleware(thunk));
+        batch(()=>{
+            store.dispatch(newDataBoxNode([], false, "world"));
+            store.dispatch(healStructure("world"));
+            store.dispatch(changeNodeMulti("world", {"am_zoomed": true, "name": "world"}));
+        })
         window.store = store;
         loader.load(()=>{
             ReactDOM.render(
                 <Provider store={store}>
-                    <MainAppPlus world_state={null}/>
+                    <MainAppPlus/>}/>
                 </Provider>,
                 domContainer)
         })
@@ -87,19 +97,21 @@ function _main_main() {
             }
             _rehydrateComponents(world_state.node_dict);
             store = createStore(rootReducer, world_state, applyMiddleware(thunk));
+            store.dispatch(healStructure("world"));
             window.store = store;
             loader.load(()=>{
                  ReactDOM.render(
-                     <MainAppPlus world_state={world_state}/>, domContainer)
+                     <Provider store={store}>
+                        <MainAppPlus/>
+                     </Provider>,
+                     domContainer)
             })
         }
     }
 }
 
-
-
 function convertLegacySave(base_node) {
-    base_node.unique_id = "world"
+    base_node.unique_id = "world";
 
     return convertNode(base_node, {})
 
@@ -166,18 +178,6 @@ class MainApp extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
-        if (props.world_state == null) {
-            this.clipboard_dict = {};
-
-            batch(()=>{
-                props.newDataBoxNode([], false, "world")
-                props.healStructure("world")
-                props.changeNodeMulti("world", {"am_zoomed": true, "name": "world"})
-            })
-        }
-        else {
-             props.healStructure("world");
-        }
 
         this.history = [];
         this.present = store.getState().node_dict;
@@ -209,9 +209,9 @@ class MainApp extends React.Component {
 
     componentDidMount() {
         window.addEventListener("resize", this._update_window_dimensions);
-        this.history = [_.cloneDeep(store.getState().node_dict)];
+        this.history = [_.cloneDeep(this.props.node_dict)];
 
-        this.props.setFocus(_getln("world", 0, 0, store.getState().node_dict), "root", 0)
+        this.props.setFocus(_getln("world", 0, 0, this.props.node_dict), "root", 0)
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
@@ -220,15 +220,15 @@ class MainApp extends React.Component {
         }
         if (this.undoing) {
             this.undoing = false;
-            this.present = _.cloneDeep(store.getState().node_dict);
+            this.present = _.cloneDeep(this.props.node_dict);
         }
         else {
-            if (!this._eqTest(store.getState().node_dict, this.present)) {
+            if (!this._eqTest(this.props.node_dict, this.present)) {
                 this.history.unshift(this.present);
                 if (this.history.length > MAX_UNDO_SAVES) {
                     this.history = this.history.slice(0, MAX_UNDO_SAVES)
                 }
-                this.present = store.getState().node_dict
+                this.present = this.props.node_dict
             }
         }
     }
@@ -278,11 +278,11 @@ class MainApp extends React.Component {
 
 
     get storedFocus() {
-        return store.getState().stored_focus
+        return this.props.stored_focus
     }
 
     get nodeDict() {
-        return store.getState().node_dict
+        return this.props.node_dict
     }
     // _toggleBoxTransparencyLastFocus() {
     //     this._toggleBoxTransparency(this.storedFocus.last_focus_id)
@@ -359,11 +359,11 @@ class MainApp extends React.Component {
     }
 
     _getParentId(uid) {
-        return store.getState().node_dict[uid].parent
+        return this.props.node_dict[uid].parent
     }
 
     _getNode(uid) {
-        return store.getState().node_dict[uid]
+        return this.props.node_dict[uid]
     }
 
     _insertBoxFromKey(kind) {
@@ -381,7 +381,7 @@ class MainApp extends React.Component {
     }
 
     _getNodeDict() {
-        return store.getState().node_dict
+        return this.props.node_dict
     }
 
 
@@ -397,7 +397,7 @@ class MainApp extends React.Component {
     }
 
     render() {
-        let node_dict = store.getState()["node_dict"]
+        let node_dict = this.props.node_dict
         let menus = (
             <React.Fragment>
                 <ProjectMenu {...this.props.statusFuncs}
@@ -414,7 +414,7 @@ class MainApp extends React.Component {
             </React.Fragment>
         );
 
-        let zoomed_node = node_dict[store.getState().state_globals.zoomed_node_id];
+        let zoomed_node = node_dict[this.props.state_globals.zoomed_node_id];
         let key_bindings = [
             [["{"], (e)=> {
                 e.preventDefault();
@@ -460,8 +460,8 @@ class MainApp extends React.Component {
                              selected={false}
                              portal_root="root"
                              portal_parent={null}
-                             innerHeight={store.getState().state_globals.innerHeight}
-                             innerWidth={store.getState().state_globals.innerWidth}
+                             innerHeight={this.props.state_globals.innerHeight}
+                             innerWidth={this.props.state_globals.innerWidth}
                              unique_id={this.state.zoomed_node_id}
                              funcs={this.funcs}/>
                      <KeyTrap global={true}  bindings={key_bindings} />
@@ -485,9 +485,9 @@ class MainApp extends React.Component {
                            className="data-box-outer"
                            portal_root="root"
                            portal_parent={null}
-                           innerHeight={store.getState().state_globals.innerHeight}
-                           innerWidth={store.getState().state_globals.innerWidth}
-                           unique_id={store.getState().state_globals.zoomed_node_id}
+                           innerHeight={this.props.state_globals.innerHeight}
+                           innerWidth={this.props.state_globals.innerWidth}
+                           unique_id={this.props.state_globals.zoomed_node_id}
                            clickable_label={false}
                            funcs={this.funcs}/>
                      <KeyTrap global={true}  bindings={key_bindings} />
@@ -506,9 +506,9 @@ class MainApp extends React.Component {
                          closed={false}
                          portal_root="root"
                          portal_parent={null}
-                         innerHeight={store.getState().state_globals.innerHeight}
-                         innerWidth={store.getState().state_globals.innerWidth}
-                         unique_id={store.getState().state_globals.zoomed_node_id}
+                         innerHeight={this.props.state_globals.innerHeight}
+                         innerWidth={this.props.state_globals.innerWidth}
+                         unique_id={this.props.state_globals.zoomed_node_id}
                          clickable_label={false}/>
                  <KeyTrap global={true}  bindings={key_bindings} />
              </React.Fragment>
@@ -517,16 +517,18 @@ class MainApp extends React.Component {
 }
 
 MainApp.propTypes = {
-    world_state: PropTypes.object
 };
 
 // Object.assign(MainApp.prototype, mutatorMixin)
 // Object.assign(MainApp.prototype, nodeCreatorMixin)
 // Object.assign(MainApp.prototype, copySelectMixin)
 
-function mapStateToProps(state, ownProps) {
-    return {}
+function mapStateToProps(state, ownProps){
+
+    return Object.assign({node_dict: state.node_dict, state_globals: state.state_globals, stored_focus: state.stored_focus},
+        ownProps)
 }
+
 
 let MainAppPlus = connect(mapStateToProps, mapDispatchToProps)(withErrorDrawer(withStatus(MainApp, tsocket), tsocket));
 

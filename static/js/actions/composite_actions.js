@@ -6,7 +6,7 @@ import { changeNodeMulti, changeNode, setNodeDict, insertNode, insertNodes, inse
     removeNode, setGlobal } from "./core_actions.js";
 import {_getNthNode, _getln, _getContainingGraphicsBox} from "../selectors.js";
 
-import {newTextNode, newLineNode, newDataBoxNode, newClosetLine, newSpriteBox, createNode, nodeModels} from "./node_creator_actions.js"
+import {newTextNode, newLineNode, newClosetLine, newSpriteBox, createNode} from "./node_creator_actions.js"
 
 
 import {cloneNodeSourceTarget, cloneLineSourceTarget} from "./action_helpers.js";
@@ -16,7 +16,9 @@ import {text_kinds} from "../shared_consts";
 
 
 export {healLine, healStructure, splitLine, createCloset, mergeTextNodes, setLineList, renumberLines, toggleBoxTransparency, setPortTarget, enterPortTargetMode,
-zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, setFocus, positionAfterBox, splitTextNode, splitLineAtTextPosition,
+    zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore,
+    setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
+    splitTextNode, splitLineAtTextPosition,
 insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, retargetPortLastFocus, setNodeSize}
 
 
@@ -227,6 +229,7 @@ function splitTextNode(text_id, cursor_position) {
         })
     }
 }
+
 function splitLineAtTextPosition(text_id, cursor_position, portal_root="root",) {
     return (dispatch, getState) => {
         batch(() => {
@@ -242,6 +245,7 @@ function splitLineAtTextPosition(text_id, cursor_position, portal_root="root",) 
         })
     }
 }
+
 function splitLine(line_id, position) {
     return (dispatch, getState) => {
         batch(() => {
@@ -293,7 +297,7 @@ function insertBoxInText(kind, text_id, cursor_position, portal_root) {
         let new_node_id = guid();
         dispatch(insertBoxBase(kind, text_id, cursor_position, new_node_id)).then(()=>{
             if (["databox", "doitbox"].includes(kind)) {
-            dispatch(setFocus(_getln(new_node_id, 0, 0, getState().node_dict), portal_root, 0));
+                dispatch(setFocus(_getln(new_node_id, 0, 0, getState().node_dict), portal_root, 0));
             } else if (text_kinds.includes(kind)) {
                 dispatch(setFocus(new_node_id, portal_root, 0))
             }
@@ -359,12 +363,136 @@ function positionAfterBox(databox_id, portal_root) {
     }
 }
 
+function arrowDown(text_id, portal_root) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        let myDataBox = ndict[my_line.parent];
+        if (my_line.amCloset) {
+            let firstTextNodeId =
+                ndict[ndict[myDataBox.line_list[0]].node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+        if (my_line.position < (myDataBox.line_list.length - 1)) {
+            let firstTextNodeId = ndict[ndict[myDataBox.line_list[my_line.position + 1]].node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+    }
+}
+
+function arrowUp(text_id, am_in_portal, portal_root, portal_parent) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        let myDataBox = ndict[my_line.parent];
+        if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
+            if (am_in_portal) {
+                dispatch(focusName(null, am_in_portal, portal_parent))
+            }
+            else {
+                dispatch(focusName(null, null, portal_root))
+            }
+        }
+        else if (my_line.position == 0) {
+            let firstTextNodeId =
+                ndict[ndictt[myDataBox.closetLine].node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+        else {
+            let firstTextNodeId =
+                ndict[ndict[myDataBox.line_list[my_line.position - 1]].node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+    }
+}
+
+function focusLeft(text_id, position, portal_root) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        for (let pos = position - 1; pos >= 0; --pos) {
+            let candidate = ndict[ndict[myLine.node_list[pos]].unique_id];
+            if (candidate.kind == "text") {
+                dispatch(setFocus(candidate.unique_id, portal_root, candidate.the_text.length));
+                return
+            }
+        }
+    }
+}
+
+function focusRight(text_id, position, portal_root) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        let nnodes = myLine.node_list.length;
+        if (position == nnodes - 1) {
+            return
+        }
+        for (let pos = position + 1; pos < nnodes; ++pos) {
+            let candidate = ndict[ndict[myLine.node_list[pos]].unique_id];
+            if (candidate.kind == "text") {
+                dispatch(setFocus(candidate.unique_id, portal_root, 0));
+                return
+            }
+        }
+    }
+}
+
+function doBracket(text_id, am_in_portal, portal_root, portal_parent) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        if (am_in_portal) {
+            dispatch(positionAfterBox(portal_root, portal_parent));
+        }
+        else {
+            dispatch(positionAfterBox(my_line.parent, portal_root));
+        }
+
+    }
+}
+
+function downFromTag(box_id, portal_root) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let myDataBox = ndict[boxId];
+        if (myDataBox.kind == "port") {
+            let targetBox = ndict[myDataBox.target];
+            if (targetBox.kind == "jsbox") {
+                dispatch(setFocus(targetBox.unique_id, boxId, 0));
+            }
+            else if (targetBox.showCloset) {
+                let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
+                dispatch(setFocus(firstTextNodeId, boxId, 0));
+            }
+            else {
+                let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
+                dispatch(setFocus(firstTextNodeId, boxId, 0));
+            }
+        }
+        else if (myDataBox.kind == "jsbox") {
+            dispatch(setFocus(boxId, portal_root, 0));
+        }
+        else if (myDataBox.showCloset) {
+            let closet = ndict[myDataBox.closetLine]
+            let firstTextNodeId = ndict[closet.node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+        else {
+            let the_line = ndict[myDataBox.line_list[0]]
+            let firstTextNodeId = ndict[the_line.node_list[0]].unique_id;
+            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        }
+
+    }
+}
+
 
 function zoomBox(uid) {
     return (dispatch, getState) => {
         batch (() => {
             dispatch(changeNode(uid, "am_zoomed", true));
-            dispath(setGlobal("zoomed_node_id", uid));
+            dispatch(setGlobal("zoomed_node_id", uid));
         })
     }
 }

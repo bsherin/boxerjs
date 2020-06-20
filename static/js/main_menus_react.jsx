@@ -112,7 +112,7 @@ class ProjectMenuRaw extends React.Component {
             //let console_node = cleanse_bokeh(document.getElementById("console"));
             const result_dict = {
                 "project_name": new_name,
-                "world_state": self.props.getStateForSave()
+                "world_state": self.props.getStateforSave()
             };
 
             postAjax("save_new_project", result_dict, save_as_success);

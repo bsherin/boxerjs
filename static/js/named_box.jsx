@@ -150,8 +150,8 @@ function withName(WrappedComponent) {
 
         getUsableDimensions() {
             return {
-                usable_width: this.props.state_globals.innerWidth - 2 * SIDE_MARGIN,
-                usable_height: this.props.state_globals.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
+                usable_width: this.props.innerWidth - 2 * SIDE_MARGIN,
+                usable_height: this.props.innerHeight - BOTTOM_MARGIN - USUAL_TOOLBAR_HEIGHT,
                 usable_height_no_bottom: window.innerHeight - USUAL_TOOLBAR_HEIGHT,
                 body_height: window.innerHeight - BOTTOM_MARGIN
             };
@@ -441,35 +441,8 @@ class EditableTagRaw extends React.Component {
 
     _handleKeyDown(event) {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
+            dispatch(downFromTag(this.props.unique_id, this.props.portal_root));
             event.preventDefault();
-            let myDataBox = this.props.node_dict[this.props.boxId];
-            if (myDataBox.kind == "port") {
-                let targetBox = this.props.node_dict[myDataBox.target];
-                if (targetBox.kind == "jsbox") {
-                    this.props.setFocus(targetBox.unique_id, this.props.boxId, 0);
-                }
-                else if (targetBox.showCloset) {
-                    let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
-                    this.props.setFocus(firstTextNodeId, this.props.boxId, 0);
-                }
-                else {
-                    let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
-                    this.props.setFocus(firstTextNodeId, this.props.boxId, 0);
-                }
-            }
-            else if (myDataBox.kind == "jsbox") {
-                this.props.setFocus(this.props.boxId, this.props.portal_root, 0);
-            }
-            else if (myDataBox.showCloset) {
-                let closet = this.props.node_dict[myDataBox.closetLine]
-                let firstTextNodeId = this.props.node_dict[closet.node_list[0]].unique_id;
-                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
-            }
-            else {
-                let the_line = this.props.node_dict[myDataBox.line_list[0]]
-                let firstTextNodeId = this.props.node_dict[the_line.node_list[0]].unique_id;
-                this.props.setFocus(firstTextNodeId, this.props.portal_root, 0);
-            }
 
         }
         if (event.key =="]") {

@@ -18,33 +18,145 @@ export {clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, cop
 
 
 
-function cloneNodesToStore(node_ids) {
+// Focus management
+
+function focusInOrAfter(node_id, portal_root=null, pos=-1) {
     return (dispatch, getState) => {
-        let new_node_ids = [];
-        batch(() => {
-            for (let nid of node_ids) {
-                let new_id = guid();
-                dispatch(cloneNodeToStore(nid, getState().clipboard.clip_dict, new_id))
-                new_node_ids.push(new_id)
+        let mnode = getState().node_dict[node_id];
+        if (!portal_root) {
+            portal_root = getState().stored_focus.last_focus_portal_root
+        }
+        if (mnode.kind == "text") {
+            if (pos == -1) {
+                pos = mnode.the_text.length
             }
-        })
-        return new_node_ids
+            dispatch(setFocus(node_id, portal_root, pos))
+        }
+        else {
+            dispatch(positionAfterBox(node_id, portal_root))
+        }
     }
 }
 
-function cloneLinesToStore(line_ids) {
+// Selection management
+
+function clearSelectedBase() {
     return (dispatch, getState) => {
-        let new_line_ids = [];
         batch(() => {
-            for (let nid of line_ids) {
-                let new_id = guid();
-                dispatch(cloneLineToStore(nid, getState().clipboard.clip_dict, new_id))
-                new_line_ids.push(new_id)
+            for (let nid in getState().node_dict) {
+                if (getState().node_dict[nid].selected) {
+                    dispatch(changeNode(nid, "selected", false))
+                }
             }
+            dispatch(setGlobal("boxer_selected", false))
         })
-        return new_line_ids
+        return Promise.resolve()
     }
 }
+
+function selectChildren(node_id) {
+    return (dispatch, getState) => {
+        batch(() => {
+            dispatch(changeNode(node_id, "selected", true));
+            let node = getState().node_dict[node_id];
+            if (node.kind == "line") {
+                for (let child of node.node_list) {
+                    dispatch(selectChildren(child))
+                }
+            } else if (container_kinds.includes(node.kind)) {
+                for (let child of node.line_list) {
+                    dispatch(selectChildren(child))
+                }
+                if (node.closetLine) {
+                    dispatch(selectChildren(node.closetLine))
+                }
+            }
+        })
+    }
+}
+
+function clearSelected(force=false) {
+    return (dispatch, getState) => {
+        if (!getState().state_globals.boxer_selected && !force) {
+            return
+        }
+        let focus_node_id = null;
+        if (getState().state_globals.boxer_selected) {
+            let sglobals = getState().state_globals;
+            let select_parent_node = getState().node_dict[sglobals.select_parent];
+
+            if (select_parent_node.kind == "line") {
+                focus_node_id = select_parent_node.node_list[sglobals.select_range[1]];
+            } else {
+                let last_selected_line = getState().node_dict[select_parent_node.line_list[sglobals.select_range[1]]];
+                focus_node_id = _.last(last_selected_line.node_list);
+            }
+        }
+
+        dispatch(clearSelectedBase())
+            .then(() => {
+                if (!focus_node_id) return;
+                    dispatch(focusInOrAfter(focus_node_id, null, -1));
+                } )
+
+    }
+}
+
+function setSelected(id_list) {
+    return (dispatch, getState) => {
+        batch(() => {
+            dispatch(clearSelected(true));
+            dispatch(changeClipboardNode(uid, "selected", true))
+        })
+    }
+}
+
+
+function selectSpan(start_id, end_id) {
+    return (dispatch, getState) => {
+        batch(() => {
+            let start_parent_ids = _findParents(start_id, getState().node_dict);
+            let end_parent_ids = _findParents(end_id, getState().node_dict);
+            let common_parent = null;
+            for (let par of start_parent_ids) {
+                if (end_parent_ids.includes(par)) {
+                    common_parent = par;
+                    break;
+                }
+            }
+            if (!common_parent) {
+                return null
+            }
+            let start_parent_id = start_parent_ids[start_parent_ids.indexOf(common_parent) - 1];
+            let end_parent_id = end_parent_ids[end_parent_ids.indexOf(common_parent) - 1];
+            let range;
+            let start_parent = getState().node_dict[start_parent_id];
+            let end_parent = getState().node_dict[end_parent_id];
+            if (start_parent.position > end_parent.position) {
+                range = [end_parent.position, start_parent.position]
+            } else {
+                range = [start_parent.position, end_parent.position]
+            }
+            let cp = getState().node_dict[common_parent];
+            let nd_list;
+            if (container_kinds.includes(cp.kind)) {
+                nd_list = cp.line_list
+            } else {
+                nd_list = cp.node_list
+            }
+            for (let i = range[0]; i <= range[1]; ++i) {
+                dispatch(selectChildren(nd_list[i]))
+            }
+            dispatch(setGlobals({
+                boxer_selected: true,
+                select_parent: common_parent,
+                select_range: range,
+            }))
+        })
+    }
+}
+
+// Functions that put stuff in the clipboard
 
 function newClipboardTextNode(the_text, uid) {
     return (dispatch, getState) => {
@@ -113,7 +225,6 @@ function cloneLineToClipboard(source_id, new_id) {
     }
 }
 
-
 function cloneLineListToClipboard(source_id_list) {
     return (dispatch, getState) => {
         let new_line_list = [];
@@ -126,6 +237,22 @@ function cloneLineListToClipboard(source_id_list) {
 
         })
         return new_line_list
+    }
+}
+
+function startNewClipboardLine(clear=false){
+    return (dispatch, getState) => {
+        batch(() => {
+            let new_line1_id = guid();
+            let new_line2_id = guid();
+            dispatch(newClipboardLineNode([], new_line1_id));
+            if (clear) {
+                dispatch(newClipboardLineNode([], new_line2_id));
+                dispatch(setClipboardList([new_line1_id, new_line2_id]));
+            } else {
+                dispatch(addToClipboard(new_line1_id))
+            }
+        })
     }
 }
 
@@ -187,77 +314,6 @@ function addTextToClipboard(the_text, clear=false) {
     }
 }
 
-function clearSelectedBase() {
-    return (dispatch, getState) => {
-        batch(() => {
-            for (let nid in getState().node_dict) {
-                if (getState().node_dict[nid].selected) {
-                    dispatch(changeNode(nid, "selected", false))
-                }
-            }
-            dispatch(setGlobal("boxer_selected", false))
-        })
-        return Promise.resolve()
-    }
-}
-
-function focusInOrAfter(node_id, portal_root=null, pos=-1) {
-    return (dispatch, getState) => {
-        let mnode = getState().node_dict[node_id];
-        if (!portal_root) {
-            portal_root = getState().stored_focus.last_focus_portal_root
-        }
-        if (mnode.kind == "text") {
-            if (pos == -1) {
-                pos = mnode.the_text.length
-            }
-            dispatch(setFocus(node_id, portal_root, pos))
-        }
-        else {
-            dispatch(positionAfterBox(node_id, portal_root))
-        }
-    }
-}
-
-
-function clearSelected(force=false) {
-    return (dispatch, getState) => {
-        if (!getState().state_globals.boxer_selected && !force) {
-            return
-        }
-        let focus_node_id = null;
-        if (getState().state_globals.boxer_selected) {
-            let sglobals = getState().state_globals;
-            let select_parent_node = getState().node_dict[sglobals.select_parent];
-
-            if (select_parent_node.kind == "line") {
-                focus_node_id = select_parent_node.node_list[sglobals.select_range[1]];
-            } else {
-                let last_selected_line = getState().node_dict[select_parent_node.line_list[sglobals.select_range[1]]];
-                focus_node_id = _.last(last_selected_line.node_list);
-            }
-        }
-
-        dispatch(clearSelectedBase())
-            .then(() => {
-                if (!focus_node_id) return;
-                    dispatch(focusInOrAfter(focus_node_id, null, -1));
-                } )
-
-    }
-}
-
-function setSelected(id_list) {
-    return (dispatch, getState) => {
-        batch(() => {
-            dispatch(clearSelected(true));
-            dispatch(changeClipboardNode(uid, "selected", true))
-        })
-    }
-}
-
-
-
 function _findParents(node_id, target_dict) {
     let mnode = target_dict[node_id];
     let parents = [mnode.unique_id];
@@ -270,26 +326,6 @@ function _findParents(node_id, target_dict) {
     return parents
 }
 
-function selectChildren(node_id) {
-    return (dispatch, getState) => {
-        batch(() => {
-            dispatch(changeNode(node_id, "selected", true));
-            let node = getState().node_dict[node_id];
-            if (node.kind == "line") {
-                for (let child of node.node_list) {
-                    dispatch(selectChildren(child))
-                }
-            } else if (container_kinds.includes(node.kind)) {
-                for (let child of node.line_list) {
-                    dispatch(selectChildren(child))
-                }
-                if (node.closetLine) {
-                    dispatch(selectChildren(node.closetLine))
-                }
-            }
-        })
-    }
-}
 
 function setClipboardToNodeList(node_list) {
     return (dispatch, getState) => {
@@ -370,111 +406,6 @@ function deleteToLineEnd(text_id, caret_pos) {
     }
 }
 
-function insertClipboardBase(text_id, cursor_position, portal_root) {
-    return (dispatch, getState) => {
-        let focus_text_pos = null;
-        let focus_node_id = null;
-        batch(() => {
-            if (getState().clipboard.clip_list.length == 0) {
-                return
-            }
-            dispatch(splitTextNode(text_id, cursor_position))
-            let parent_line = _getParentNode(text_id, getState().node_dict)
-            let first_text_id = text_id;
-
-            let clist = getState().clipboard.clip_list;
-            let cdict = getState().clipboard.clip_dict;
-
-            if (clist.length == 1) {
-
-                // Clone the nodes from the clipboard.
-                let lin_id = getState().clipboard.clip_list[0];
-                let new_node_ids = dispatch(cloneNodesToStore(cdict[clist[0]].node_list))
-
-                // Deal with focus
-                // If theres only one node and the preceding node is also a text
-                // node than they will be combined. So we have to use the preceding node
-                // for focus
-                if (new_node_ids.length == 1) {
-                    let inserted_node = getState().node_dict[new_node_ids[0]];
-                    let preceding_node = getState().node_dict[text_id];
-                    if (inserted_node.kind == "text" && preceding_node.kind == "text") {
-                        focus_node_id = text_id;
-                    }
-                    else {
-                        focus_node_id = inserted_node.unique_id
-                    }
-                }
-                else {
-                    // We are inserting multiple nodes
-                    // So what we are doing only depends on the last node
-                    let focus_node_id = _.last(new_node_ids);
-                }
-
-                dispatch(insertNodes(new_node_ids, parent_line.unique_id, getState().node_dict[text_id].position + 1));
-                dispatch(healStructure(parent_line.unique_id))
-            } else {
-                let updated_line_list = dispatch(cloneLinesToStore(clist))
-
-                // Split the line between the two text nodes resulting from the split
-                let nodeA = getState().node_dict[first_text_id];
-                let targetLine = getState().node_dict[nodeA.parent];
-                dispatch(splitLine(targetLine.unique_id, nodeA.position + 1));
-
-                // insert nodes from the first clipboard line at the end of the first line
-                dispatch(insertNodes(getState().node_dict[updated_line_list[0]].node_list, targetLine.unique_id, targetLine.node_list.length));
-
-                // Figure out where to focus when done
-                let last_line = getState().node_dict[_.last(updated_line_list)]
-                focus_node_id = _.last(last_line.node_list)
-
-                // Insert nodes from the last clipboard line at the start of the second line resulting
-                // from the split
-                nodeA = getState().node_dict[first_text_id];
-                targetLine = getState().node_dict[nodeA.parent];
-                let targetBox = getState().node_dict[targetLine.parent];
-                let targetLine2 = getState().node_dict[targetBox.line_list[targetLine.position + 1]];
-                dispatch(insertNodes(last_line.node_list, targetLine2.unique_id, 0));
-
-                // If there are any remaining lines, insert them between the others
-                if (clist.length > 2) {
-                    targetBox = getState().node_dict[targetLine.parent];
-                    dispatch(insertLines(updated_line_list.slice(1, clist.length - 1), targetBox.unique_id,
-                        targetLine.position + 1));
-                }
-                dispatch(healStructure(targetBox.unique_id))
-
-            }
-            dispatch(clearSelected(true));
-        })
-        return Promise.resolve(focus_node_id)
-    }
-}
- function insertClipboard(text_id, cursor_position, portal_root) {
-     return (dispatch, getState) => {
-         dispatch(insertClipboardBase(text_id, cursor_position, portal_root))
-             .then((focus_node_id) => {
-                     dispatch(focusInOrAfter(focus_node_id, portal_root, -1));
-            })
-     }
- }
-
-function startNewClipboardLine(clear=false){
-    return (dispatch, getState) => {
-        batch(() => {
-            let new_line1_id = guid();
-            let new_line2_id = guid();
-            dispatch(newClipboardLineNode([], new_line1_id));
-            if (clear) {
-                dispatch(newClipboardLineNode([], new_line2_id));
-                dispatch(setClipboardList([new_line1_id, new_line2_id]));
-            } else {
-                dispatch(addToClipboard(new_line1_id))
-            }
-        })
-    }
-}
-
 function cutSelected() {
     return (dispatch, getState) => {
         batch(() => {
@@ -535,8 +466,6 @@ function copySelected() {
         })
     }
 }
-
-
 
 
 function copyBoxerSelection() {
@@ -635,50 +564,6 @@ function deleteBoxerSelection() {
     }
 }
 
-function selectSpan(start_id, end_id) {
-    return (dispatch, getState) => {
-        batch(() => {
-            let start_parent_ids = _findParents(start_id, getState().node_dict);
-            let end_parent_ids = _findParents(end_id, getState().node_dict);
-            let common_parent = null;
-            for (let par of start_parent_ids) {
-                if (end_parent_ids.includes(par)) {
-                    common_parent = par;
-                    break;
-                }
-            }
-            if (!common_parent) {
-                return null
-            }
-            let start_parent_id = start_parent_ids[start_parent_ids.indexOf(common_parent) - 1];
-            let end_parent_id = end_parent_ids[end_parent_ids.indexOf(common_parent) - 1];
-            let range;
-            let start_parent = getState().node_dict[start_parent_id];
-            let end_parent = getState().node_dict[end_parent_id];
-            if (start_parent.position > end_parent.position) {
-                range = [end_parent.position, start_parent.position]
-            } else {
-                range = [start_parent.position, end_parent.position]
-            }
-            let cp = getState().node_dict[common_parent];
-            let nd_list;
-            if (container_kinds.includes(cp.kind)) {
-                nd_list = cp.line_list
-            } else {
-                nd_list = cp.node_list
-            }
-            for (let i = range[0]; i <= range[1]; ++i) {
-                dispatch(selectChildren(nd_list[i]))
-            }
-            dispatch(setGlobals({
-                boxer_selected: true,
-                select_parent: common_parent,
-                select_range: range,
-            }))
-        })
-    }
-}
-
 function mergeWithPrecedingLine(second_line_id) {
     return (dispatch, getState) => {
         batch(() => {
@@ -754,3 +639,122 @@ function deletePrecedingBox(text_id, clearClipboard=true, portal_root) {
             })
     }
 }
+
+// From clipboard to the main store
+
+function cloneNodesToStore(node_ids) {
+    return (dispatch, getState) => {
+        let new_node_ids = [];
+        batch(() => {
+            for (let nid of node_ids) {
+                let new_id = guid();
+                dispatch(cloneNodeToStore(nid, getState().clipboard.clip_dict, new_id))
+                new_node_ids.push(new_id)
+            }
+        })
+        return new_node_ids
+    }
+}
+
+function cloneLinesToStore(line_ids) {
+    return (dispatch, getState) => {
+        let new_line_ids = [];
+        batch(() => {
+            for (let nid of line_ids) {
+                let new_id = guid();
+                dispatch(cloneLineToStore(nid, getState().clipboard.clip_dict, new_id))
+                new_line_ids.push(new_id)
+            }
+        })
+        return new_line_ids
+    }
+}
+
+function insertClipboardBase(text_id, cursor_position, portal_root) {
+    return (dispatch, getState) => {
+        let focus_text_pos = null;
+        let focus_node_id = null;
+        batch(() => {
+            if (getState().clipboard.clip_list.length == 0) {
+                return
+            }
+            dispatch(splitTextNode(text_id, cursor_position))
+            let parent_line = _getParentNode(text_id, getState().node_dict)
+            let first_text_id = text_id;
+
+            let clist = getState().clipboard.clip_list;
+            let cdict = getState().clipboard.clip_dict;
+
+            if (clist.length == 1) {
+
+                // Clone the nodes from the clipboard.
+                let lin_id = getState().clipboard.clip_list[0];
+                let new_node_ids = dispatch(cloneNodesToStore(cdict[clist[0]].node_list))
+
+                // Deal with focus
+                // If theres only one node and the preceding node is also a text
+                // node than they will be combined. So we have to use the preceding node
+                // for focus
+                if (new_node_ids.length == 1) {
+                    let inserted_node = getState().node_dict[new_node_ids[0]];
+                    let preceding_node = getState().node_dict[text_id];
+                    if (inserted_node.kind == "text" && preceding_node.kind == "text") {
+                        focus_node_id = text_id;
+                    }
+                    else {
+                        focus_node_id = inserted_node.unique_id
+                    }
+                }
+                else {
+                    // We are inserting multiple nodes
+                    // So what we are doing only depends on the last node
+                    let focus_node_id = _.last(new_node_ids);
+                }
+
+                dispatch(insertNodes(new_node_ids, parent_line.unique_id, getState().node_dict[text_id].position + 1));
+                dispatch(healStructure(parent_line.unique_id))
+            } else {
+                let updated_line_list = dispatch(cloneLinesToStore(clist))
+
+                // Split the line between the two text nodes resulting from the split
+                let nodeA = getState().node_dict[first_text_id];
+                let targetLine = getState().node_dict[nodeA.parent];
+                dispatch(splitLine(targetLine.unique_id, nodeA.position + 1));
+
+                // insert nodes from the first clipboard line at the end of the first line
+                dispatch(insertNodes(getState().node_dict[updated_line_list[0]].node_list, targetLine.unique_id, targetLine.node_list.length));
+
+                // Figure out where to focus when done
+                let last_line = getState().node_dict[_.last(updated_line_list)]
+                focus_node_id = _.last(last_line.node_list)
+
+                // Insert nodes from the last clipboard line at the start of the second line resulting
+                // from the split
+                nodeA = getState().node_dict[first_text_id];
+                targetLine = getState().node_dict[nodeA.parent];
+                let targetBox = getState().node_dict[targetLine.parent];
+                let targetLine2 = getState().node_dict[targetBox.line_list[targetLine.position + 1]];
+                dispatch(insertNodes(last_line.node_list, targetLine2.unique_id, 0));
+
+                // If there are any remaining lines, insert them between the others
+                if (clist.length > 2) {
+                    targetBox = getState().node_dict[targetLine.parent];
+                    dispatch(insertLines(updated_line_list.slice(1, clist.length - 1), targetBox.unique_id,
+                        targetLine.position + 1));
+                }
+                dispatch(healStructure(targetBox.unique_id))
+
+            }
+            dispatch(clearSelected(true));
+        })
+        return Promise.resolve(focus_node_id)
+    }
+}
+ function insertClipboard(text_id, cursor_position, portal_root) {
+     return (dispatch, getState) => {
+         dispatch(insertClipboardBase(text_id, cursor_position, portal_root))
+             .then((focus_node_id) => {
+                     dispatch(focusInOrAfter(focus_node_id, portal_root, -1));
+            })
+     }
+ }
