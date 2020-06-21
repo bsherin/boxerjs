@@ -3,7 +3,8 @@ import React from "react";
 import {graphics_kinds} from "./shared_consts.js";
 import {extractText, guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utilities.js";
 
-import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColor, defaultPenWidth} from "./shared_consts";
+import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColor, defaultPenWidth} from "./shared_consts.js";
+import {setSpriteParams} from "./actions/composite_actions.js";
 import {Ellipse, Rectangle, Line} from "./pixi_shapes.js";
 import {SvgRect, SvgLine, } from "./svg_shapes.js";
 import PIXI from "pixi.js";
@@ -112,11 +113,15 @@ class SpriteNode {
     }
 
     setMyParams(param_dict, callback=null) {
-        window.setSpriteParams(this.unique_id, param_dict, ()=>{
-            if (callback) {
-                callback(param_dict)
-            }
-        })
+        window.store.dispatch(setSpriteParams(this.unique_id, param_dict))
+            .then(()=>{
+                window.vstore.dispatch(setSpriteParams(this.unique_id, param_dict))
+                    .then(()=>{
+                        if (callback) {
+                            callback(param_dict)
+                        }
+                    })
+            })
     }
 
     clean(callback=null) {

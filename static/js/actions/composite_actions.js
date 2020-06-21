@@ -18,7 +18,7 @@ import {text_kinds} from "../shared_consts";
 export {healLine, healStructure, splitLine, createCloset, mergeTextNodes, setLineList, renumberLines, toggleBoxTransparency, setPortTarget, enterPortTargetMode,
     zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore,
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
-    splitTextNode, splitLineAtTextPosition,
+    splitTextNode, splitLineAtTextPosition, setSpriteParams,
 insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, retargetPortLastFocus, setNodeSize}
 
 
@@ -411,7 +411,7 @@ function focusLeft(text_id, position, portal_root) {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
         for (let pos = position - 1; pos >= 0; --pos) {
-            let candidate = ndict[ndict[myLine.node_list[pos]].unique_id];
+            let candidate = ndict[ndict[my_line.node_list[pos]].unique_id];
             if (candidate.kind == "text") {
                 dispatch(setFocus(candidate.unique_id, portal_root, candidate.the_text.length));
                 return
@@ -424,12 +424,12 @@ function focusRight(text_id, position, portal_root) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
-        let nnodes = myLine.node_list.length;
+        let nnodes = my_line.node_list.length;
         if (position == nnodes - 1) {
             return
         }
         for (let pos = position + 1; pos < nnodes; ++pos) {
-            let candidate = ndict[ndict[myLine.node_list[pos]].unique_id];
+            let candidate = ndict[ndict[my_line.node_list[pos]].unique_id];
             if (candidate.kind == "text") {
                 dispatch(setFocus(candidate.unique_id, portal_root, 0));
                 return
@@ -593,6 +593,7 @@ function setGraphicsSize(uid, new_width, new_height) {
 }
 
 
+
 function createCloset(boxId, show=false) {
     return (dispatch, getState) => {
         batch(() => {
@@ -618,5 +619,32 @@ function toggleCloset(boxId) {
             dispatch(changeNode(mbox.unique_id, "showCloset", !mbox.showCloset))
         }
 
+    }
+}
+
+function setSpriteParams(uid, pdict) {
+    return (dispatch, getState) => {
+        batch(() => {
+            let mnode = getState().node_dict[uid];
+            if (mnode) {
+                for (let lin_id of mnode.line_list) {
+                    let lin = getState().node_dict[lin_id];
+                    for (let nd_id of lin.node_list) {
+                        let nd = getState().node_dict[nd_id];
+                        if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                            dispatch(setln(nd_id, 0, 0, "the_text", String(pdict[nd.name])))
+                        }
+                    }
+            }
+            for (let nd_id of getState().node_dict[mnode.closetLine].node_list) {
+                let nd = getState().node_dict[nd_id]
+                if (nd.name && pdict.hasOwnProperty(nd.name)) {
+                    dispatch(setln(nd_id, 0, 0, "the_text", String(pdict[nd.name])))
+                }
+            }
+            }
+
+        })
+        return Promise.resolve()
     }
 }

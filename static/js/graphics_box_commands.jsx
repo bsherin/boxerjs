@@ -13,20 +13,20 @@ class GraphicsNode {
         this.saveParams = Object.keys(param_dict);
     }
     clearComponents(callback=null) {
-        window.changeNode(this.unique_id, "drawn_components", [], callback)
+        window.store.dispatch(changeNode(this.unique_id, "drawn_components", [], callback));
     }
 
     setWrap(wrap) {
-        window.changeNode(this.unique_id, "do_wrap", wrap)
+        window.store.dispatch(changeNode(this.unique_id, "do_wrap", wrap))
     }
 
 
     setBgColor(color) {
-        window.changeNode(this.unique_id, "bgColor", color);
+        window.store.dispatch(changeNode(this.unique_id, "bgColor", color));
     }
 
     addGraphicsComponent(the_comp, callback=null) {
-        window.addGraphicsComponent(this.unique_id, the_comp, callback)
+        window.store.dispatch(addGraphicsComponent(this.unique_id, the_comp, callback));
     }
 
 }

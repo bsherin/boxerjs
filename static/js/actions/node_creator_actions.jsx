@@ -17,7 +17,8 @@ import {SvgTriangle} from "../svg_shapes.js";
 import {SpriteNode} from "../sprite_commands.js";
 
 export {newTextNode, newLineNode, newDataBoxNode, newSpriteBox, newDoitBoxNode, newClosetLine, createNode, nodeModels,
-    textNodeDict, lineNodeDict, dataBoxNodeDict}
+    textNodeDict, lineNodeDict, dataBoxNodeDict, colorNodeDict, graphicsNodeDict, doitBoxNodeDict,
+    portNodeDict, newPort, newColorBox}
 
 function textNodeDict(the_text, uid) {
     return {
@@ -169,6 +170,27 @@ function newDataBoxNode(line_list=[], amClosetBox=false, uid) {
     }
 }
 
+function doitBoxNodeDict(line_list, uid) {
+    return { kind: "doitbox",
+            key: uid,
+            name: null,
+            parent: null,
+            fixed_size: false,
+            fixed_width: null,
+            fixed_height: null,
+            focusName: false,
+            am_zoomed: false,
+            transparent: false,
+            position: 0,
+            selected: false,
+            line_list: line_list,
+            closed: false,
+            showCloset: false,
+            closetLine: null,
+            unique_id: uid
+    }
+}
+
 function newDoitBoxNode(line_list=[], uid) {
     return (dispatch, getState) => {
         batch(() => {
@@ -183,50 +205,62 @@ function newDoitBoxNode(line_list=[], uid) {
             for (let lnodeid of line_list) {
                 dispatch(changeNode(lnodeid, "parent", uid))
             }
-            let new_box = {
-                kind: "doitbox",
-                key: uid,
-                name: null,
-                parent: null,
-                fixed_size: false,
-                fixed_width: null,
-                fixed_height: null,
-                focusName: false,
-                am_zoomed: false,
-                transparent: false,
-                position: 0,
-                selected: false,
-                line_list: line_list,
-                closed: false,
-                showCloset: false,
-                closetLine: null,
-                unique_id: uid};
+            let new_box = doitBoxNodeDict(line_list, uid);
             dispatch(createEntry(new_box));
 
         })
     }
 }
 
+function portNodeDict(target=null, uid) {
+    return {
+    kind: "port",
+        key: uid,
+        target: target,
+        name: null,
+        parent: null,
+        fixed_size: false,
+        fixed_width: null,
+        fixed_height: null,
+        focusNameTag: false,
+        am_zoomed: false,
+        position: 0,
+        selected: false,
+        closed: false,
+        unique_id: uid
+    }
+}
+
 function newPort(target=null, uid) {
     return (dispatch, getState) => {
-        let new_box = {
-            kind: "port",
-            key: uid,
-            target: target,
-            name: null,
-            parent: null,
-            fixed_size: false,
-            fixed_width: null,
-            fixed_height: null,
-            focusNameTag: false,
-            am_zoomed: false,
-            position: 0,
-            selected: false,
-            closed: false,
-            unique_id: uid
-        };
+        let new_box = portNodeDict(target, uid);
         dispatch(createEntry(new_box));
     }
+}
+
+function graphicsNodeDict(uid, specific_kind, line_list) {
+    return {
+        kind: specific_kind,
+        key: uid,
+        name: null,
+        parent: null,
+        fixed_size: false,
+        fixed_width: null,
+        fixed_height: null,
+        focusNameTag: false,
+        am_zoomed: false,
+        transparent: false,
+        selected: false,
+        line_list: line_list,
+        closed: false,
+        drawn_components: [],
+        showCloset: false,
+        closetLine: null,
+        unique_id: uid,
+        bgColor: defaultBgColor,
+        graphics_fixed_width: 303,
+        graphics_fixed_heig
+}
 }
 
 function newGraphicsBox(line_list=[], specific_kind, uid) {
@@ -244,33 +278,36 @@ function newGraphicsBox(line_list=[], specific_kind, uid) {
                 dispatch(changeNode(lnodeid, "parent", uid))
             }
 
-            let new_node_params = {
-                kind: specific_kind,
-                key: uid,
-                name: null,
-                parent: null,
-                fixed_size: false,
-                fixed_width: null,
-                fixed_height: null,
-                focusNameTag: false,
-                am_zoomed: false,
-                transparent: false,
-                selected: false,
-                line_list: line_list,
-                closed: false,
-                drawn_components: [],
-                showCloset: false,
-                closetLine: null,
-                unique_id: uid,
-                bgColor: defaultBgColor,
-                graphics_fixed_width: 303,
-                graphics_fixed_height: 303,
-                showGraphics: true,
-            };
+            let new_node_params = graphicsNodeDict(uid, specific_kind, line_list)
             let new_node;
             let newgnode = new GraphicsNode(new_node_params)
             dispatch(createEntry(newgnode));
         })
+    }
+}
+
+function colorNodeDict(uid, line_list) {
+    return {
+        kind: "color",
+        key: uid,
+        name: null,
+        parent: null,
+        fixed_size: false,
+        fixed_width: null,
+        fixed_height: null,
+        focusNameTag: false,
+        am_zoomed: false,
+        transparent: false,
+        selected: false,
+        line_list: line_list,
+        closed: false,
+        drawn_components: [],
+        showCloset: false,
+        closetLine: null,
+        unique_id: uid,
+        graphics_fixed_width: 25,
+        graphics_fixed_height: 25,
+        showGraphics: true,
     }
 }
 
@@ -288,28 +325,7 @@ function newColorBox(color_string=null, uid) {
             dispatch(newLineNode(node_list, line_id))
             let line_list = [line_id]
 
-            let new_node_params = {
-                kind: "color",
-                key: uid,
-                name: null,
-                parent: null,
-                fixed_size: false,
-                fixed_width: null,
-                fixed_height: null,
-                focusNameTag: false,
-                am_zoomed: false,
-                transparent: false,
-                selected: false,
-                line_list: line_list,
-                closed: false,
-                drawn_components: [],
-                showCloset: false,
-                closetLine: null,
-                unique_id: uid,
-                graphics_fixed_width: 25,
-                graphics_fixed_height: 25,
-                showGraphics: true,
-            };
+            let new_node_params = colorNodedict(uid, line_list);
             let newgnode = new GraphicsNode(new_node_params)
             dispatch(createEntry(newgnode));
         })

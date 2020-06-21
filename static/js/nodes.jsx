@@ -1,6 +1,6 @@
 import React from "react";
 import ContentEditable from "react-contenteditable";
-import { Provider } from 'react-redux';
+import { Provider, batch } from 'react-redux';
 import PropTypes from "prop-types";
 
 import {connect} from "react-redux";
@@ -8,7 +8,7 @@ import {connect} from "react-redux";
 import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, propsAreEqual, _convertColorArg, _svgConvertColorArg} from "./utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
-import {doExecution, repairCopiedDrawnComponents, _mouseClickOnSprite, _mouseClickOnGraphics} from "./eval_space.js";
+import {doExecution, _mouseClickOnSprite, _mouseClickOnGraphics} from "./eval_space.js";
 
 import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
 
@@ -460,31 +460,35 @@ class TextNodeRaw extends React.Component {
     }
 
     async _runMe() {
-        let parent_line = this._myLine();
 
-
-        let result = await doExecution(parent_line, parent_line.parent, this.props.node_dict);
+        let result = await doExecution(this.props.parent);
         if (result == null) {
             return
         }
-        let new_node_id, new_line_id, new_databox_id, new_dict;
+        let new_node_id = guid();
+        let new_line_id = guid();
+        let new_databox_id = guid();
+
         if (typeof(result) != "object") {
-            let new_node, new_line, new_databox, new_dict;
-            [new_node_id, new_dict] = this.props.funcs.newTextNode(String(result), this.props.funcs.getNodeDict());
-            [new_line_id, new_dict] = this.props.funcs.newLineNode([new_node_id], new_dict);
-            [new_databox_id, new_dict] = this.props.funcs.newDataBox([new_line_id], false, new_dict);
-            this.props.funcs.insertNode(new_databox_id, parent_line.unique_id, parent_line.node_list.length, null, new_dict)
+            batch(()=>{
+                this.props.newTextNode(String(result), new_node_id);
+                this.props.newLineNode([new_node_id], new_line_id);
+                this.props.newDataBox([new_line_id], false, new_databox_id);
+                this.props.insertNode(new_databox_id, this.props.parent, -1)
+            })
+
         }
         else {
-            let vid, target_dict;
-            [vid, target_dict] = this.props.funcs.cloneNode(result.vid, window.virtualNodeDict,
-                this.props.funcs.getNodeDict(), true)
+            let new_id = guid();
+            batch(()=> {
+                this.props.cloneNodeToStore(result.vid, window.vstore.getState().node_dict, new_id, true);
 
-            if (data_kinds.includes(target_dict[vid].kind)) {
-                target_dict[vid].name = null;
-            }
-            // repairCopiedDrawnComponents(target_dict[vid], true, target_dict);
-            this.props.funcs.insertNode(vid, parent_line.unique_id, parent_line.node_list.length, null, target_dict)
+                if (data_kinds.includes(window.store.getState().node_dict[new_id].kind)) {
+                    this.props.changeNode(new_id, "name", null);
+                }
+                // repairCopiedDrawnComponents(target_dict[vid], true, target_dict);
+                this.props.insertNode(new_id, this.props.parent, -1)
+            })
         }
     }
 
@@ -593,21 +597,6 @@ class TextNodeRaw extends React.Component {
         }
     }
 
-    _myNode() {
-        return this.props.node_dict[this.props.unique_id]
-    }
-
-    _myLineId() {
-        return this._myNode().parent;
-    }
-
-    _myLine() {
-        return this.props.node_dict[this._myLineId()]
-    }
-
-    _myBox() {
-        return this.props.node_dict[this._myLine().parent]
-    }
     _listen_for_clicks () {
         let self = this;
         $(this.iRef).off("dblclick");

@@ -1,33 +1,59 @@
 
 import update from "immutability-helper";
-import { combineReducers } from 'redux';
+import {applyMiddleware, combineReducers, createStore} from 'redux';
 import {SET_GLOBAL, CREATE_ENTRY, CHANGE_NODE, SET_NODE_DICT, INSERT_NODE, INSERT_LINE, INSERT_LINES, REPLACE_NODE, REPLACE_LINE,
     INSERT_NODES, REMOVE_NODE, REMOVE_LINE, STORE_FOCUS, CLEAR_CLIPBOARD, ADD_TO_CLIPBOARD, SET_CLIPBOARD_DICT,
     CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST, CHANGE_CLIPBOARD_NODE} from "./actions/core_actions.js"
+import thunk from "redux-thunk";
 
 export {rootReducer}
 
 
 function node_dict(state={}, action) {
+    let pos;
     switch (action.type) {
         case CREATE_ENTRY:
           return update(state, {[action.new_node.unique_id]: {$set: action.new_node}})
         case CHANGE_NODE:
           return update(state, {[action.uid]: {[action.param_name]: {$set: action.new_val}}})
         case INSERT_NODE:
+            if (action.position == -1) {
+                pos = state[action.line_id].node_list.length
+            }
+            else {
+                pos = action.position
+            }
             return update(state,
-                {[action.line_id]: {node_list: {$splice: [[action.position, 0, action.new_node_id]]}}})
+                {[action.line_id]: {node_list: {$splice: [[pos, 0, action.new_node_id]]}}})
         case SET_NODE_DICT:
             return action.new_node_dict
         case INSERT_NODES:
+            if (action.position == -1) {
+                pos = state[action.line_id].node_list.length
+            }
+            else {
+                pos = action.position
+            }
             return update(state,
-                {[action.line_id]: {node_list: {$splice: [[action.position, 0, ...action.node_id_list]]}}})
+                {[action.line_id]: {node_list: {$splice: [[pos, 0, ...action.node_id_list]]}}})
         case INSERT_LINE:
+            if (action.position == -1) {
+                pos = state[action.box_id].line_list.length
+            }
+            else {
+                pos = action.position
+            }
             return update(state,
-                {[action.box_id]: {line_list: {$splice: [[action.position, 0, action.new_line_id]]}}})
+                {[action.box_id]: {line_list: {$splice: [[pos, 0, action.new_line_id]]}}})
         case INSERT_LINES:
+            if (action.position == -1) {
+                pos = state[action.box_id].line_list.length
+            }
+            else {
+                pos = action.position
+            }
             return update(state,
-                {[action.box_id]: {line_list: {$splice: [[action.position, 0, ...action.line_id_list]]}}})
+                {[action.box_id]: {line_list: {$splice: [[pos, 0, ...action.line_id_list]]}}})
         case REMOVE_NODE:
             let npos = state[action.parent_id].node_list.indexOf(action.uid);
             return update(state,
@@ -116,3 +142,12 @@ const rootReducer = combineReducers({
     stored_focus,
     clipboard
 })
+
+const virtualReducer = combineReducers({
+    node_dict,
+    state_globals,
+})
+
+
+var vstore = createStore(virtualReducer, applyMiddleware(thunk));
+window.vstore = vstore;

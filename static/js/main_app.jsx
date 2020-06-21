@@ -401,7 +401,7 @@ class MainApp extends React.Component {
         let menus = (
             <React.Fragment>
                 <ProjectMenu {...this.props.statusFuncs}
-                    getStateforSave={this._getStateForSave}
+                    getStateForSave={this._getStateForSave}
                 />
                 <EditMenu {...this.funcs}
                 />

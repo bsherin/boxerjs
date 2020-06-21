@@ -388,7 +388,7 @@ class MainApp extends React.Component {
             React.Fragment,
             null,
             React.createElement(ProjectMenu, _extends({}, this.props.statusFuncs, {
-                getStateforSave: this._getStateForSave
+                getStateForSave: this._getStateForSave
             })),
             React.createElement(EditMenu, this.funcs),
             React.createElement(MakeMenu, this.funcs),

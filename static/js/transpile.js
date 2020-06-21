@@ -1,30 +1,41 @@
 
 import _ from "lodash";
+
+
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
 import {container_kinds, data_kinds} from "./shared_consts.js";
 
-export {insertVirtualNode, _createLocalizedFunctionCall, _convertFunctionNode, getPortTarget, makeChildrenNonVirtual,
+import {guid} from "./utilities.js";
+
+import {cloneLineToStore, cloneNodeToStore} from "./actions/composite_actions";
+import {changeNode, changeNodeMulti} from "./actions/core_actions.js";
+import {newDoitBoxNode, newDataBoxNode, newPort, newTextNode, newLineNode} from "./actions/node_creator_actions.js";
+import {insertVirtualNode} from "./vnd_mutators.js";
+
+export {_createLocalizedFunctionCall, _convertFunctionNode, getPortTarget,
     findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
 
+var vndict = ()=>{return window.vstore.getState().node_dict}
 
 // This is the first thing called to begin processing of either a single line executed
 // from the interface or a tell statement
 // It creates a temporary doit node, wrapped around the line of code, then inserts it
 // as a virtual doit node in the hierarchy.
 function _createLocalizedFunctionCall(the_code_line, box_id, ports=null, use_virtual_source=false) {
-    let temp_dict = {};
-    let local_code_line_id, _tempDoitNodeId;
-    let line_source = null
+    let line_source;
     if (use_virtual_source) {
-        line_source = window.virtualNodeDict
+        line_source = vndict();
     }
-    [local_code_line_id, window.virtualNodeDict] = window.cloneNode(the_code_line.unique_id, line_source, window.virtualNodeDict, true);
-    [_tempDoitNodeId, window.virtualNodeDict] = window.newDoitNode([local_code_line_id], window.virtualNodeDict);
-    window.virtualNodeDict[_tempDoitNodeId].name = "_tempFunc";
-    window.virtualNodeDict[_tempDoitNodeId].virtual = true
-    let _inserted_start_node = insertVirtualNode(_tempDoitNodeId, box_id);
-    _inserted_start_node.ports = ports
-    return _inserted_start_node
+    else {
+        line_source = window.store.getState().node_dict;
+    }
+    let local_code_line_id = guid();
+    window.vstore.dispatch(cloneLineToStore(the_code_line.unique_id, line_source, local_code_line_id));
+    let _tempDoitNodeId = guid();
+    window.vstore.dispatch(newDoitBoxNode([local_code_line_id], _tempDoitNodeId))
+    window.vstore.dispatch(changeNodeMulti(_tempDoitNodeId, {name: "_tempFunc", virtual: true, ports: ports}));
+    window.vstore.dispatch(insertVirtualNode(_tempDoitNodeId, box_id));
+    return _tempDoitNodeId
 }
 
 class TranspileError extends Error {
@@ -41,11 +52,11 @@ class TranspileError extends Error {
 function _convertFunctionNode(doitNode) {
     try {
 
-        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, window.virtualNodeDict);
+        let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, vndict());
 
         // Identify the types of the named boxes found
         // Get the arguments needed for each doit and jsbox
-        let context = preprocessNamedBoxes(_named_nodes, window.virtualNodeDict);
+        let context = preprocessNamedBoxes(_named_nodes, vndict());
         context.doitId = doitNode.unique_id;
 
         // Get the input names for the box we're converting
@@ -63,11 +74,10 @@ function _convertFunctionNode(doitNode) {
         // This makes them easy to refer to
         let inserted_lines = 0;
         for (let input_name of input_names) {
-            let new_node_id;
-            [new_node_id, window.virtualNodeDict] = window.newDataBoxNode([], false, window.virtualNodeDict);
-            let inserted_node = window.virtualNodeDict[new_node_id];
-            inserted_node.name = input_name;
-            insertVirtualNode(new_node_id, doitNode.unique_id);
+            let new_node_id = guid();
+            window.vstore.dispatch(newDataBoxNode([], false, new_node_id));
+            window.vstore.dispatch(changeNode(new_node_id, "name", input_name));
+            window.vstore.dispatch(insertVirtualNode(new_node_id, doitNode.unique_id));
             context.local_var_nodes[input_name] = inserted_node.unique_id;
         }
 
@@ -75,18 +85,17 @@ function _convertFunctionNode(doitNode) {
         // This is a mechanism for getting input arguments into tells
         if (doitNode.hasOwnProperty("ports") && doitNode.ports) {
             for (let portname in doitNode.ports) {
-                let new_port_id;
-                [new_port_id, window.virtualNodeDict] = window.newPort(doitNode.ports[portname], window.virtualNodeDict);
-                let inserted_port = window.virtualNodeDict[new_port_id]
-                inserted_port.name = portname
-                insertVirtualNode(new_port_id, doitNode.unique_id)
+                let new_port_id = guid();
+                window.vstore.dispatch(newPort(doitNode.ports[portname], new_port_id));
+                window.vstore.dispatch(changeNode(new_port_id, "name", portname));
+                window.vstore.dispatch(insertVirtualNode(new_port_id, doitNode.unique_id))
                 context.data_boxes[portname] = inserted_port
             }
         }
 
         // Find all called doit boxes and copy them locally
         // Then recursively call this function to convert them
-        let called_doits = findCalledDoits(doitNode, window.virtualNodeDict, context);
+        let called_doits = findCalledDoits(doitNode, vndict(), context);
         let called_doit_string = "";
         context.copied_doits = {};
 
@@ -94,10 +103,9 @@ function _convertFunctionNode(doitNode) {
             if (called_doit.node.parent == doitNode.unique_id) {
                 continue
             }
-            let new_doit_id;
-            [new_doit_id, window.virtualNodeDict] = window.cloneNode(called_doit.node.unique_id, window.virtualNodeDict, window.virtualNodeDict, true);
-            let vnode = window.virtualNodeDict[new_doit_id];
-            insertVirtualNode(vnode.unique_id, doitNode.unique_id);
+            let new_doit_id = guid();
+            window.vstore.dispatch(cloneNodeToStore(called_doit.node.unique_id, vndict(), new_doit_id))
+            window.vstore.dispatch(insertVirtualNode(new_doit_id, doitNode.unique_id));
             // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
                 node: vnode,
@@ -245,65 +253,6 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
     return [new_names, new_nodes, current_turtle_id]
 }
 
-// Insert the node nodeToInsertId in the closet of boxToInsertInId
-// Assumes both nodes already exist in virtualNodeDict
-function insertVirtualNode(nodeToInsertId, boxToInsertInId) {
-    let boxToInsertIn = window.virtualNodeDict[boxToInsertInId];
-    let cline_id;
-    if (!boxToInsertIn.closetLine) {
-        window.virtualNodeDict = window.createClosetAndReturn(boxToInsertInId, window.virtualNodeDict)
-    }
-    cline_id = window.virtualNodeDict[boxToInsertInId].closetLine;
-    window.virtualNodeDict[cline_id].virtual = true
-
-    window.virtualNodeDict[nodeToInsertId].parent = window.virtualNodeDict[cline_id].unique_id;
-    window.virtualNodeDict[cline_id].node_list.push(nodeToInsertId);
-    window.virtualNodeDict = window.healLine(cline_id, false, window.virtualNodeDict)
-    window.virtualNodeDict[nodeToInsertId].virtual = true;
-    makeChildrenVirtual(nodeToInsertId);
-
-    return window.virtualNodeDict[nodeToInsertId]
-}
-
-function makeChildrenVirtual(node_id) {
-    let node = window.virtualNodeDict[node_id];
-    if (container_kinds.includes(node.kind)) {
-        for (let line_id of node.line_list) {
-            let the_line = window.virtualNodeDict[line_id];
-            the_line.virtual = true;
-            for (let lnode_id of the_line.node_list) {
-                window.virtualNodeDict[lnode_id].virtual = true;
-                makeChildrenVirtual(lnode_id)
-            }
-        }
-        if (node.closetLine) {
-            node.closetLine.virtual = true;
-            for (let lnode_id of node.closetLine.node_list) {
-                window.virtualNodeDict[lnode_id].virtual= true;
-                makeChildrenVirtual(lnode_id)
-            }
-        }
-    }
-}
-
-function makeChildrenNonVirtual(lin_id, nd) {
-    let the_line = nd[lin_id];
-    for (let nd_id of the_line.node_list) {
-        let anode = nd[nd_id];
-        if (container_kinds.includes(anode.kind)) {
-            for (let line_id of anode.line_list) {
-                let aline = nd[line_id];
-                aline.virtual = false;
-            }
-            if (anode.closetLine) {
-                nd[anode.closetLine].virtual = false;
-                makeChildrenNonVirtual(anode.closetLine, nd)
-            }
-        }
-    }
-
-}
-
 
 // Finds doit boxes that are called
 // The names are adjusted if we have a port to a doit box
@@ -443,7 +392,8 @@ function convertStatementLine(token_list, context, is_last_line=false) {
         args = boxer_statements[first_token].args
     }
     else if (statement_type == "boxer_tell") {
-        let inserted_node = convertTell(token_list, context)
+        let inserted_node_id = convertTell(token_list, context);
+        let inserted_node = vndict()[inserted_node_id];
         let call_string = ` await getBoxValue("${inserted_node.name}", "${inserted_node.unique_id}")()`;
         if (is_last_line) {
             call_string = "\nreturn " + call_string;
@@ -520,8 +470,8 @@ function convertStatementLine(token_list, context, is_last_line=false) {
 }
 
 function findNamedNode(name, starting_id) {
-    let start_node = window.virtualNodeDict[starting_id];
-    let [named_nodes, tid] = findNamedBoxesInScope(start_node, window.virtualNodeDict);
+    let start_node = vndict()[starting_id];
+    let [named_nodes, tid] = findNamedBoxesInScope(start_node, vndict());
     for (let node of named_nodes) {
         if (node.name == name) {
             return node
@@ -545,15 +495,15 @@ function convertTell(token_list, context) {
         node_id = the_node.unique_id;
     }
     else {
-        [node_id, window.virtualNodeDict] = window.newTextNode(token_list[2], window.virtualNodeDict);
-        the_node = window.virtualNodeDict[node_id]
+        let node_id = guid();
+        window.vstore.dispatch(newTextNode(token_list[2], node_id));
     }
-    let the_code_line_id, the_code_line;
-    [the_code_line_id, window.virtualNodeDict] = window.newLineNode([node_id], window.virtualNodeDict);
-    the_code_line = window.virtualNodeDict[the_code_line_id];
-    let _inserted_start_node = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes, true);
+    let the_code_line_id = guid();
+    window.vstore.dispatch(newLineNode([node_id], the_code_line_id));
+    let the_code_line = vndict()[the_code_line_id];
+    let _inserted_start_node_id = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes, true);
 
-    return _inserted_start_node
+    return _inserted_start_node_id
 }
 
 // Identifies the first argument in the given token list and converts it to a javascript string
@@ -565,7 +515,7 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
     let first_token;
     let tokens_consumed = 1;
     let new_consuming_line = _.cloneDeep(consuming_line);
-    let nd = window.virtualNodeDict;
+    let nd = vndict();
 
     // If the first token is an object, then it is treated as the next argument in its entirety
     if (typeof(first_node) == "object") {
@@ -724,7 +674,7 @@ function boxObjectToValue(dbox) {
 }
 
 function dataBoxToValue(dbox) {
-    let nd = window.virtualNodeDict;
+    let nd = vndict();
     if (dbox.line_list.length == 1){
         let the_line = nd[dbox.line_list[0]];
         if (the_line.node_list.length == 1) {
@@ -756,7 +706,7 @@ function getPortTarget(portNode, node_dict) {
 }
 
 function extractArgs(doitBoxNode) {
-    let first_tokenized = tokenizeLine(doitBoxNode.line_list[0], window.virtualNodeDict);
+    let first_tokenized = tokenizeLine(doitBoxNode.line_list[0], vndict());
     let arglist;
     if (first_tokenized[0] == "input") {
         arglist = first_tokenized.slice(1,);
