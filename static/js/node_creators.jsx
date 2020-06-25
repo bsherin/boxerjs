@@ -1,6 +1,6 @@
 import React from "react";
 
-import {guid} from "./utilities.js";
+import {guid} from "./utility/utilities.js";
 import {
     defaultBgColor,
     defaultFontFamily,
@@ -470,7 +470,7 @@ let nodeCreatorMixin = {
 
     _newSvgTurtleBox(target_dict={}) {
         let spriteid;
-        [spriteid, target_dict] = this._newSpriteBox(false, target_dict);
+        [spriteid, target_dict] = this._newSpriteBox(true, target_dict);
         target_dict = this.changeNodeAndReturn(spriteid, "transparent", true, target_dict);
         let node_list = [spriteid];
         let new_lineid;

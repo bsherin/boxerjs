@@ -1,5 +1,6 @@
-import {doBinding} from "./utilities";
-
+import {doBinding} from "./utility/utilities.js";
+import {changeNode} from "./redux/actions/core_actions.js";
+import {addGraphicsComponent} from "./redux/actions/composite_actions.js";
 
 export {GraphicsNode}
 
@@ -13,7 +14,8 @@ class GraphicsNode {
         this.saveParams = Object.keys(param_dict);
     }
     clearComponents(callback=null) {
-        window.store.dispatch(changeNode(this.unique_id, "drawn_components", [], callback));
+        window.store.dispatch(changeNode(this.unique_id, "drawn_components", []));
+        callback()
     }
 
     setWrap(wrap) {
@@ -26,7 +28,7 @@ class GraphicsNode {
     }
 
     addGraphicsComponent(the_comp, callback=null) {
-        window.store.dispatch(addGraphicsComponent(this.unique_id, the_comp, callback));
+        window.store.dispatch(addGraphicsComponent(this.unique_id, the_comp)).then(callback);
     }
 
 }

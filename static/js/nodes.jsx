@@ -1,16 +1,20 @@
+
+
 import React from "react";
 import ContentEditable from "react-contenteditable";
 import { Provider, batch } from 'react-redux';
-import PropTypes from "prop-types";
 
 import {connect} from "react-redux";
 
-import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, propsAreEqual, _convertColorArg, _svgConvertColorArg} from "./utilities.js";
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
-import {doExecution, _mouseClickOnSprite, _mouseClickOnGraphics} from "./eval_space.js";
+import {_getln, makeSelectMyPropsAndGlobals, makeSelectMyProps, makeSelectColorProps, makeSelectMyPropsAndTextGlobals} from "./redux/selectors.js"
 
-import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+import {doExecution, _mouseClickOnSprite, _mouseClickOnGraphics} from "./execution/eval_space.js";
+import {ErrorBoundary} from "./error_boundary.js";
+
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
 
 import {SvgRect} from "./svg_shapes.js"
 // noinspection ES6CheckImport
@@ -19,10 +23,10 @@ import * as PIXI from "pixi.js";
 
 import {data_kinds} from "./shared_consts.js";
 
-import {withName, NamedBox_propTypes, NamedBox_defaultProps} from "./named_box.js";
+import {withName} from "./named_box.js";
 import {Button} from "@blueprintjs/core";
 
-export {DataBox, PortBox, JsBox, loader}
+export {DataBox, PortBox, JsBox, loader, GenericNode}
 
 let currentlyDeleting = false;
 
@@ -43,29 +47,6 @@ PIXI.settings.RESOLUTION = 1;
 const loader = PIXI.Loader.shared;
 loader.add('turtle', "/static/assets/turtle_image.png");
 
-function mapStateToPropsWithND(state, ownProps){
-
-    return Object.assign({
-            node_dict: state.node_dict,
-            innerWidth: state.state_globals.innerWidth,
-            innerHeight: state.state_globals.innerHeigh
-        },
-        ownProps, state.node_dict[ownProps["unique_id"]])
-}
-
-function mapStateToPropsWithBS(state, ownProps){
-
-    return Object.assign({boxer_selected: state.state_globals.boxer_selected},
-        ownProps, state.node_dict[ownProps["unique_id"]])
-}
-
-function mapStateToProps(state, ownProps){
-
-    return Object.assign({
-        innerWidth: state.state_globals.innerWidth,
-        innerHeight: state.state_globals.innerHeight},
-        ownProps, state.node_dict[ownProps["unique_id"]])
-}
 
 
 class SpriteBoxRaw extends React.Component {
@@ -73,43 +54,36 @@ class SpriteBoxRaw extends React.Component {
         super(props);
         doBinding(this);
         this.spriteRef = React.createRef();
+        this.last_tick_processed = 0
     }
 
-    _listen_for_clicks () {
-        let self = this;
-        if (this.spriteRef && this.spriteRef.current) {
-            this.spriteRef.current.removeListener("pointerdown", this._onMouseDown);
-            this.spriteRef.current.addListener("pointerdown", this._onMouseDown);
-        }
-    }
+    // _listen_for_clicks () {
+    //     let self = this;
+    //     if (this.spriteRef && this.spriteRef.current) {
+    //         this.spriteRef.current.removeListener("pointerdown", this._onMouseDown);
+    //         this.spriteRef.current.addListener("pointerdown", this._onMouseDown);
+    //     }
+    // }
 
-    _onMouseDown(event) {
-        _mouseClickOnSprite(this.props.unique_id, this.props.funcs.getBaseNode())
-    }
+    // _onMouseDown(event) {
+    //     _mouseClickOnSprite(this.props.unique_id, this.props.funcs.getBaseNode())
+    // }
 
-    componentDidMount () {
-        this._listen_for_clicks();
-    }
-
-    componentDidUpdate () {
-        this._listen_for_clicks();
-    }
-
-    // shouldComponentUpdate(nextProps, nextState, nextContext) {
-    //     let pequal = propsAreEqual(nextProps, this.props);
-    //     let sequal = propsAreEqual(nextState, this.state);
-    //     return !pequal || !sequal
+    // componentDidMount () {
+    //     this._listen_for_clicks();
+    // }
+    // //
+    // // componentDidUpdate () {
+    // //     this._listen_for_clicks();
     // }
 
     _myNode() {
         return this.props.node_dict[this.props.unique_id]
     }
 
-
     _getMousePosition() {
         return this.props.getMousePosition();
     }
-
 
     _isColor(aboxorstring) {
         return typeof(aboxorstring) == "object" && aboxorstring.hasOwnProperty("kind") &&  aboxorstring.kind == "color"
@@ -117,8 +91,11 @@ class SpriteBoxRaw extends React.Component {
 
 
     render() {
+        if (this.props.kind != "sprite") {
+            return null
+        }
         let sparams = this.props.sparams;
-        let in_svg = this.props.usesvg;
+        let in_svg = this.props.in_svg;
         let the_sprite;
         if (!in_svg) {
             the_sprite = (
@@ -160,15 +137,16 @@ class SpriteBoxRaw extends React.Component {
     }
 }
 
-function mapStateToPropsWithSprite(state, ownProps){
-
-    return Object.assign({
-            sparams: state.node_dict[ownProps["unique_id"]].getAllParams(),
-            usesvg:state.node_dict[ownProps["unique_id"]].useSvg()},
-        ownProps, state.node_dict[ownProps["unique_id"]])
+function makeMapStateToPropsAndGlobals() {
+    const selectMyPropsAndGlobals = makeSelectMyPropsAndGlobals()
+    return (state, ownProps) => {
+        return Object.assign(selectMyPropsAndGlobals(state, ownProps), ownProps)
+    }
 }
 
-var SpriteBox = connect(mapStateToPropsWithSprite, mapDispatchToProps)(SpriteBoxRaw)
+var SpriteBox = connect(
+    makeMapStateToPropsAndGlobals,
+    mapDispatchToProps)(SpriteBoxRaw)
 
 class GraphicsBoxRaw extends React.Component {
     constructor(props) {
@@ -178,18 +156,33 @@ class GraphicsBoxRaw extends React.Component {
         this.do_wrap = true;
         this.last_x = 0;
         this.last_y = 0;
+        this.last_tick_processed = 0
     }
 
-    _listen_for_clicks () {
-        let self = this;
-        if (this.graphicsRef && this.graphicsRef.current) {
-            if (this.graphicsRef && this.graphicsRef.current) {
-                this.graphicsRef.current.removeListener("pointerdown", this._onMouseDown);
-                this.graphicsRef.current.addListener("pointerdown", this._onMouseDown);
-                this.graphicsRef.current.removeListener("pointermove", this._onMouseMove);
-                this.graphicsRef.current.addListener("pointermove", this._onMouseMove);
+    //
+    // _listen_for_clicks () {
+    //     let self = this;
+    //     if (this.graphicsRef && this.graphicsRef.current) {
+    //         if (this.graphicsRef && this.graphicsRef.current) {
+    //             this.graphicsRef.current.removeListener("pointerdown", this._onMouseDown);
+    //             this.graphicsRef.current.addListener("pointerdown", this._onMouseDown);
+    //             this.graphicsRef.current.removeListener("pointermove", this._onMouseMove);
+    //             this.graphicsRef.current.addListener("pointermove", this._onMouseMove);
+    //         }
+    //     }
+    // }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        if (window._running > 0 && window.update_on_ticks) {
+            if (this.last_tick_processed < window.tick_received) {
+                this.last_tick_processed = window.tick_received;
+                return true
+            }
+            else {
+                return false
             }
         }
+        return true
     }
 
     _onMouseMove(event) {
@@ -201,17 +194,17 @@ class GraphicsBoxRaw extends React.Component {
 
     }
 
-    _onMouseDown(event) {
-        _mouseClickOnGraphics(this.props.unique_id, this.props.node_dict["world"])
-    }
+    // _onMouseDown(event) {
+    //     _mouseClickOnGraphics(this.props.unique_id, this.props.node_dict["world"])
+    // }
 
-    componentDidMount () {
-        this._listen_for_clicks();
-    }
-
-    componentDidUpdate () {
-        this._listen_for_clicks();
-    }
+    // componentDidMount () {
+    //     this._listen_for_clicks();
+    // }
+    //
+    // componentDidUpdate () {
+    //     this._listen_for_clicks();
+    // }
 
     _addComponent(new_comp, callback=null) {
         this.props.addGraphicsComponent(this.props.unique_id, new_comp, callback);
@@ -227,18 +220,13 @@ class GraphicsBoxRaw extends React.Component {
     }
 
     _getColorBoxColor() {
-        let color_string = this.props.node_dict[this.props.funcs.getln(this.props.unique_id, 0, 0)].the_text
-        return _convertColorArg(color_string)
+        return _convertColorArg(this.props.color_string)
     }
 
     render() {
         if (this.props.closed || !this.props.showGraphics) {
             return (
-                <DataBoxRaw {...this.props} in_svg={false} addComponent={this._addComponent}
-                                         do_wrap={this.do_wrap}
-                                         setWrap={this._setWrap}
-                                         setBgColor={this._setBgColor}
-                                         clearComponents={this._clearComponents}/>
+                <DataBoxRaw {...this.props} in_svg={false} addComponent={this._addComponent}/>
             )
         }
         else {
@@ -263,30 +251,7 @@ class GraphicsBoxRaw extends React.Component {
                     temp_ll.push(this.props.closetLine)
                 }
                 for (let lin_id of temp_ll) {
-                    for (let nd_id of this.props.node_dict[lin_id].node_list) {
-                        let nd = this.props.node_dict[nd_id]
-                        if (nd.kind == "sprite") {
-                            let new_comp = (
-                                <SpriteBox {...nd}
-                                           in_svg={false}
-                                           key={nd.unique_id}
-                                           app={this.props.app}
-                                           funcs={this.props.funcs}
-                                           graphics_fixed_width={gwidth}
-                                           graphics_fixed_height={gheight}
-                                           do_wrap={this.do_wrap}
-                                           setWrap={this._setWrap}
-                                           getMousePosition={this._getMousePosition}
-                                           setBgColor={this._setBgColor}
-                                           clearComponents={this._clearComponents}
-                                           showGraphics={this.props.showGraphics}/>
-                            );
-                            acindex += 1;
-                            if (new_comp) {
-                                sprite_components.push(new_comp)
-                            }
-                        }
-                    }
+                    sprite_components = sprite_components.concat(<GraphicsBoxLine in_svg={false} key={lin_id} unique_id={lin_id}/>)
                 }
                 let bgcolor = _convertColorArg(this.props.bgColor)
                 let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
@@ -315,16 +280,67 @@ class GraphicsBoxRaw extends React.Component {
     }
 }
 
-GraphicsBoxRaw.propTypes = {
-    unique_id: PropTypes.string,
-    graphics_fixed_width: PropTypes.number,
-    graphics_fixed_height: PropTypes.number,
-    showGraphics: PropTypes.bool,
-    funcs: PropTypes.object,
-    app: PropTypes.object
-};
 
-const GraphicsBox = connect(mapStateToPropsWithND, mapDispatchToProps)(withApp(withName(GraphicsBoxRaw)));
+function makeMapStateToPropsGraphics() {
+    const selectMyPropsAndGlobals = makeSelectMyPropsAndGlobals();
+    const selectMyColorProps = makeSelectColorProps();
+    return (state, ownProps) => {
+        if (state.node_dict[ownProps["unique_id"]].kind == "color") {
+            return Object.assign(selectMyColorProps(state, ownProps), ownProps)
+        }
+        else {
+            return Object.assign(selectMyPropsAndGlobals(state, ownProps), ownProps)
+        }
+
+    }
+}
+
+const GraphicsBox = connect(
+    makeMapStateToPropsGraphics,
+    mapDispatchToProps)(withApp(withName(GraphicsBoxRaw)));
+
+
+class GraphicsBoxLineRaw extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.last_tick_processed = 0
+    }
+
+    shouldComponentUpdate(nextProps, nextState) {
+        if (window._running > 0 && window.update_on_ticks) {
+            if (this.last_tick_processed < window.tick_received) {
+                this.last_tick_processed = window.tick_received;
+                return true
+            }
+            else {
+                return false
+            }
+        }
+        return true
+    }
+
+    render () {
+        let sprite_components = []
+        for (let nd_id of this.props.node_list) {
+            let new_comp = (
+                <SpriteBox unique_id={nd_id}
+                           in_svg={this.props.in_svg}
+                           key={nd_id}
+                           app={this.props.app}
+                           showGraphics={true}/>
+            );
+            if (new_comp) {
+                sprite_components.push(new_comp)
+            }
+        }
+        return sprite_components
+    }
+}
+
+const GraphicsBoxLine = connect(
+    makeSelectMyProps,
+    mapDispatchToProps)(GraphicsBoxLineRaw);
 
 
 class SvgGraphicsBoxRaw extends React.Component {
@@ -334,7 +350,21 @@ class SvgGraphicsBoxRaw extends React.Component {
         this.graphicsRef = React.createRef();
         this.last_x = 0;
         this.last_y = 0;
+        this.last_tick_processed = 0
     }
+
+    // shouldComponentUpdate(nextProps, nextState) {
+    //     if (window._running > 0 && window.update_on_ticks) {
+    //         if (this.last_tick_processed < window.tick_received) {
+    //             this.last_tick_processed = window.tick_received;
+    //             return true
+    //         }
+    //         else {
+    //             return false
+    //         }
+    //     }
+    //     return true
+    // }
 
 
     _getMousePosition() {
@@ -347,11 +377,7 @@ class SvgGraphicsBoxRaw extends React.Component {
             return (
                 <DataBoxRaw {...this.props}
                             addComponent={this._addComponent}
-                            in_svg={true}
-                            do_wrap={this.do_wrap}
-                            setWrap={this._setWrap}
-                            setBgColor={this._setBgColor}
-                            clearComponents={this._clearComponents}/>
+                            in_svg={true}/>
             )
         }
         else {
@@ -364,29 +390,7 @@ class SvgGraphicsBoxRaw extends React.Component {
                 temp_ll.push(this.props.closetLine)
             }
             for (let lin_id of temp_ll) {
-                for (let nd_id of this.props.node_dict[lin_id].node_list) {
-                    let nd = this.props.node_dict[nd_id]
-                    if (nd.kind == "sprite") {
-                        let new_comp = (
-                            <SpriteBox {...nd}
-                                       in_svg={true}
-                                       key={nd.unique_id}
-                                       app={this.props.app}
-                                       graphics_fixed_width={gwidth}
-                                       graphics_fixed_height={gheight}
-                                       do_wrap={this.do_wrap}
-                                       setWrap={this._setWrap}
-                                       getMousePosition={this._getMousePosition}
-                                       setBgColor={this._setBgColor}
-                                       clearComponents={this._clearComponents}
-                                       showGraphics={this.props.showGraphics}/>
-                        );
-                        acindex += 1;
-                        if (new_comp) {
-                            sprite_components.push(new_comp)
-                        }
-                    }
-                }
+                sprite_components = sprite_components.concat(<GraphicsBoxLine in_svg={true} key={lin_id} unique_id={lin_id}/>)
             }
             let bgcolor = _svgConvertColorArg(this.props.bgColor)
             let trans_string = `scale(1, -1) translate( ${gwidth / 2}, ${gheight / 2} )`
@@ -406,7 +410,9 @@ class SvgGraphicsBoxRaw extends React.Component {
     }
 }
 
-var SvgGraphicsBox = connect(mapStateToPropsWithND, mapDispatchToProps)(withName(SvgGraphicsBoxRaw));
+var SvgGraphicsBox = connect(
+    makeMapStateToPropsGraphics,
+    mapDispatchToProps)(withName(SvgGraphicsBoxRaw));
 
 
 class TextNodeRaw extends React.Component {
@@ -415,13 +421,7 @@ class TextNodeRaw extends React.Component {
         doBinding(this);
         this.state = {};
         this.iRef = null;
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        if (window.freeze && window._running > 0){
-                return false
-            }
-        return !propsAreEqual(nextProps, this.props, ["funcs"]) || this.props.setTextFocus
+        this.last_tick_processed = 0
     }
 
     trimSpaces(string) {
@@ -442,6 +442,9 @@ class TextNodeRaw extends React.Component {
     _handleChange(event) {
         let txt = this.trimSpaces(event.target.value);  // Otherwise we end up with junk
         this.props.changeNode(this.props.unique_id, "the_text", txt)
+        if (this.props.in_sprite_value) {
+            this.props.changeSpriteValueBox(this.props.value_parent, txt)
+        }
     }
 
     _displayMessage() {
@@ -471,9 +474,7 @@ class TextNodeRaw extends React.Component {
 
         if (typeof(result) != "object") {
             batch(()=>{
-                this.props.newTextNode(String(result), new_node_id);
-                this.props.newLineNode([new_node_id], new_line_id);
-                this.props.newDataBox([new_line_id], false, new_databox_id);
+                this.props.createTextDataBox(String(result), new_databox_id);
                 this.props.insertNode(new_databox_id, this.props.parent, -1)
             })
 
@@ -490,55 +491,12 @@ class TextNodeRaw extends React.Component {
                 this.props.insertNode(new_id, this.props.parent, -1)
             })
         }
+        this.props.healStructure(this.props.parent)
     }
 
    _handleKeyDown(event) {
         if (["Control", "Shift", "Meta"].includes(event.key)) {
             return
-        }
-        if (event.key == "F9") {
-            event.preventDefault();
-            this.props.toggleCloset(this.props.unique_id);
-            return
-        }
-        if (event.key == "k") {
-            if (event.ctrlKey || event.metaKey) {
-                event.preventDefault();
-                let caret_pos = getCaretPosition(this.iRef);
-                this.props.deleteToLineEnd(this.props.unique_id, caret_pos)
-            }
-            return
-        }
-        if (event.key == "|") {
-            event.preventDefault();
-            if (this.props.am_in_portal) {
-                this.props.focusName(null, this.props.am_in_portal)
-            }
-            else {
-                this.props.focusName(this.props.unique_id, null, this.props.portal_root)
-            }
-        }
-        if (event.key == "Enter") {
-            event.preventDefault();
-            if (event.ctrlKey || event.metaKey) {
-                this._runMe();
-            }
-            else {
-                currentlyDeleting = false;
-                this.props.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef), this.props.portal_root);
-            }
-            // this.props.funcs.clearSelected();
-
-            return
-        }
-
-        if (event.ctrlKey || event.shiftKey || event.metaKey || event.altKey) {
-            return
-        }
-
-        if (event.key == "Escape") {
-            event.preventDefault();
-            this.props.clearSelected();
         }
         if (event.key == "Backspace") {
             if (this.props.boxer_selected) {
@@ -563,37 +521,114 @@ class TextNodeRaw extends React.Component {
             currentlyDeleting = true;
             return
         }
-        this.props.clearSelected();
-        if (event.key == "ArrowDown") {
-            this.props.arrowDown(this.props.unique_id, this.props.portal_root);
-            event.preventDefault();
-            return
-        }
-
-        if ((event.key == "ArrowLeft") && (getCaretPosition(this.iRef) == 0) && (this.props.position != 0)){
-            this.props.focusLeft(this.props.unique_id, this.props.position, this.props.portal_root);
-            return
-        }
-        if ((event.key == "ArrowRight") && (getCaretPosition(this.iRef) == this.props.the_text.length)) {
-            this.props.focusRight(this.props.unique_id, this.props.position, this.props.portal_root);
-            event.preventDefault();
-            return
-        }
-
         currentlyDeleting = false;
+        switch (event.key) {
+            case "F9":
+                event.preventDefault();
+                this.props.toggleCloset(this.props.unique_id);
+                return
+            case "k":
+                if (event.ctrlKey || event.metaKey) {
+                    event.preventDefault();
+                    let caret_pos = getCaretPosition(this.iRef);
+                    this.props.deleteToLineEnd(this.props.unique_id, caret_pos)
+                }
+                return
+            case "|":
+                event.preventDefault();
+                if (this.props.am_in_portal) {
+                    this.props.focusName(null, this.props.am_in_portal)
+                }
+                else {
+                    this.props.focusName(this.props.unique_id, null, this.props.portal_root)
+                }
+                return
+            case "{":
+                event.preventDefault();
+                this.props.insertBoxInText("databox", this.props.unique_id, getCaretPosition(document.activeElement),
+                         this.props.last_focus_portal_root)
+                return
+            case "[":
+                event.preventDefault();
+                this.props.insertBoxInText("doitbox", this.props.unique_id, getCaretPosition(document.activeElement),
+                         this.props.last_focus_portal_root)
+                return
 
-        if (event.key =="]") {
-            this.props.doBracket(this.props.unique_id, this.props.am_in_portal,
-                this.props.portal_root, this.props.portal_parent);
-            event.preventDefault();
-            return
+            case "Enter":
+                event.preventDefault();
+                if (event.ctrlKey || event.metaKey) {
+                    this._runMe();
+                }
+                else {
+                    currentlyDeleting = false;
+                    this.props.splitLineAtTextPosition(this.props.unique_id, getCaretPosition(this.iRef), this.props.portal_root);
+                }
+                return
         }
 
-        if (event.key == "ArrowUp") {
-            this.props.arrowDown(this.props.unique_id, this.props.am_in_portal,
-                this.props.portal_root, this.props.portal_parent);
-            event.preventDefault();
+        if (event.ctrlKey || event.metaKey) {
+            switch (event.key) {
+                case ".":
+                    window.user_aborted = true;
+                    event.preventDefault();
+                    return
+                case "v":
+                    event.preventDefault();
+                    this.props.insertClipboard(this.props.unique_id, getCaretPosition(document.activeElement),
+                        this.props.last_focus_portal_root);
+                    return
+                case "c":
+                    event.preventDefault();
+                    this.props.copySelected();
+                    return
+                case "x":
+                    event.preventDefault();
+                    this.props.cutSelected();
+                    return
+                case "z":
+                    event.preventDefault();
+                    // needs doint
+                    return
+
+            }
+        }
+
+        if (event.shiftKey  || event.altKey) {
             return
+        }
+        switch (event.key) {
+            case "Escape":
+                event.preventDefault();
+                this.props.clearSelected();
+                return
+
+            case "ArrowDown":
+                this.props.arrowDown(this.props.unique_id, this.props.portal_root);
+                event.preventDefault();
+                return
+
+            case "ArrowLeft":
+                if ((getCaretPosition(this.iRef) == 0) && (this.props.position != 0)) {
+                    this.props.focusLeft(this.props.unique_id, this.props.position, this.props.portal_root);
+                    event.preventDefault();
+                }
+                return
+            case "ArrowRight":
+                if ((getCaretPosition(this.iRef) == this.props.the_text.length)) {
+                    this.props.focusRight(this.props.unique_id, this.props.position, this.props.portal_root);
+                    event.preventDefault();
+                }
+                return
+            case "ArrowUp":
+                this.props.arrowUp(this.props.unique_id, this.props.am_in_portal,
+                    this.props.portal_root, this.props.portal_parent);
+                event.preventDefault();
+                return
+            case "]":
+                this.props.doBracket(this.props.unique_id, this.props.am_in_portal,
+                    this.props.portal_root, this.props.portal_parent);
+                event.preventDefault();
+                return
         }
     }
 
@@ -672,10 +707,10 @@ class TextNodeRaw extends React.Component {
     render() {
         let cname;
         if (this.props.selected) {
-            cname = "editable mousetrap selected"
+            cname = "editable selected"
         }
         else {
-            cname = "editable mousetrap"
+            cname = "editable"
         }
         return (
             <React.Fragment>
@@ -697,31 +732,24 @@ class TextNodeRaw extends React.Component {
     }
 }
 
-TextNodeRaw.propTypes = {
-    the_text: PropTypes.string,
-    setFocus: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.array]),
-    unique_id: PropTypes.string,
-    selected: PropTypes.bool,
-    funcs: PropTypes.object,
-    am_in_portal: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.string])
-};
+function makeMapStateToPropsForText() {
+    const selectMyProps = makeSelectMyPropsAndTextGlobals();
+    return (state, ownProps) => {
+        return Object.assign(selectMyProps(state, ownProps), ownProps)
+    }
+}
 
-TextNodeRaw.defaultProps = {
-    setFocus: false,
-    am_in_portal: false
-};
-
-let TextNode = connect(mapStateToPropsWithBS, mapDispatchToProps)(TextNodeRaw)
+let TextNode = connect(
+    makeMapStateToPropsForText,
+    mapDispatchToProps
+    )(TextNodeRaw)
 
 class PortBoxRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
         this.state = {};
+        this.last_tick_processed = 0
     }
 
     render() {
@@ -731,76 +759,36 @@ class PortBoxRaw extends React.Component {
             inner_content = <div>You can now target this port</div>;
         }
         else {
-            tnode = this.props.node_dict[this.props.target];
-            if (!tnode) {
-                inner_content = <Button onClick={()=>{this.props.funcs.retargetPort(this.props.unique_id)}}>Target is missing</Button>;
-            }
-            else {
-                tnode.closed = this.props.closed;
-                if (tnode.kind == "databox" || tnode.kind == "doitbox" || tnode.closed) {
-                    inner_content = <DataBox portal_root={this.props.unique_id}
-                                              {...tnode} am_in_portal={this.props.unique_id}
-                                              portal_parent={this.props.portal_root}
-                                              portal_is_zoomed={this.props.am_zoomed}
-                                              clickable_label={false}
-                    />
-                }
-                else if (tnode.kind == "sprite") {
-                    inner_content = <SpriteBox portal_root={this.props.unique_id}
-                                              am_in_portal={this.props.unique_id}
-                                              portal_parent={this.props.portal_root}
-                                              portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode}/>
-                }
-                else if (tnode.kind == "graphics" || tnode.kind == "color") {
-                    inner_content = <GraphicsBox portal_root={this.props.unique_id}
-                                              portal_parent={this.props.portal_root}
-                                              am_in_portal={this.props.unique_id}
-                                              portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode}/>
-                }
-                else if (tnode.kind == "svggraphics") {
-                    inner_content = <SvgGraphicsBox portal_root={this.props.unique_id}
-                                              portal_parent={this.props.portal_root}
-                                              am_in_portal={this.props.unique_id}
-                                              portal_is_zoomed={this.props.am_zoomed}
-                                              {...tnode}/>
-                }
-                else if (tnode.kind == "htmlbox") {
-                    inner_content = <HtmlBox portal_root={this.props.unique_id}
-                                              portal_parent={this.props.portal_root}
-                                              am_in_portal={this.props.unique_id}
-                                              portal_is_zoomed={this.props.am_zoomed}
-                                              clickable_label={false}
-                                              {...tnode}/>
-                }
-            }
+            inner_content = <GenericNode key={this.props.target}
+                      am_in_portal={this.props.am_in_portal}
+                      portal_parent={this.props.portal_parent}
+                      portal_root={this.props.portal_root}
+                      unique_id={this.props.target}
+                      from_port={this.props.unique_id}
+                      portal_is_zoomed={this.props.am_zoomed}
+                      clickable_label={false}
+                />
         }
 
         return (
-            <React.Fragment>
+            <ErrorBoundary>
                 {inner_content}
-            </React.Fragment>
+            </ErrorBoundary>
         )
     }
 }
 
-var PortBox = connect(mapStateToProps, mapDispatchToProps)(withName(PortBoxRaw));
+var PortBox = connect(
+    makeMapStateToPropsAndGlobals,
+    mapDispatchToProps
+    )(withName(PortBoxRaw));
 
 class DataBoxRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
+        this.last_tick_processed = 0
     }
-
-    // shouldComponentUpdate(nextProps, nextState) {
-    //     if (window.freeze && window._running > 0){
-    //             return false
-    //         }
-    //     return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-    //         || this.props.funcs.containsPort(this.props.unique_id)
-    // }
-
 
     render() {
         let dbclass;
@@ -814,29 +802,18 @@ class DataBoxRaw extends React.Component {
                              am_in_portal={this.props.am_in_portal}
                              portal_parent={this.props.portal_parent}
                              portal_root={this.props.portal_root}
-                             unique_id={the_line_id}
-                             do_wrap={this.props.do_wrap}
-                             setWrap={this.props.setWrap}
-                             setBgColor={this.props.setBgColor}
-                             clearComponents={this.props.clearComponents}
-                             showGraphics={this.props.showGraphics}/>
+                             unique_id={the_line_id}/>
             )
         });
 
         if (this.props.showCloset) {
-            let cline = this.props.node_dict[this.props.closetLine];
             let clinenode = (
                 <DataboxLine key={this.props.closetLine}
                              am_in_portal={this.props.am_in_portal}
                              portal_parent={this.props.portal_parent}
                              portal_root={this.props.portal_root}
                              unique_id={this.props.closetLine}
-                             amCloset={true}
-                             do_wrap={this.props.do_wrap}
-                             setWrap={this.props.setWrap}
-                             setBgColor={this.props.setBgColor}
-                             clearComponents={this.props.clearComponents}
-                             showGraphics={this.props.showGraphics}/>
+                             />
             );
             the_content.unshift(clinenode)
         }
@@ -848,31 +825,12 @@ class DataBoxRaw extends React.Component {
     }
 }
 
-var DataBox = connect(mapStateToProps, mapDispatchToProps)(withName(DataBoxRaw))
 
-DataBox.propTypes = Object.assign({
-    am_in_portal: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.string]),
-    portal_parent: PropTypes.string,
-    portal_root: PropTypes.string,
-    unique_id: PropTypes.string,
-    amCloset: PropTypes.bool,
-    funcs: PropTypes.object,
-    do_wrap: PropTypes.bool,
-    setWrap: PropTypes.func,
-    setBgColor: PropTypes.func,
-    clearComponents: PropTypes.func,
-    showGraphics: PropTypes.bool
-}, NamedBox_propTypes);
+var DataBox = connect(
+    makeSelectMyPropsAndGlobals,
+    mapDispatchToProps,
+)(withName(DataBoxRaw))
 
-DataBox.defaultProps = Object.assign(NamedBox_defaultProps,{
-    do_wrap: null,
-    setWrap: null,
-    setBgColor: null,
-     clearComponents: null,
-    showGraphics: false
-});
 
 class HtmlBoxRaw extends React.Component {
     constructor(props) {
@@ -884,8 +842,8 @@ class HtmlBoxRaw extends React.Component {
         this.state.focusingName = false;
         this.state.boxWidth = null;
         this.cmobject = null;
+        this.last_tick_processed = 0
     }
-
 
     _handleCodeChange(new_code) {
         this.props.changeNode(this.props.unique_id, "the_code", new_code)
@@ -894,7 +852,6 @@ class HtmlBoxRaw extends React.Component {
     _handleBlur() {
         this.props.storeFocus(this.props.unique_id, 0, this.props.portal_root);
     }
-
 
     _setCMObject(cmobject) {
         this.cmobject = cmobject
@@ -971,24 +928,10 @@ class HtmlBoxRaw extends React.Component {
     }
 }
 
-var HtmlBox = connect(mapStateToProps, mapDispatchToProps)(withName(HtmlBoxRaw));
-
-HtmlBox.propTypes = {
-    name: PropTypes.string,
-    the_code: PropTypes.string,
-    showConverted: PropTypes.bool,
-    closed: PropTypes.bool,
-    unique_id: PropTypes.string,
-    funcs: PropTypes.object,
-    selected: PropTypes.bool,
-};
-
-HtmlBox.defaultProps = {
-    closed: false,
-    am_zoomed: false,
-    innerWidth: 0,
-    innerHeight: 0
-};
+var HtmlBox = connect(
+    makeSelectMyPropsAndGlobals,
+    mapDispatchToProps,
+)(withName(HtmlBoxRaw));
 
 class JsBoxRaw extends React.Component {
     constructor(props) {
@@ -1000,8 +943,8 @@ class JsBoxRaw extends React.Component {
         this.state.focusingName = false;
         this.state.boxWidth = null;
         this.cmobject = null;
+        this.last_tick_processed = 0
     }
-
 
     _handleCodeChange(new_code) {
         this.props.changeNode(this.props.unique_id, "the_code", new_code)
@@ -1084,42 +1027,17 @@ class JsBoxRaw extends React.Component {
     }
 }
 
-var JsBox = connect(mapStateToProps, mapDispatchToProps)(withName(JsBoxRaw));
-
-JsBox.propTypes = {
-    name: PropTypes.string,
-    the_code: PropTypes.string,
-    closed: PropTypes.bool,
-    unique_id: PropTypes.string,
-    funcs: PropTypes.object,
-    selected: PropTypes.bool,
-};
-
-JsBox.defaultProps = {
-    closed: false,
-    am_zoomed: false,
-    innerWidth: 0,
-    innerHeight: 0
-};
+var JsBox = connect(
+    makeSelectMyPropsAndGlobals,
+    mapDispatchToProps
+)(withName(JsBoxRaw));
 
 class DataboxLineRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
+        this.last_tick_processed = 0
     }
-
-    // If I have shouldComponentUpdate here I run into focus problems
-    // When a new box is created it doesn't clear the setFocus in the text node
-
-    // shouldComponentUpdate(nextProps, nextState) {
-    //     if (window.freeze && window._running > 0){
-    //             return false
-    //         }
-    //     return true
-        // let pequal = propsAreEqual(nextProps, this.props);
-        // let sequal = propsAreEqual(nextState, this.state);
-        // return !pequal || !sequal
-    // }
 
     _handleSelection(selectedKeys) {
         this.props.setSelected(selectedKeys);
@@ -1127,91 +1045,17 @@ class DataboxLineRaw extends React.Component {
 
     render() {
         let the_content = this.props.node_list.map((the_node_id, index) => {
-            let the_node = this.props.node_dict[the_node_id];
-            if (the_node.kind == "text") {
-                return (
-                    <TextNode key={the_node_id}
-                              am_in_portal={this.props.am_in_portal}
-                              portal_parent={this.props.portal_parent}
-                              portal_root={this.props.portal_root}
-                              className="editable"
-                              unique_id={the_node_id}/>
-                )
-            }
-            else if (the_node.kind == "jsbox") {
-                return (
-                    <JsBox portal_root={this.props.portal_root}
-                           unique_id={the_node_id}
-                           key={the_node.unique_id}/>
-                )
-            }
-            else if (the_node.kind == "htmlbox") {
-                return (
-                    <HtmlBox portal_root={this.props.portal_root}
-                             unique_id={the_node_id}
-                             key={unique_id={the_node_id}}/>
-                )
-            }
-
-
-            else if (the_node.kind == "sprite") {
-                return (
-                    <SpriteBox portal_root={this.props.portal_root}
-                               unique_id={the_node_id}
-                               key={the_node_id}
-                               do_wrap={this.props.do_wrap}
-                               setWrap={this.props.setWrap}
-                               setBgColor={this.props.setBgColor}
-                               clearComponents={this.props.clearComponents}
-                               showGraphics={this.props.showGraphics}/>
-                )
-            }
-            else if (the_node.kind == "graphics" || the_node.kind == "color") {
-                return (
-                    <GraphicsBox portal_root={this.props.portal_root}
-                                 unique_id={the_node_id}
-                                 key={the_node_id}/>
-                )
-            }
-            else if (the_node.kind == "svggraphics") {
-                return (
-                    <SvgGraphicsBox portal_root={this.props.portal_root}
-                                    unique_id={the_node_id}
-                                    key={the_node_id}/>
-                )
-            }
-            else if (the_node.kind == "port") {
-                let type_label;
-                if (!the_node.target) {
-                    type_label = "Data"
-                }
-                else {
-                    let target_node = this.props.node_dict[the_node.target];
-                    if (!target_node || data_kinds.includes(target_node.kind)) {
-                        type_label = "Data"
-                    }
-                    else if (target_node.kind == "jsbox") {
-                        type_label = "JSBox"
-                    }
-                    else {
-                        type_label = "Doit"
-                    }
-                }
-                return (<PortBox portal_root={this.props.portal_root}
-                                 unique_id={the_node_id}
-                                 key={the_node_id}
-                                 type_label={type_label}/>
-                )
-            }
-            else  {
-                return (
-                    <DataBox portal_root={this.props.portal_root}
-                             unique_id={the_node_id}
-                             key={the_node_id}
-                             className="data-box-outer"
-                             clickable_label={false}/>
-                )
-            }
+            return (
+                <ErrorBoundary>
+                    <GenericNode key={the_node_id}
+                                  am_in_portal={this.props.am_in_portal}
+                                  portal_parent={this.props.portal_parent}
+                                  portal_root={this.props.portal_root}
+                                  from_port={false}
+                                  unique_id={the_node_id}
+                    />
+                </ErrorBoundary>
+            )
         });
         let cname;
         if (this.props.amCloset) {
@@ -1228,26 +1072,114 @@ class DataboxLineRaw extends React.Component {
     }
 }
 
-DataboxLineRaw.propTypes = {
-    unique_id: PropTypes.string,
-    node_list: PropTypes.array,
-    funcs: PropTypes.object,
-    do_wrap: PropTypes.bool,
-    setWrap: PropTypes.func,
-    setBgColor: PropTypes.func,
-    clearComponents: PropTypes.func,
-    showGraphics: PropTypes.bool
-};
+function makeMapStateToProps() {
+    const selectMyProps = makeSelectMyProps()
+    return (state, ownProps) => {
+        return Object.assign(selectMyProps(state, ownProps), ownProps)
+    }
+}
 
-DataboxLineRaw.defaultProps = {
-    do_wrap: null,
-    setWrap: null,
-    setBgColor: null,
-    clearComponents: null,
-    showGraphics: false
-};
+let DataboxLine = connect(
+    makeMapStateToProps,
+    mapDispatchToProps,
+)(DataboxLineRaw)
 
-let DataboxLine = connect(mapStateToPropsWithND, mapDispatchToProps)(DataboxLineRaw)
+
+class GenericNodeRaw extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.last_tick_processed = 0
+    }
+
+    render () {
+        if (!this.props.found) {
+            if (this.props.from_port) {
+                return (<Button onClick={()=>{this.props.retargetPort(this.props.from_port)}}>Target is missing</Button>)
+            }
+            else {
+                return <div>Missing element</div>
+            }
+        }
+        switch (this.props.kind) {
+            case "text":
+                return (
+                    <TextNode key={this.props.unique_id}
+                              am_in_portal={this.props.am_in_portal}
+                              portal_parent={this.props.portal_parent}
+                              portal_root={this.props.portal_root}
+                              innerWidth={this.props.innerWidth}
+                              innerHeight={this.props.innerHeight}
+                              unique_id={this.props.unique_id}/>
+                )
+            case "jsbox":
+                return (
+                    <JsBox portal_root={this.props.portal_root}
+                           unique_id={this.props.unique_id}
+                           innerWidth={this.props.innerWidth}
+                          innerHeight={this.props.innerHeight}
+                           key={this.props.unique_id}/>
+                )
+            case "htmlbox":
+                return (
+                    <HtmlBox portal_root={this.props.portal_root}
+                             unique_id={this.props.unique_id}
+                             innerWidth={this.props.innerWidth}
+                              innerHeight={this.props.innerHeight}
+                             key={this.props.unique_id}/>
+                )
+
+            case "sprite":
+                return (
+                    <SpriteBox portal_root={this.props.portal_root}
+                               unique_id={this.props.unique_id}
+                               innerWidth={this.props.innerWidth}
+                               innerHeight={this.props.innerHeight}
+                               key={this.props.unique_id}/>
+                )
+
+            case "graphics":
+            case "color":
+                return (
+                    <GraphicsBox portal_root={this.props.portal_root}
+                                 unique_id={this.props.unique_id}
+                                 innerWidth={this.props.innerWidth}
+                                 innerheight={this.props.innerHeight}
+                                 key={this.props.unique_id}/>
+                )
+
+            case "svggraphics":
+                return (
+                    <SvgGraphicsBox portal_root={this.props.portal_root}
+                                    unique_id={this.props.unique_id}
+                                    innerWidth={this.props.innerWidth}
+                                    innerHeight={this.props.innerHeight}
+                                    key={this.props.unique_id}/>
+                )
+            case "port":
+                return (<PortBox portal_root={this.props.portal_root}
+                                 unique_id={this.props.unique_id}
+                                 innerWidth={this.props.innerWidth}
+                              innerHeight={this.props.innerHeight}
+                                 key={this.props.unique_id}/>
+                )
+            default:
+                return (<DataBox portal_root={this.props.portal_root}
+                         unique_id={this.props.unique_id}
+                         key={this.props.unique_id}
+                         className="data-box-outer"
+                                 innerWidth={this.props.innerWidth}
+                          innerHeight={this.props.innerHeight}
+                         clickable_label={false}/>
+                )
+        }
+    }
+}
+
+
+let GenericNode = connect(
+    makeMapStateToPropsAndGlobals,
+    mapDispatchToProps)(GenericNodeRaw)
 
 
 // This isn't currently used. it creates a turtle sprite using an image

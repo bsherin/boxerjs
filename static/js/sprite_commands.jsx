@@ -1,31 +1,20 @@
 import React from "react";
 
-import {graphics_kinds} from "./shared_consts.js";
-import {extractText, guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utilities.js";
+import {graphics_kinds, sprite_params} from "./shared_consts.js";
+import {_getText, _extractValue, guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
 
-import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColor, defaultPenWidth} from "./shared_consts.js";
-import {setSpriteParams} from "./actions/composite_actions.js";
+import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColorString, defaultPenWidth} from "./shared_consts.js";
+import {setSpriteParams} from "./redux/actions/composite_actions.js";
 import {Ellipse, Rectangle, Line} from "./pixi_shapes.js";
 import {SvgRect, SvgLine, } from "./svg_shapes.js";
 import PIXI from "pixi.js";
 import {Container, Text} from "react-pixi-fiber";
 
-import {_getln} from "./selectors.js";
+import {_getln} from "./redux/selectors.js";
+import {_getContainingGraphicsBox} from "./redux/selectors";
 
 export {SpriteNode}
 
-const sprite_params =[
-        "xPosition",
-        "yPosition",
-        "pen",
-        "shown",
-        "heading",
-        "spriteSize",
-        "penWidth",
-        "fontFamily",
-        "fontSize",
-        "fontStyle"
-];
 
 window.getNode = (uid) => {
     return window.store.getState().node_dict[uid]
@@ -37,24 +26,11 @@ class SpriteNode {
         for (let k in param_dict) {
             this[k] = _.cloneDeep(param_dict[k])
         }
-        this.saveParams = Object.keys(param_dict);
+        // this.saveParams = Object.keys(param_dict);
     }
 
     getContainingGraphicsNode() {
-        let base_id = "world";
-        function getGBox(the_id) {
-            if (the_id == base_id) {
-                return null
-            }
-            let cnode = window.getNode(the_id)
-            if (graphics_kinds.includes(cnode.kind)) {
-                return cnode
-            }
-            else {
-                return getGBox(cnode.parent)
-            }
-        }
-        return getGBox(this.unique_id);
+        return _getContainingGraphicsBox(this.unique_id, window.store.getState().node_dict)
     }
 
     useSvg() {
@@ -63,49 +39,52 @@ class SpriteNode {
     }
 
     getParam(pname) {
-        for (let lin_id of this.line_list) {
+        let llist = [... this.line_list];
+        llist.push(this.closetLine);
+        for (let lin_id of llist) {
             for (let nd_id of window.getNode(lin_id).node_list) {
                 let nd = window.getNode(nd_id);
                 if (nd.name == pname) {
-                    return _extractValue(nd_id)
+                    if (nd.name == "shape") {
+                        return nd.drawn_components
+                    }
+                    else if (nd.name == "penColor") {
+                        let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
+                        if (this.useSvg()) {
+                            return _svgConvertColorArg(color_string)
+                        } else {
+                            return _convertColorArg(color_string)
+                        }
+                    } else {
+                        return _extractValue(nd_id)
+                    }
                 }
-            }
-        }
-        for (let nd_id of window.getNode(mnode.closetLine).node_list) {
-            let nd = window.getNode(nd_id);
-            if (nd.name == pname) {
-                return _extractValue(nd_id)
             }
         }
         return null
     }
 
-
     getAllParams() {
+        let llist = [...this.line_list];
+        llist.push(this.closetLine);
         let pdict = {};
-        for (let lin of this.line_list) {
+        for (let lin of llist) {
             for (let nd_id of window.getNode(lin).node_list) {
                 let nd = window.getNode(nd_id);
                 if (sprite_params.includes(nd.name)) {
-                    pdict[nd.name]  = _extractValue(nd_id)
-                }
-                if (nd.name == "shape") {
-                    pdict["shape_components"] = nd.drawn_components
-                }
-            }
-        }
-        for (let nd_id of window.getNode(this.closetLine).node_list) {
-            let nd = window.getNode(nd_id);
-            if (sprite_params.includes(nd.name)) {
-                pdict[nd.name] = _extractValue(nd_id)
-            }
-            if (nd.name == "penColor") {
-                let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
-                if (this.useSvg()) {
-                    pdict.penColor = _svgConvertColorArg(color_string)
-                }
-                else {
-                    pdict.penColor = _convertColorArg(color_string)
+                    if (nd.name == "shape") {
+                        pdict["shape_components"] = nd.drawn_components
+                    }
+                    else if (nd.name == "penColor") {
+                        let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
+                        if (this.useSvg()) {
+                            pdict.penColor = _svgConvertColorArg(color_string)
+                        } else {
+                            pdict.penColor = _convertColorArg(color_string)
+                        }
+                    } else {
+                        pdict[nd.name] = _extractValue(nd_id)
+                    }
                 }
             }
         }
@@ -147,7 +126,7 @@ class SpriteNode {
                     shown: true,
                     heading: 0,
                     "spriteSize": 1,
-                    "penColor": defaultPenColor,
+                    "penColor": defaultPenColorString,
                     "penWidth": defaultPenWidth,
                     "fontFamily": defaultFontFamily,
                     "fontSize": defaultFontSize,
@@ -173,11 +152,11 @@ class SpriteNode {
     }
 
     right(deg, callback=null) {
-        this.setHeading(this.getParam("heading") + deg, callback)
+        this.setHeading(this.sparams.heading + deg, callback)
     }
 
     left(deg) {
-        this.setHeading(his.getParam("heading") - deg)
+        this.setHeading(this.sparams.heading - deg)
     }
 
     penup(callback=null) {
@@ -196,34 +175,40 @@ class SpriteNode {
         this.setMyParams({shown: false}, callback)
     }
 
+    get pcolor() {
+        if (this.useSvg()) {
+            return _svgConvertColorArg(this.sparams.penColor)
+        }
+        else {
+            return _convertColorArg(this.sparams.penColor)
+        }
+    }
+
     stampRectangle(w, h, hollow=false) {
-        let sparams = this.getAllParams();
         let new_comp;
         if (!this.useSvg()) {
-            new_comp = (<Rectangle x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
-                           width={w} height={h} fill={hollow ? null : sparams["penColor"]}
-                           penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}
+            new_comp = (<Rectangle x={this.sparams["xPosition"]} y={this.sparams["yPosition"]} key={guid()}
+                           width={w} height={h} fill={hollow ? null : this.pcolor}
+                           penWidth={this.sparams["penWidth"]} penColor={this.pcolor}
             />);
         }
         else {
-            new_comp = (<SvgRect x={sparams["xPosition"]} y={sparams["yPosition"]} key={guid()}
-                        width={w} height={h} fill={hollow ? null : sparams["penColor"]}
-                        penWidth={sparams["penWidth"]} penColor={sparams["penColor"]}/>)
+            new_comp = (<SvgRect x={this.sparams["xPosition"]} y={this.sparams["yPosition"]} key={guid()}
+                        width={w} height={h} fill={hollow ? null : this.pcolor}
+                        penWidth={this.sparams["penWidth"]} penColor={this.pcolor}/>)
         }
 
         this.addComponent(new_comp)
     }
 
     dot() {
-        let sparams = this.getAllParams();
-        this.stampRectangle(sparams.penWidth, sparams.penWidth)
+        this.stampRectangle(this.sparams.penWidth, this.sparams.penWidth)
     }
 
     stampEllipse(w, h, hollow=false) {
-        let sparams = this.getAllParams(sprite_id);
-        let new_comp = (<Ellipse x={sparams.xPosition} y={sparams.yPosition} key={guid()}
-                                 width={w} height={h} fill={hollow ? null : sparams.penColor}
-                                 penWidth={sparams.penWidth} penColor={sparams.penColor}
+        let new_comp = (<Ellipse x={this.sparams.xPosition} y={this.sparams.yPosition} key={guid()}
+                                 width={w} height={h} fill={hollow ? null : this.pcolor}
+                                 penWidth={this.sparams.penWidth} penColor={this.pcolor}
         />);
         this.addComponent(new_comp)
     }
@@ -268,15 +253,14 @@ class SpriteNode {
     type(aboxorstring) {
         let the_text = _getText(aboxorstring);
         if (!the_text) return;
-        let sparams = this.getAllParams();
         const style = new PIXI.TextStyle({
-          fontFamily: sparams.fontFamily,
-          fontSize: sparams.fontSize,
-          fontStyle: sparams.fontStyle,
+          fontFamily: this.sparams.fontFamily,
+          fontSize: this.sparams.fontSize,
+          fontStyle: this.sparams.fontStyle,
         });
         let new_comp =  (
             <Container scale={[1, -1]}>
-                <Text x={sparams.xPosition} y={sparams.yPosition} align="center" text={the_text}/>
+                <Text x={this.sparams.xPosition} y={this.sparams.yPosition} align="center" text={the_text}/>
             </Container>
         );
         this.addComponent(new_comp)
@@ -304,27 +288,26 @@ class SpriteNode {
     moveTo(newX, newY, pdown=null, callback=null) {
         let in_svg = this.useSvg();
 
-        let sparams = this.getAllParams();
         if (pdown == null) {
-            pdown = sparams["pen"]
+            pdown = this.sparams["pen"]
         }
-        if (newX != sparams.xPosition || newY != sparams.yPosition) {
+        if (newX != this.sparams.xPosition || newY != this.sparams.yPosition) {
             let new_comp;
             if (pdown) {
                 if (!in_svg) {
-                    new_comp = (<Line x={sparams.xPosition} y={sparams.yPosition}
+                    new_comp = (<Line x={this.sparams.xPosition} y={this.sparams.yPosition}
                                   xend={newX} yend={newY}
                                   key={guid()}
-                                  penwidth={sparams.penWidth} pencolor={sparams.penColor}
+                                  penwidth={this.sparams.penWidth} pencolor={_convertColorArg(this.pcolor)}
 
                 />);
                 }
                 else {
-                    new_comp = (<SvgLine x={sparams.xPosition} y={sparams.yPosition}
+                    new_comp = (<SvgLine x={this.sparams.xPosition} y={this.sparams.yPosition}
                                          xend={newX} yend={newY}
                                          key={guid()}
-                                         penWidth={sparams.penWidth}
-                                         penColor={sparams.penColor}
+                                         penWidth={this.sparams.penWidth}
+                                         penColor={_svgConvertColorArg(this.pcolor)}
 
                     />);
                 }
@@ -356,33 +339,32 @@ class SpriteNode {
         if (!gnode) return;
 
         let do_wrap = gnode.do_wrap;
-        let sparams = this.getAllParams();
         let maxX = gnode.graphics_fixed_width / 2;
         let minX = -1 * maxX;
         let maxY = gnode.graphics_fixed_height / 2;
         let minY = -1 * maxY;
         let the_heading;
         if (distance >= 0) {
-            the_heading = sparams["heading"]
+            the_heading = this.sparams["heading"]
         }
         else {
-            the_heading = sparams["heading"] + 180
+            the_heading = this.sparams["heading"] + 180
         }
         distance = Math.abs(distance);
         let h_radians = degreesToRadians(the_heading);
         let cosAngle = Math.cos(h_radians);
         let sinAngle = Math.sin(h_radians);
-        let x = sparams["xPosition"];
-        let y = sparams["yPosition"];
+        let x = this.sparams["xPosition"];
+        let y = this.sparams["yPosition"];
         let self = this;
         if (distance > 0) {
-            var newX = sparams["xPosition"] + sinAngle * distance;
-            var newY = sparams["yPosition"] + cosAngle * distance;
+            var newX = this.sparams["xPosition"] + sinAngle * distance;
+            var newY = this.sparams["yPosition"] + cosAngle * distance;
 
             function xWrap(cutBound, otherBound) {
                 var distanceToEdge = Math.abs((cutBound - x) / sinAngle);
                 var edgeY = cosAngle * distanceToEdge + y;
-                self._updatedNode().moveTo(cutBound, edgeY, sparams["pen"],()=> {
+                self._updatedNode().moveTo(cutBound, edgeY, self.sparams["pen"],()=> {
                     distance -= distanceToEdge;
                     x = otherBound;
                     y = edgeY;
@@ -395,7 +377,7 @@ class SpriteNode {
             function yWrap(cutBound, otherBound) {
                 var distanceToEdge = Math.abs((cutBound - y) / cosAngle);
                 var edgeX = sinAngle * distanceToEdge + x;
-                self._updatedNode().moveTo(edgeX, cutBound, sparams["pen"],()=> {
+                self._updatedNode().moveTo(edgeX, cutBound, self.sparams["pen"],()=> {
                     distance -= distanceToEdge;
                     x = edgeX;
                     y = otherBound;
@@ -407,7 +389,7 @@ class SpriteNode {
                 });
             }
             function noWrap() {
-                self._updatedNode().moveTo(newX, newY, sparams["pen"], callback);
+                self._updatedNode().moveTo(newX, newY, self.sparams["pen"], callback);
             }
             if (do_wrap) {
                 if (newX > maxX)
@@ -429,33 +411,3 @@ class SpriteNode {
 }
 
 
-function _extractValue(nd_id) {
-    let the_text = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text
-    if (isNaN(the_text)){
-        if (the_text.toLowerCase() == "false") {
-            return false
-        }
-        else if (the_text.toLowerCase() == "true") {
-            return true
-        }
-        return the_text
-    }
-    else {
-        return eval(the_text)
-    }
-}
-
-
-function _getText(aboxorstring) {
-    let the_text = null;
-    if (typeof(aboxorstring) == "object") {
-        the_text = extractText(aboxorstring);
-    }
-    else if (typeof(aboxorstring) == "string") {
-        the_text = aboxorstring
-    }
-    else if (typeof(aboxorstring) == "number") {
-        the_text = aboxorstring
-    }
-    return the_text
-}

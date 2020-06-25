@@ -4,19 +4,19 @@ import ContentEditable from "react-contenteditable";
 import {Button} from "@blueprintjs/core";
 import {Spring, animated} from 'react-spring/renderprops'
 
-import {DragHandle} from "./resizing_layouts.js";
+import {DragHandle} from "./third_party/resizing_layouts.js";
 
-import {doBinding, propsAreEqual} from "./utilities.js";
-import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./sizing_tools.js";
+import {doBinding, propsAreEqual} from "./utility/utilities.js";
+import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./utility/sizing_tools.js";
 import {graphics_kinds} from "./shared_consts.js";
 import {connect} from "react-redux";
-import {mapDispatchToProps} from "./actions/dispatch_mapper";
-import {withErrorDrawer} from "./error_drawer";
-import {withStatus} from "./toaster";
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper";
+
+import {ErrorBoundary} from "./error_boundary.js";
 
 const resizeTolerance = 2;
 
-export {EditableTag, withName, CloseButton, TypeLabel, ZoomButton, NamedBox_propTypes, NamedBox_defaultProps}
+export {EditableTag, withName, CloseButton, TypeLabel, ZoomButton}
 
 function withName(WrappedComponent) {
     return class extends React.Component {
@@ -36,19 +36,25 @@ function withName(WrappedComponent) {
                 startingWidth: null,
                 startingHeight: null
             };
+            this.last_tick_processed = 0
         }
-
-        // shouldComponentUpdate(nextProps, nextState) {
-        //     if (window.freeze && window._running > 0){
-        //         return false
-        //     }
-        //     return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-        //         || this.props.funcs.containsPort(this.props.unique_id)
-        // }
 
         _flipMe() {
             this.boxRef = React.createRef();
             this.props.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+        }
+
+        shouldComponentUpdate(nextProps, nextState) {
+            if (window._running > 0 && window.update_on_ticks) {
+                if (this.last_tick_processed < window.tick_received) {
+                    this.last_tick_processed = window.tick_received;
+                    return true
+                }
+                else {
+                    return false
+                }
+            }
+            return true
         }
 
         _convertMe() {
@@ -347,7 +353,9 @@ function withName(WrappedComponent) {
                                     </div>
                                 )
                             } else {
-                                return (<div style={wrapper_style}>
+                                return (
+                                    <ErrorBoundary>
+                                    <div style={wrapper_style}>
                                         <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
                                              style={inner_props}>
                                             <CloseButton handleClick={this._closeMe}/>
@@ -372,6 +380,7 @@ function withName(WrappedComponent) {
                                                    the_label={type_label}/>
                                         }
                                     </div>
+                                    </ErrorBoundary>
                                 )
                             }
                         }}
@@ -383,56 +392,25 @@ function withName(WrappedComponent) {
     }
 }
 
-let NamedBox_propTypes = {
-    name: PropTypes.string,
-    kind: PropTypes.string,
-    closed: PropTypes.bool,
-    clickable_label: PropTypes.bool,
-    label_function: PropTypes.func,
-    unique_id: PropTypes.string,
-    line_list: PropTypes.array,
-    selected: PropTypes.bool,
-    am_zoomed: PropTypes.bool,
-    fixed_size: PropTypes.bool,
-    am_in_portal: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.string]),
-    portal_is_zoomed: PropTypes.bool,
-    type_label: PropTypes.string,
-    inner_ref: PropTypes.object,
-    fixed_width: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number]),
-    fixed_height: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number])
-};
-
-let NamedBox_defaultProps = {
-    kind: "databox",
-    closed: false,
-    clickable_label: false,
-    am_zoomed: false,
-    innerWidth: 0,
-    innerHeight: 0,
-    am_in_portal: false,
-    portal_is_zoomed: false,
-    type_label: null,
-    inner_ref: null
-
-};
 
 class EditableTagRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
+        this.last_tick_processed = 0
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        if (window.freeze && window._running > 0){
+        if (window._running > 0 && window.update_on_ticks) {
+            if (this.last_tick_processed < window.tick_received) {
+                this.last_tick_processed = window.tick_received;
+                return true
+            }
+            else {
                 return false
             }
-        return this.props.focusingMe || !propsAreEqual(nextProps, this.props, ["funcs"])
+        }
+        return true
     }
 
     _handleChange(event) {
@@ -441,7 +419,7 @@ class EditableTagRaw extends React.Component {
 
     _handleKeyDown(event) {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
-            dispatch(downFromTag(this.props.unique_id, this.props.portal_root));
+            this.props.downFromTag(this.props.boxId, this.props.portal_root);
             event.preventDefault();
 
         }
@@ -513,27 +491,15 @@ class EditableTagRaw extends React.Component {
     }
 }
 
-EditableTagRaw.propTypes = {
-    the_name: PropTypes.string,
-    funcs: PropTypes.object,
-    boxId: PropTypes.string,
-    submitRef: PropTypes.func,
-    doneEditingName: PropTypes.func,
-    focusingMe: PropTypes.bool,
-    selected: PropTypes.bool,
-    boxWidth: PropTypes.number,
-    am_sprite: PropTypes.bool,
-};
 
-EditableTagRaw.defaultProps = {
-    am_sprite: false
-};
-
-function mapStateToPropsND(state, ownProps) {
-    return {node_dict: state.node_dict}
+function mapStateToPropsNull(state, ownProps) {
+    return ownProps;
 }
 
-let EditableTag = connect(mapStateToPropsND, mapDispatchToProps)(EditableTagRaw);
+let EditableTag = connect(
+    mapStateToPropsNull,
+    mapDispatchToProps
+    )(EditableTagRaw);
 
 class CloseButton extends React.Component {
     constructor (props) {
@@ -559,10 +525,6 @@ class CloseButton extends React.Component {
         )
     }
 }
-
-CloseButton.propTypes = {
-    handlClick: PropTypes.func
-};
 
 class TypeLabel extends React.Component {
     constructor (props) {
@@ -590,16 +552,6 @@ class TypeLabel extends React.Component {
     }
 }
 
-TypeLabel.propTypes = {
-    the_label: PropTypes.string,
-    clickable: PropTypes.bool,
-    clickFunc: PropTypes.func
-};
-
-TypeLabel.defaultProps = {
-    clickable: false
-};
-
 class ZoomButton extends React.Component {
     constructor (props) {
         super(props);
@@ -624,7 +576,3 @@ class ZoomButton extends React.Component {
         )
     }
 }
-
-ZoomButton.propTypes = {
-    handlClick: PropTypes.func
-};

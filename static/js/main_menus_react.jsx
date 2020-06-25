@@ -7,16 +7,21 @@ import {connect} from "react-redux";
 
 import { MenuItem, Menu, Popover, MenuDivider, PopoverPosition, Button } from "@blueprintjs/core";
 
-import {showModalReact} from "./modal_react.js";
-import {doFlash} from "./toaster.js"
-import {doBinding} from "./utilities.js";
-import {postAjax} from "./communication_react";
+import {showModalReact} from "./utility/modal_react.js";
+import {doFlash} from "./utility/toaster.js"
+import {doBinding} from "./utility/utilities.js";
+import {postAjax} from "./utility/communication_react";
 
-import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
 
 function mapStateToProps(state, ownProps){
-    return {stored_focus: state.stored_focus}
+    return Object.assign({last_focus_id: state.stored_focus.last_focus_id}, ownProps)
 }
+
+function mapStateToPropsNull(state, ownProps){
+    return Object.assign({}, ownProps)
+}
+
 
 export {ProjectMenu, MakeMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
 
@@ -97,7 +102,6 @@ class ProjectMenuRaw extends React.Component {
     }
 
     _saveProjectAs() {
-        this.props.startSpinner();
         let self = this;
         postAjax("get_project_names", {}, function (data) {
             let checkboxes;
@@ -106,13 +110,12 @@ class ProjectMenuRaw extends React.Component {
         });
 
         function doCancel() {
-            self.props.stopSpinner()
         }
         function CreateNewProject (new_name) {
             //let console_node = cleanse_bokeh(document.getElementById("console"));
             const result_dict = {
                 "project_name": new_name,
-                "world_state": self.props.getStateforSave()
+                "world_state": self.props.getStateForSave()
             };
 
             postAjax("save_new_project", result_dict, save_as_success);
@@ -121,18 +124,14 @@ class ProjectMenuRaw extends React.Component {
                 if (data_object["success"]) {
                     window.world_name = new_name;
                     document.title = new_name;
-                    self.props.clearStatusMessage();
                     data_object.alert_type = "alert-success";
                     data_object.timeout = 2000;
                     // postWithCallback("host", "refresh_project_selector_list", {'user_id': window.user_id});
-                    self.props.stopSpinner();
                     doFlash(data_object)
                 }
                 else {
-                    self.props.clearStatusMessage();
                     data_object["message"] = "Saving didn't work";
                     data_object["alert-type"] = "alert-warning";
-                    self.props.stopSpinner();
                     doFlash(data_object)
                 }
             }
@@ -146,11 +145,9 @@ class ProjectMenuRaw extends React.Component {
             project_name: window.world_name,
             world_state: self.props.getStateForSave()
         };
-        this.props.startSpinner();
         postAjax("update_project", result_dict, updateSuccess);
 
         function updateSuccess(data) {
-            self.props.stopSpinner();
             if (data.success) {
                 data["alert_type"] = "alert-success";
                 data.timeout = 2000;
@@ -158,8 +155,6 @@ class ProjectMenuRaw extends React.Component {
             else {
                 data["alert_type"] = "alert-warning";
             }
-            self.props.clearStatusMessage();
-            self.props.stopSpinner();
             doFlash(data)
         }
     }
@@ -197,7 +192,7 @@ ProjectMenuRaw.propTypes = {
 };
 
 
-let ProjectMenu = connect(mapStateToProps, mapDispatchToProps)(ProjectMenuRaw)
+let ProjectMenu = connect(mapStateToPropsNull, mapDispatchToProps)(ProjectMenuRaw)
 
 class MakeMenuRaw extends React.Component {
     constructor(props) {
@@ -273,17 +268,17 @@ class BoxMenuRaw extends React.Component {
     }
 
     _name_box() {
-        this.props.focusName(this.props.stored_focus.last_focus_id)
+        this.props.focusName(this.props.last_focus_id)
     }
 
 
     get option_dict () {
         return {
             "Name": this._name_box,
-            "Unfix Box Size": ()=>{this.props.unfixSize(this.props.stored_focus.last_focus_id)},
-            "Toggle Closet": ()=>{this.props.toggleCloset(this.props.stored_focus.last_focus_id)},
-            "Toggle Transparency": ()=>{this.props.toggleBoxTransparency(this.props.stored_focus.last_focus_id)},
-            "Retarget Port": ()=>{this.props.retargetPort(this.props.stored_focus.last_focus_id)}
+            "Unfix Box Size": ()=>{this.props.unfixSize(this.props.last_focus_id)},
+            "Toggle Closet": ()=>{this.props.toggleCloset(this.props.last_focus_id)},
+            "Toggle Transparency": ()=>{this.props.toggleBoxTransparency(this.props.last_focus_id)},
+            "Retarget Port": ()=>{this.props.retargetPort(this.props.last_focus_id)}
         }
     }
 
@@ -340,17 +335,11 @@ class EditMenuRaw extends React.Component {
         this.props.copySelected()
     }
 
-    _undo(event) {
-        this.props.undo()
-    }
-
-
     get option_dict () {
         return {
             "Cut": this._cut,
             "Copy": this._copy,
             "Paste": this._paste,
-            "Undo": this._undo,
         }
     }
 
@@ -359,7 +348,6 @@ class EditMenuRaw extends React.Component {
             "Cut": "cut",
             "Copy": "duplicate",
             "Paste": "clipboard",
-            "Undo": "undo"
 
         }
     }
@@ -369,7 +357,6 @@ class EditMenuRaw extends React.Component {
             "Cut": "ctr+x",
             "Copy": "ctrl+v",
             "Paste": "ctrl+v",
-            "Undo": "ctrl+z"
         }
 
     }
@@ -387,7 +374,7 @@ class EditMenuRaw extends React.Component {
         )
     }
 }
-let EditMenu = connect(mapStateToProps, mapDispatchToProps)(EditMenuRaw)
+let EditMenu = connect(mapStateToPropsNull, mapDispatchToProps)(EditMenuRaw)
 
 class ViewMenu extends React.Component {
     constructor(props) {

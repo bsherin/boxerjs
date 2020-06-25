@@ -1,8 +1,9 @@
 
+// import "./wdyr.js";
 
 import React from "react";
 import * as ReactDOM from 'react-dom'
-import PropTypes from 'prop-types';
+
 
 import { createStore, applyMiddleware } from 'redux';
 import { Provider } from 'react-redux';
@@ -13,32 +14,28 @@ import _ from 'lodash';
 
 import "../css/boxer.scss";
 
-import {rootReducer} from './reducers.js'
-import {mapDispatchToProps} from "./actions/dispatch_mapper.js";
+import {rootReducer} from './redux/reducers.js'
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
 
-import {newDataBoxNode} from "./actions/node_creator_actions.js";
-import {healStructure} from "./actions/composite_actions.js";
-import {changeNodeMulti} from "./actions/core_actions.js";
+import {newDataBoxNode} from "./redux/actions/node_creator_actions.js";
+import {healStructure, collectGarbage} from "./redux/actions/composite_actions.js";
+import {changeNodeMulti} from "./redux/actions/core_actions.js";
 
-import {_getln} from "./selectors.js"
 
-import {doBinding, guid} from "./utilities.js";
-import {DataBox, PortBox, JsBox, loader} from "./nodes.js";
+import {doBinding, guid} from "./utility/utilities.js";
+import {loader, GenericNode} from "./nodes.js";
 import {BoxerNavbar} from "./blueprint_navbar.js";
 import {ProjectMenu, BoxMenu, MakeMenu, EditMenu, ViewMenu} from "./main_menus_react.js";
-import {postAjax} from "./communication_react.js"
+import {postAjax} from "./utility/communication_react.js"
 
-import {BoxerSocket} from "./boxer_socket.js"
-import {KeyTrap} from "./key_trap.js";
-import {getCaretPosition} from "./utilities";
-import {withStatus} from "./toaster.js";
-import {withErrorDrawer} from "./error_drawer.js";
+import {BoxerSocket} from "./utility/boxer_socket.js"
 import {container_kinds} from "./shared_consts.js";
 import {shape_classes} from "./pixi_shapes.js";
 import {svg_shape_classes} from "./svg_shapes.js"
 
 import {SpriteNode} from "./sprite_commands.js"
 import {GraphicsNode} from "./graphics_box_commands.js"
+import {_getContainingGraphicsBox, makeSelectAllStateGlobals} from "./redux/selectors.js";
 
 const node_classes = {
     "sprite": SpriteNode,
@@ -61,6 +58,8 @@ var store;
 
 const MAX_UNDO_SAVES = 20;
 
+window.tick_received = 0;
+
 function _main_main() {
     console.log("entering start_post_load");
     window._running = 0;
@@ -71,12 +70,12 @@ function _main_main() {
     let domContainer = document.querySelector('#main-root');
     if (window.world_name == "") {
         store = createStore(rootReducer, applyMiddleware(thunk));
+        window.store = store;
         batch(()=>{
             store.dispatch(newDataBoxNode([], false, "world"));
             store.dispatch(healStructure("world"));
             store.dispatch(changeNodeMulti("world", {"am_zoomed": true, "name": "world"}));
         })
-        window.store = store;
         loader.load(()=>{
             ReactDOM.render(
                 <Provider store={store}>
@@ -98,6 +97,7 @@ function _main_main() {
             _rehydrateComponents(world_state.node_dict);
             store = createStore(rootReducer, world_state, applyMiddleware(thunk));
             store.dispatch(healStructure("world"));
+            store.dispatch(collectGarbage())
             window.store = store;
             loader.load(()=>{
                  ReactDOM.render(
@@ -171,6 +171,32 @@ function _rehydrateComponents(ndict) {
                 nd.component_specs = [];
             }
         }
+        else if (nd.kind == "sprite") {
+            if (!nd.hasOwnProperty("sparams")) {
+                nd.sparams = {}
+            }
+            else {
+                nd.sparams["shape_components"] = [];
+                let cgb = _getContainingGraphicsBox(nd.unique_id, ndict)
+                let use_svg = cgb && cgb.kind == "svggraphics"
+                if (nd.hasOwnProperty("component_specs")) {
+                    for (let comp of nd.component_specs) {
+                        let Dcomp;
+                        if (use_svg) {
+                            Dcomp = svg_shape_classes[comp.type];
+                        }
+                        else {
+                            Dcomp = shape_classes[comp.type];
+                        }
+
+                        let new_comp = <Dcomp {...comp.props}/>;
+                        nd.sparams.shape_components.push(new_comp)
+                    }
+                    nd.component_specs = [];
+                }
+            }
+
+        }
     }
 }
 
@@ -178,66 +204,23 @@ class MainApp extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
-
-        this.history = [];
-        this.present = store.getState().node_dict;
-        this.undoing = false;
-        this.exportFuncs();
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        if (window._running > 0 && window.update_on_ticks) {
-            if (window.tick_received) {
-                window.tick_received = false;
-                return true
-            }
-            else {
-                return false
-            }
-        }
-        return true
+        this.last_tick_processed = 0
     }
 
     _setExecuting(abool) {
         this.setState({executing: abool})
     }
 
-    exportFuncs() {
-        window.addErrorDrawerEntry = this.props.addErrorDrawerEntry;
-        window.openErrorDrawer = this.props.openErrorDrawer;
-    }
-
     componentDidMount() {
+        this._update_window_dimensions();
         window.addEventListener("resize", this._update_window_dimensions);
-        this.history = [_.cloneDeep(this.props.node_dict)];
 
-        this.props.setFocus(_getln("world", 0, 0, this.props.node_dict), "root", 0)
+        this.props.setFocusInBox("world", "root", 0);
     }
 
     componentDidUpdate(preProps, preState, snapShot) {
         if (window._running > 0) {
             return
-        }
-        if (this.undoing) {
-            this.undoing = false;
-            this.present = _.cloneDeep(this.props.node_dict);
-        }
-        else {
-            if (!this._eqTest(this.props.node_dict, this.present)) {
-                this.history.unshift(this.present);
-                if (this.history.length > MAX_UNDO_SAVES) {
-                    this.history = this.history.slice(0, MAX_UNDO_SAVES)
-                }
-                this.present = this.props.node_dict
-            }
-        }
-    }
-
-
-    _undo() {
-        if (this.history.length > 0) {
-            this.undoing = true;
-            this.props.setNodeDict(this.history.shift())
         }
     }
 
@@ -249,7 +232,8 @@ class MainApp extends React.Component {
     }
 
     _getStateForSave() {
-        let new_state = _.cloneDeep(store.getState());
+        window.store.dispatch(collectGarbage())
+        let new_state = _.cloneDeep(window.store.getState());
         this._dehydrateComponents(new_state.node_dict);
         return new_state
     }
@@ -273,24 +257,25 @@ class MainApp extends React.Component {
                 }
                 nd.drawn_components = [];
             }
+            else if (nd.kind == "sprite") {
+                let cgb = _getContainingGraphicsBox(nd.unique_id, ndict)
+                 let use_svg = cgb && cgb.kind == "svggraphics"
+                 nd.component_specs = []
+                 for (let comp of nd.sparams.shape_components) {
+                     let new_spec;
+                     if (use_svg) {
+                         new_spec = {type: comp.type.type_name, props: comp.props};
+                     }
+                     else {
+                        new_spec = {type: comp.type, props: comp.props};
+                     }
+
+                    nd.component_specs.push(new_spec)
+                }
+                nd.sparams.shape_components = [];
+             }
         }
     }
-
-
-    get storedFocus() {
-        return this.props.stored_focus
-    }
-
-    get nodeDict() {
-        return this.props.node_dict
-    }
-    // _toggleBoxTransparencyLastFocus() {
-    //     this._toggleBoxTransparency(this.storedFocus.last_focus_id)
-    // }
-
-    // _toggleClosetLastFocus() {
-    //     this._toggleCloset(this.storedFocus.last_focus_id)
-    // }
 
     _compareNode(n1, n2, fields) {
         for (let field of fields) {
@@ -358,46 +343,7 @@ class MainApp extends React.Component {
 
     }
 
-    _getParentId(uid) {
-        return this.props.node_dict[uid].parent
-    }
-
-    _getNode(uid) {
-        return this.props.node_dict[uid]
-    }
-
-    _insertBoxFromKey(kind) {
-        this.props.insertBoxInText(kind, document.activeElement.id, getCaretPosition(document.activeElement),
-            this.storedFocus.last_focus_portal_root)
-    }
-
-     _insertClipboardFromKey() {
-        this.props.insertClipboard(document.activeElement.id, getCaretPosition(document.activeElement),
-            this.storedFocus.last_focus_portal_root)
-    }
-
-    _insertClipboardLastFocus() {
-        this.props.insertClipboard(this.storedFocus.last_focus_id, this.storedFocus.last_focus_pos, this.storedFocus.last_focus_portal_root)
-    }
-
-    _getNodeDict() {
-        return this.props.node_dict
-    }
-
-
-    get funcs () {
-        let funcs = {
-            getParentId: this._getParentId,
-            getNode: this._getNode,
-            openErrorDrawer: this.props.openErrorDrawer,
-            undo: this._undo,
-            getStateForSave: this._getStateForSave,
-        };
-        return funcs
-    }
-
     render() {
-        let node_dict = this.props.node_dict
         let menus = (
             <React.Fragment>
                 <ProjectMenu {...this.props.statusFuncs}
@@ -414,47 +360,13 @@ class MainApp extends React.Component {
             </React.Fragment>
         );
 
-        let zoomed_node = node_dict[this.props.state_globals.zoomed_node_id];
-        let key_bindings = [
-            [["{"], (e)=> {
-                e.preventDefault();
-                this._insertBoxFromKey("databox");
-            }],
-            [["["], (e)=> {
-                e.preventDefault();
-                this._insertBoxFromKey("doitbox");
-            }],
-            [["esc"], (e)=> {
-                this.props.clearSelected()
-            }],
-            [["ctrl+v", "command+v"], (e)=>{
-                e.preventDefault();
-                this._insertClipboardFromKey()
-            }],
-            [["ctrl+c", "command+c"], (e)=>{
-                e.preventDefault();
-                this.props.copySelected()
-            }],
-            [["ctrl+x", "command+x"], (e)=>{
-                e.preventDefault();
-                this.props.cutSelected()
-            }],
-            [["ctrl+z", "command+z"], (e)=>{
-                e.preventDefault();
-                this._undo()
-            }]
-        ];
-        if (zoomed_node.kind == "port") {
-            return (
-
-                <Provider store={store}>
-                    <BoxerNavbar is_authenticated={window.is_authenticated}
+        return (
+            <Provider store={store}>
+                <BoxerNavbar is_authenticated={window.is_authenticated}
                                   user_name={window.username}
                                   menus={menus}
                     />
-                    <PortBox name={zoomed_node.name}
-                             target={zoomed_node.target}
-                             focusNameTag={false}
+                <GenericNode unique_id={this.props.state_globals.zoomed_node_id}
                              am_zoomed={true}
                              closed={false}
                              selected={false}
@@ -462,56 +374,10 @@ class MainApp extends React.Component {
                              portal_parent={null}
                              innerHeight={this.props.state_globals.innerHeight}
                              innerWidth={this.props.state_globals.innerWidth}
-                             unique_id={this.state.zoomed_node_id}
-                             funcs={this.funcs}/>
-                     <KeyTrap global={true}  bindings={key_bindings} />
-             </Provider>
-            )
-        }
-        else if (zoomed_node.kind == "jsbox") {
-            return (
-                <React.Fragment>
-                    <BoxerNavbar is_authenticated={window.is_authenticated}
-                                  user_name={window.username}
-                                  menus={menus}
-                    />
-                    <JsBox name={zoomed_node.name}
-                           focusNameTag={false}
-                           am_zoomed={true}
-                           closed={false}
-                           selected={false}
-                           kind={zoomed_node.kind}
-                           the_code={zoomed_node.the_code}
-                           className="data-box-outer"
-                           portal_root="root"
-                           portal_parent={null}
-                           innerHeight={this.props.state_globals.innerHeight}
-                           innerWidth={this.props.state_globals.innerWidth}
-                           unique_id={this.props.state_globals.zoomed_node_id}
-                           clickable_label={false}
-                           funcs={this.funcs}/>
-                     <KeyTrap global={true}  bindings={key_bindings} />
-             </React.Fragment>
-            )
-        }
-        return (
-            <React.Fragment>
-                <BoxerNavbar is_authenticated={window.is_authenticated}
-                              user_name={window.username}
-                              menus={menus}
-                />
-                <DataBox className="data-box-outer"
-                         focusNameTag={false}
-                         am_zoomed={true}
-                         closed={false}
-                         portal_root="root"
-                         portal_parent={null}
-                         innerHeight={this.props.state_globals.innerHeight}
-                         innerWidth={this.props.state_globals.innerWidth}
-                         unique_id={this.props.state_globals.zoomed_node_id}
-                         clickable_label={false}/>
-                 <KeyTrap global={true}  bindings={key_bindings} />
-             </React.Fragment>
+                             clickable_label={false}
+                             />
+
+            </Provider>
         )
     }
 }
@@ -519,18 +385,19 @@ class MainApp extends React.Component {
 MainApp.propTypes = {
 };
 
-// Object.assign(MainApp.prototype, mutatorMixin)
-// Object.assign(MainApp.prototype, nodeCreatorMixin)
-// Object.assign(MainApp.prototype, copySelectMixin)
 
-function mapStateToProps(state, ownProps){
 
-    return Object.assign({node_dict: state.node_dict, state_globals: state.state_globals, stored_focus: state.stored_focus},
-        ownProps)
+function makeMapStateToStateGlobals() {
+    const selectMyProps = makeSelectAllStateGlobals()
+    return (state, ownProps) => {
+        return Object.assign(selectMyProps(state, ownProps), ownProps)
+    }
 }
 
 
-let MainAppPlus = connect(mapStateToProps, mapDispatchToProps)(withErrorDrawer(withStatus(MainApp, tsocket), tsocket));
+let MainAppPlus = connect(
+    makeMapStateToStateGlobals,
+    mapDispatchToProps)(MainApp);
 
 _main_main();
 

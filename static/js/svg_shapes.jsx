@@ -1,6 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
-import {doBinding, guid} from "./utilities";
+import {doBinding, guid} from "./utility/utilities";
 
 export {SvgLine, SvgRect, SvgTriangle, svg_shape_classes}
 
