@@ -52,12 +52,13 @@ class TranspileError extends Error {
 function _convertFunctionNode(doitNode) {
     try {
 
+        let doit_id = doitNode.unique_id;
         let [_named_nodes, current_turtle_id] = findNamedBoxesInScope(doitNode, vndict());
 
         // Identify the types of the named boxes found
         // Get the arguments needed for each doit and jsbox
         let context = preprocessNamedBoxes(_named_nodes, vndict());
-        context.doitId = doitNode.unique_id;
+        context.doitId = doit_id;
 
         // Get the input names for the box we're converting
         let arglist = context.doit_boxes[doitNode.name].args;
@@ -67,7 +68,9 @@ function _convertFunctionNode(doitNode) {
         }
         let converted_body;
         context.local_var_nodes = {}
-        doitNode.input_names = input_names;
+
+        window.vstore.dispatch(changeNode(doit_id, "input_names", input_names));
+        // doitNode.input_names = input_names;
         context.input_names = input_names;
 
         // Insert virtual data boxes for each input
@@ -129,7 +132,7 @@ function _convertFunctionNode(doitNode) {
         // Start building the javascript string
         let name_string = `async function (`;
         let first = true;
-        for (let arg of doitNode.input_names) {
+        for (let arg of input_names) {
             if (!first) {
                 name_string = name_string + ", ";
             }
@@ -140,18 +143,19 @@ function _convertFunctionNode(doitNode) {
 
         // We need lines to put the input values into the virtual nodes created when the box is run
         let assign_input_string = "";
-        for (let arg of doitNode.input_names) {
+        for (let arg of input_names) {
             let assign_string = `await change("${arg}", ${arg}, "${context.doitId}")\n` ;
             assign_input_string += assign_string
         }
 
-        doitNode.raw_func = `${name_string} {
+        let raw_func = `${name_string} {
                 let my_node_id = "${doitNode.unique_id}";
                 let current_turtle_id = "${current_turtle_id}";
                 ${assign_input_string}
                 ${converted_body}
             }
         `;
+        window.vstore.dispatch(changeNode(doit_id, "raw_func", raw_func))
         return
     }
     catch(error) {
@@ -256,14 +260,15 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
 
 // Finds doit boxes that are called
 // The names are adjusted if we have a port to a doit box
-function findCalledDoits(doitNode, nd, context, called_doits = []) {
+function findCalledDoits(doitNode, nd, context) {
+    let called_doits = []
     for (let line_id of doitNode.line_list){
         let line = nd[line_id];
         let tline = tokenizeLine(line_id, nd);
         for (let token of tline) {
             if (typeof(token) == "object") {
                 if (token.name == null && token.kind == "doitbox") {
-                    called_doits = called_doits.concat(findCalledDoits(token, nd, context, called_doits))
+                    called_doits = called_doits.concat(findCalledDoits(token, nd, context))
                 }
             }
             else {

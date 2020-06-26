@@ -350,7 +350,8 @@ class MainApp extends React.Component {
                 menus: menus
             }),
             React.createElement(GenericNode, { unique_id: this.props.state_globals.zoomed_node_id,
-                am_in_port: 'false',
+                am_in_port: false,
+                from_port: false,
                 port_chain: ["root"]
             })
         );

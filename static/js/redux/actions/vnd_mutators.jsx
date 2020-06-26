@@ -164,8 +164,8 @@ function makeChildrenVirtual(node_id) {
                     }
                 }
                 if (node.closetLine) {
-                    node.closetLine.virtual = true;
-                    for (let lnode_id of node.closetLine.node_list) {
+                   getState().node_dict[node.closetLine].virtual = true;
+                    for (let lnode_id of getState().node_dict[node.closetLine].node_list) {
                         dispatch(changeNode(lnode_id, "virtual",true));
                         dispatch(makeChildrenVirtual(lnode_id));
                     }

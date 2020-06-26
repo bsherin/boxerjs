@@ -106,6 +106,7 @@ async function doExecution(the_code_line_id) {
 
 function getBoxValue(boxName, startId) {
     let _node = findNamedNode(boxName, startId);
+    let _node_id = _node.unique_id;
     if (_node.kind == "port") {
         _node = getPortTarget(_node,window.vstore.getState().node_dict);
         if (!_node) {
@@ -123,7 +124,8 @@ function getBoxValue(boxName, startId) {
         if (!_node.hasOwnProperty("raw_func") || _node.raw_func == null) {
             _convertFunctionNode(_node)
         }
-        eval("_node.cfunc = " + _node.raw_func)
+
+        eval("_node.cfunc = " + window.vstore.getState().node_dict[_node_id].raw_func)
     }
     return _node.cfunc
 }
@@ -424,12 +426,7 @@ async function left(current_turtle_id, degrees, eval_in_place=null) {
 async function setxy(current_turtle_id, x, y, eval_in_place=null) {
     let the_sprite = await getSprite(current_turtle_id)
     if (the_sprite) {
-        the_sprite.moveTo(x, y, null, async (newX, newY) => {
-            if (eval_in_place) {
-                let estring = `xPosition =${newX};\nyPosition=${newY}`;
-                eval_in_place(estring);
-            }
-        })
+        the_sprite.moveTo(x, y, null)
     }
 }
 

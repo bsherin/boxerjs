@@ -720,19 +720,26 @@ class PortBoxRaw extends React.Component {
     render() {
         let tnode;
         let inner_content;
-        // comment
-        let new_port_chain = _.cloneDeep(this.props.port_chain);
-        new_port_chain.push(this.props.unique_id);
-        if (this.props.target == null) {
-            inner_content = <div>You can now target this port</div>;
+        
+        if (this.props.port_chain.includes(this.props.unique_id) ) {
+            inner_content = <div>Ad infinitum...</div>;
+
         }
         else {
-            inner_content = <GenericNode key={this.props.target}
-                      am_in_port={this.props.unique_id}
-                      port_chain={new_port_chain}
-                      unique_id={this.props.target}
-                      port_is_zoomed={this.props.am_zoomed}
-                />
+            let new_port_chain = _.cloneDeep(this.props.port_chain);
+            new_port_chain.push(this.props.unique_id);
+            if (this.props.target == null) {
+                inner_content = <div>You can now target this port</div>;
+            }
+            else {
+                inner_content = <GenericNode key={this.props.target}
+                                             am_in_port={this.props.unique_id}
+                                             from_port={this.props.unique_id}
+                                             port_chain={new_port_chain}
+                                             unique_id={this.props.target}
+                                             port_is_zoomed={this.props.am_zoomed}
+                    />
+            }
         }
 
         return (
@@ -1010,6 +1017,7 @@ class DataboxLineRaw extends React.Component {
                 <ErrorBoundary>
                     <GenericNode key={the_node_id}
                                  am_in_port={false}
+                                 from_port={false}
                                  port_chain={this.props.port_chain}
                                  unique_id={the_node_id}
                     />
