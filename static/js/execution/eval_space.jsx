@@ -37,12 +37,6 @@ function addConverted(cdict) {
     return nstring
 }
 
-// Mousetrap.bind(['ctrl+.', 'command+.'], function (e) {
-//                 window.user_aborted = true;
-//                 e.preventDefault();
-//             });
-
-
 async function _mouseClickOnSprite(sprite_box_id, base_node) {
     let snode = _getMatchingNode(sprite_box_id, base_node);
     let [named_nodes, tid] = findNamedBoxesInScope(snode, base_node);

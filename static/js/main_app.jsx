@@ -1,5 +1,5 @@
 
-// import "./wdyr.js";
+// import "./third_party/wdyr.js";
 
 import React from "react";
 import * as ReactDOM from 'react-dom'
@@ -367,14 +367,8 @@ class MainApp extends React.Component {
                                   menus={menus}
                     />
                 <GenericNode unique_id={this.props.state_globals.zoomed_node_id}
-                             am_zoomed={true}
-                             closed={false}
-                             selected={false}
-                             portal_root="root"
-                             portal_parent={null}
-                             innerHeight={this.props.state_globals.innerHeight}
-                             innerWidth={this.props.state_globals.innerWidth}
-                             clickable_label={false}
+                             am_in_port="false"
+                             port_chain={["root"]}
                              />
 
             </Provider>
@@ -396,7 +390,7 @@ function makeMapStateToStateGlobals() {
 
 
 let MainAppPlus = connect(
-    makeMapStateToStateGlobals,
+    makeMapStateToStateGlobals(),
     mapDispatchToProps)(MainApp);
 
 _main_main();

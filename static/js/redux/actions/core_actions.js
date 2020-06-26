@@ -1,7 +1,6 @@
 
 import { batch } from 'react-redux'
 
-import {sprite_params} from "../../shared_consts.js";
 
 export {createEntry, changeNode, changeSpriteParam, setNodeDict, insertNode, insertNodes, insertLine, insertLines, changeNodeMulti,
     clearClipboard, addToClipboard, setClipboardDict, createClipboardEntry, setClipboardList, changeClipboardNode,
@@ -226,12 +225,12 @@ function replaceLine(line_id, parent_node_id, position) {
 
 
 const STORE_FOCUS = "STORE_FOCUS"
-function storeFocus(uid, position, portal_root) {
+function storeFocus(uid, position, port_chain) {
     return {
         type: STORE_FOCUS,
         last_focus_id: uid,
         last_focus_pos: position,
-        last_focus_portal_root: portal_root
+        last_focus_port_chain: port_chain
     }
 }
 

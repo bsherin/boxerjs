@@ -5,13 +5,13 @@ import {createSelector} from "reselect";
 
 export {_getNthNode, _getln, _getNthLine, _getContainingGraphicsBox, _containsPort, _getParentNode,
     makeSelectMyPropsAndGlobals, makeSelectColorProps, makeSelectMyProps, makeSelectMyPropsAndTextGlobals,
-    makeSelectAllStateGlobals}
+    makeSelectAllStateGlobals, _isParentBoxInPort, _getclosetn}
 
 
 function getMyProps(state, props) {
     let myprops = state.node_dict[props["unique_id"]]
     if (myprops) {
-        return Object.assign(myprops, {found: true})
+        return Object.assign( {found: true}, myprops)  // This order matters since myprops might be a class instance
     }
     else {
         return {found: false}
@@ -22,7 +22,6 @@ function getStateGlobals(state, props) {
     return {innerWidth: state.state_globals.innerWidth,
         innerHeight: state.state_globals.innerHeight}
 }
-
 
 function getAllStateGlobals(state, props) {
     return Object.assign({state_globals: state.state_globals});
@@ -35,7 +34,21 @@ function getMyText(state, props) {
 
 function getTextGlobals(state, props) {
     return {boxer_selected: state.state_globals.boxer_selected,
-            last_focus_portal_root: state.stored_focus.last_focus_portal_root}
+            last_focus_port_chain: state.stored_focus.last_focus_port_chain}
+}
+
+function _isParentBoxInPort(uid, port_chain, node_dict) {
+    if (_.last(port_chain) == "root") return false;
+    if (node_dict[uid].kind == "text") {
+        let parent_line_id = node_dict[uid].parent;
+        let parent_box_id = node_dict[parent_line_id].parent;
+        let port_box = node_dict[_.last(port_chain)]
+        return port_box.target == parent_box_id
+    }
+    else {
+        let port_box = node_dict[_.last(port_chain)]
+        return port_box.target == uid
+    }
 }
 
 function makeSelectMyPropsAndGlobals() {
@@ -119,6 +132,17 @@ function _getln(nid, ln, nn, node_dict){
         }
 
     }
+}
+
+function _getclosetn(nid, nn, node_dict) {
+    let target_node = node_dict[nid];
+    let cline = node_dict[target_node.closetLine]
+    if (nn == -1) {
+        return _.last(cline.node_list)
+    } else {
+        return cline.node_list[nn]
+    }
+
 }
 
 

@@ -2,10 +2,11 @@
 import React from "react";
 import {batch} from "react-redux";
 
+
 import {guid} from "../../utility/utilities.js"
 import { changeNodeMulti, changeNode, changeNodePure, changeSpriteParam, setNodeDict, insertNode, insertLine,
     removeNode, setGlobal } from "./core_actions.js";
-import {_getNthNode, _getln, _getContainingGraphicsBox} from "../selectors.js";
+import {_getNthNode, _getln, _getContainingGraphicsBox, _isParentBoxInPort, _getclosetn} from "../selectors.js";
 
 import {newTextNode, newLineNode, newClosetLine, newSpriteBox, createNode,
 } from "./node_creator_actions.js"
@@ -276,7 +277,7 @@ function splitTextNode(text_id, cursor_position) {
     }
 }
 
-function splitLineAtTextPosition(text_id, cursor_position, portal_root="root",) {
+function splitLineAtTextPosition(text_id, cursor_position, port_chain="root",) {
     return (dispatch, getState) => {
         batch(() => {
             dispatch(splitTextNode(text_id, cursor_position));
@@ -287,7 +288,7 @@ function splitLineAtTextPosition(text_id, cursor_position, portal_root="root",) 
             dispatch(splitLine(linid, getState().node_dict[text_id].position + 1));
             dispatch(healStructure(box_parent_id));
             let nd_for_focus = _getln(parent_line.parent, parent_line_pos + 1, 0, getState().node_dict);
-            dispatch(setFocus(nd_for_focus, portal_root, 0));
+            dispatch(setFocus(nd_for_focus, port_chain, 0));
         })
     }
 }
@@ -338,14 +339,14 @@ function insertBoxBase(kind, text_id, cursor_position, new_node_id) {
     }
 }
 
-function insertBoxInText(kind, text_id, cursor_position, portal_root) {
+function insertBoxInText(kind, text_id, cursor_position, port_chain) {
     return (dispatch, getState) => {
         let new_node_id = guid();
         dispatch(insertBoxBase(kind, text_id, cursor_position, new_node_id)).then(()=>{
             if (["databox", "doitbox"].includes(kind)) {
-                dispatch(setFocus(_getln(new_node_id, 0, 0, getState().node_dict), portal_root, 0));
+                dispatch(setFocus(_getln(new_node_id, 0, 0, getState().node_dict), port_chain, 0));
             } else if (text_kinds.includes(kind)) {
-                dispatch(setFocus(new_node_id, portal_root, 0))
+                dispatch(setFocus(new_node_id, port_chain, 0))
             }
             // dispatch(clearSelected());
             if (kind == "port") {
@@ -358,7 +359,7 @@ function insertBoxInText(kind, text_id, cursor_position, portal_root) {
 function insertBoxLastFocus(kind) {
     return (dispatch, getState) => {
         let stored_focus = getState().stored_focus;
-        dispatch(insertBoxInText(kind, stored_focus.last_focus_id, stored_focus.last_focus_pos, stored_focus.last_focus_portal_root))
+        dispatch(insertBoxInText(kind, stored_focus.last_focus_id, stored_focus.last_focus_pos, stored_focus.last_focus_port_chain))
     }
 }
 
@@ -390,33 +391,48 @@ function retargetPort(port_id) {
 
 function retargetPortLastFocus() {
     return (dispatch, getState) => {
-        dispatch(retargetPort(getState().stored_focus.last_focus_portal_root))
+        dispatch(retargetPort(getState().stored_focus.last_focus_port_chain))
     }
 }
 
-function setFocus(focus_node_id, portal_root, pos) {
+function setFocus(focus_node_id, port_chain, pos) {
     return (dispatch, getState) => {
-        dispatch(changeNode(focus_node_id, "setTextFocus", [portal_root, pos]))
+        dispatch(changeNode(focus_node_id, "setTextFocus", [port_chain, pos]))
     }
 }
 
-function setFocusInBox(box_id, portal_root, pos) {
+function setFocusInBox(box_id, port_chain, pos) {
     return (dispatch, getState) => {
-        let focus_node_id = _getln(box_id, 0, 0, getState().node_dict);
-        dispatch(changeNode(focus_node_id, "setTextFocus", [portal_root, pos]))
+        let targetBox = getState().node_dict[box_id];
+        let final_box_id = box_id;
+        let final_port_chain = port_chain;
+        if (targetBox.kind == "port") {
+            final_port_chain = _.cloneDeep(port_chain);
+            final_port_chain.push(box_id);
+            final_box_id = targetBox.target;
+
+        }
+        let focus_node_id;
+        if (targetBox.showCloset) {
+            focus_node_id =_getClosetn(final_box_id, 0, getState().node_dict)
+        }
+        else {
+            focus_node_id = _getln(final_box_id, 0, 0, getState().node_dict);
+        }
+        dispatch(changeNode(focus_node_id, "setTextFocus", [final_port_chain, pos]))
     }
 }
 
-function positionAfterBox(databox_id, portal_root) {
+function positionAfterBox(databox_id, port_chain) {
     return (dispatch, getState) => {
         let mnode = getState().node_dict[databox_id];
 
         let target_id = _getNthNode(mnode.parent, mnode.position + 1, getState().node_dict).unique_id;
-        dispatch(setFocus(target_id, portal_root, 0))
+        dispatch(setFocus(target_id, port_chain, 0))
     }
 }
 
-function arrowDown(text_id, portal_root) {
+function arrowDown(text_id, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
@@ -424,56 +440,51 @@ function arrowDown(text_id, portal_root) {
         if (my_line.amCloset) {
             let firstTextNodeId =
                 ndict[ndict[myDataBox.line_list[0]].node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+            dispatch(setFocus(firstTextNodeId, port_chain, 0));
         }
         if (my_line.position < (myDataBox.line_list.length - 1)) {
             let firstTextNodeId = ndict[ndict[myDataBox.line_list[my_line.position + 1]].node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+            dispatch(setFocus(firstTextNodeId, port_chain, 0));
         }
     }
 }
 
-function arrowUp(text_id, am_in_portal, portal_root, portal_parent) {
+function arrowUp(text_id, am_in_port, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
         let myDataBox = ndict[my_line.parent];
         if (my_line.amCloset || (my_line.position == 0 && !myDataBox.showCloset)) {
-            if (am_in_portal) {
-                dispatch(focusName(null, am_in_portal, portal_parent))
-            }
-            else {
-                dispatch(focusName(null, null, portal_root))
-            }
+            dispatch(focusName(null, port_chain))
         }
         else if (my_line.position == 0) {
             let firstTextNodeId =
                 ndict[ndictt[myDataBox.closetLine].node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+            dispatch(setFocus(firstTextNodeId, port_chain, 0));
         }
         else {
             let firstTextNodeId =
                 ndict[ndict[myDataBox.line_list[my_line.position - 1]].node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+            dispatch(setFocus(firstTextNodeId, port_chain, 0));
         }
     }
 }
 
-function focusLeft(text_id, position, portal_root) {
+function focusLeft(text_id, position, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
         for (let pos = position - 1; pos >= 0; --pos) {
             let candidate = ndict[ndict[my_line.node_list[pos]].unique_id];
             if (candidate.kind == "text") {
-                dispatch(setFocus(candidate.unique_id, portal_root, candidate.the_text.length));
+                dispatch(setFocus(candidate.unique_id, port_chain, candidate.the_text.length));
                 return
             }
         }
     }
 }
 
-function focusRight(text_id, position, portal_root) {
+function focusRight(text_id, position, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
@@ -484,59 +495,37 @@ function focusRight(text_id, position, portal_root) {
         for (let pos = position + 1; pos < nnodes; ++pos) {
             let candidate = ndict[ndict[my_line.node_list[pos]].unique_id];
             if (candidate.kind == "text") {
-                dispatch(setFocus(candidate.unique_id, portal_root, 0));
+                dispatch(setFocus(candidate.unique_id, port_chain, 0));
                 return
             }
         }
     }
 }
 
-function doBracket(text_id, am_in_portal, portal_root, portal_parent) {
+function doBracket(text_id, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
-        if (am_in_portal) {
-            dispatch(positionAfterBox(portal_root, portal_parent));
+        if (_isParentBoxInPort(text_id, port_chain, getState().node_dict)) {
+            dispatch(positionAfterBox(_.last(port_chain), _.dropRight(port_chain, 1)));
         }
         else {
-            dispatch(positionAfterBox(my_line.parent, portal_root));
+            dispatch(positionAfterBox(my_line.parent, port_chain));
         }
 
     }
 }
 
-function downFromTag(boxId, portal_root) {
+function downFromTag(boxId, port_chain) {
     return (dispatch, getState) => {
         let ndict = getState().node_dict;
         let myDataBox = ndict[boxId];
-        if (myDataBox.kind == "port") {
-            let targetBox = ndict[myDataBox.target];
-            if (targetBox.kind == "jsbox") {
-                dispatch(setFocus(targetBox.unique_id, boxId, 0));
-            }
-            else if (targetBox.showCloset) {
-                let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
-                dispatch(setFocus(firstTextNodeId, boxId, 0));
-            }
-            else {
-                let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
-                dispatch(setFocus(firstTextNodeId, boxId, 0));
-            }
-        }
-        else if (myDataBox.kind == "jsbox") {
-            dispatch(setFocus(boxId, portal_root, 0));
-        }
-        else if (myDataBox.showCloset) {
-            let closet = ndict[myDataBox.closetLine]
-            let firstTextNodeId = ndict[closet.node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+        if (text_kinds.includes(myDataBox.kind)) {
+            dispatch(setFocus(boxId, port_chain, 0));
         }
         else {
-            let the_line = ndict[myDataBox.line_list[0]]
-            let firstTextNodeId = ndict[the_line.node_list[0]].unique_id;
-            dispatch(setFocus(firstTextNodeId, portal_root, 0));
+            dispatch(setFocusInBox(boxId, port_chain, 0));
         }
-
     }
 }
 
@@ -577,26 +566,34 @@ function unzoomBox(uid) {
     }
 }
 
-function focusName(uid=null, box_id=null, portal_root="root") {
+function focusName(text_id=null, port_chain=["root"]) {
     return (dispatch, getState) => {
-        if (box_id == null) {
-            if (uid == null) {
-                uid = document.activeElement.id
+        if (text_id == null) {
+            text_id = document.activeElement.id
+        }
+        let mnode = getState().node_dict[text_id];
+        let box_id;
+
+        if (mnode.kind == "text") {
+            if (_isParentBoxInPort(text_id, port_chain, getState().node_dict)) {
+                box_id = _.last(port_chain);
+                port_chain = _.dropRight(port_chain, 1)
             }
-            let mnode = getState().node_dict[uid];
-            if ((mnode.kind != "text") && (text_kinds.includes(mnode.kind))) {
-                box_id = mnode.unique_id
-            } else {
+            else {
                 let line_id = mnode.parent;
                 box_id = getState().node_dict[line_id].parent;
             }
+
+        }
+        else if (text_kinds.includes(mnode.kind)) {
+            box_id = text_id
         }
 
         let currentName = getState().node_dict[box_id].name;
         if (currentName == null) {
             dispatch(changeNode(box_id, "name", ""));
         }
-        dispatch(changeNode(box_id, "focusNameTag", portal_root))
+        dispatch(changeNode(box_id, "focusNameTag", port_chain))
     }
 }
 

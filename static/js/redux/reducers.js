@@ -123,7 +123,7 @@ function clipboard(state=initial_clipboard, action){
 const initial_stored_focus = {
     last_focus_id: null,
     last_focus_pos: null,
-    last_focus_portal_root: null
+    last_focus_port_chain: null
 }
 
 function stored_focus(state=initial_stored_focus, action) {
@@ -132,31 +132,13 @@ function stored_focus(state=initial_stored_focus, action) {
             return {
                 last_focus_id: action.last_focus_id,
                 last_focus_pos: action.last_focus_pos,
-                last_focus_portal_root: action.last_focus_portal_root
+                last_focus_port_chain: action.last_focus_port_chain
             }
         default:
             return state
     }
 }
 
-// function history_state(state, action) {
-//     switch(action.type) {
-//         case INITIALIZE_HISTORY: {
-//             return update(state, {history: {$set: state.node_dict}})
-//         }
-//     }
-//
-// }
-//
-// function rootReducer(state={}, action) {
-//     return {
-//         node_dict: node_dict(state.node_dict, action),
-//         state_globals: state_globals(state.state_globals, action),
-//         stored_focus: stored_focus(state.stored_focus, action),
-//         clipboard: clipboard(state.clipboard, action),
-//         history_state: history_state({node_dict: state.node_dict, history: state.history}, action)
-//     }
-// }
 
 const rootReducer = combineReducers({
     node_dict,

@@ -20,20 +20,20 @@ export {clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, cop
 
 // Focus management
 
-function focusInOrAfter(node_id, portal_root=null, pos=-1) {
+function focusInOrAfter(node_id, port_chain=null, pos=-1) {
     return (dispatch, getState) => {
         let mnode = getState().node_dict[node_id];
-        if (!portal_root) {
-            portal_root = getState().stored_focus.last_focus_portal_root
+        if (!port_chain) {
+            port_chain = getState().stored_focus.last_focus_port_chain
         }
         if (mnode.kind == "text") {
             if (pos == -1) {
                 pos = mnode.the_text.length
             }
-            dispatch(setFocus(node_id, portal_root, pos))
+            dispatch(setFocus(node_id, port_chain, pos))
         }
         else {
-            dispatch(positionAfterBox(node_id, portal_root))
+            dispatch(positionAfterBox(node_id, port_chain))
         }
     }
 }
@@ -438,7 +438,7 @@ function cutSelected() {
             }
             let val_dict = {
                 the_text: tnode.the_text.slice(0, start) + tnode.the_text.slice(start + num,),
-                setTextFocus: [getState().stored_focus.last_focus_portal_root, start]
+                setTextFocus: [getState().stored_focus.last_focus_port_chain, start]
             }
             dispatch(changeNodeMulti(tnode.unique_id, val_dict));
         })
@@ -546,7 +546,7 @@ function deleteBoxerSelection() {
                     dispatch(setLineList(sglobals.select_parent, [new_line_id]));
 
                     focus_node_id = getState().node_dict[new_line_id].node_list[0];
-                    dispatch(focusInOrAfter(focus_node_id, sfocus.last_focus_portal_root, 0));
+                    dispatch(focusInOrAfter(focus_node_id, sfocus.last_focus_port_chain, 0));
                 }
                 if (sglobals.select_range[0] >= getState().node_dict[sglobals.select_parent].line_list.length) {
                     focus_line_id = getState().node_dict[sglobals.select_parent].line_list[sglobals.select_range[0] - 1];
@@ -631,11 +631,11 @@ function deletePrecedingBoxBase(text_id, clearClipboard=true) {
     }
 }
 
-function deletePrecedingBox(text_id, clearClipboard=true, portal_root) {
+function deletePrecedingBox(text_id, clearClipboard=true, port_chain) {
     return (dispatch, getState) => {
         dispatch(deletePrecedingBoxBase(text_id, clearClipboard))
             .then((result) => {
-                dispatch(focusInOrAfter(result.focus_node, portal_root, result.focus_pos))
+                dispatch(focusInOrAfter(result.focus_node, port_chain, result.focus_pos))
             })
     }
 }
@@ -670,7 +670,7 @@ function cloneLinesToStore(line_ids) {
     }
 }
 
-function insertClipboardBase(text_id, cursor_position, portal_root) {
+function insertClipboardBase(text_id, cursor_position, port_chain) {
     return (dispatch, getState) => {
         let focus_text_pos = null;
         let focus_node_id = null;
@@ -750,11 +750,11 @@ function insertClipboardBase(text_id, cursor_position, portal_root) {
         return Promise.resolve(focus_node_id)
     }
 }
- function insertClipboard(text_id, cursor_position, portal_root) {
+ function insertClipboard(text_id, cursor_position, port_chain) {
      return (dispatch, getState) => {
-         dispatch(insertClipboardBase(text_id, cursor_position, portal_root))
+         dispatch(insertClipboardBase(text_id, cursor_position, port_chain))
              .then((focus_node_id) => {
-                     dispatch(focusInOrAfter(focus_node_id, portal_root, -1));
+                     dispatch(focusInOrAfter(focus_node_id, port_chain, -1));
             })
      }
  }

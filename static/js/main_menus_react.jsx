@@ -15,7 +15,10 @@ import {postAjax} from "./utility/communication_react";
 import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
 
 function mapStateToProps(state, ownProps){
-    return Object.assign({last_focus_id: state.stored_focus.last_focus_id}, ownProps)
+    return Object.assign(
+        {last_focus_id: state.stored_focus.last_focus_id,
+            last_focus_port_chain: state.stored_focus.last_focus_port_chain
+        }, ownProps)
 }
 
 function mapStateToPropsNull(state, ownProps){
@@ -268,7 +271,7 @@ class BoxMenuRaw extends React.Component {
     }
 
     _name_box() {
-        this.props.focusName(this.props.last_focus_id)
+        this.props.focusName(this.props.last_focus_id, this.props.last_focus_port_chain)
     }
 
 
