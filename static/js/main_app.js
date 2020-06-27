@@ -1,6 +1,6 @@
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
 
-// import "./third_party/wdyr.js";
+import "./third_party/wdyr.js";
 
 import React from "react";
 import * as ReactDOM from 'react-dom';
@@ -78,7 +78,7 @@ function _main_main() {
                 Provider,
                 { store: store },
                 React.createElement(MainAppPlus, null),
-                '}/>'
+                "}/>"
             ), domContainer);
         });
     } else {
@@ -352,7 +352,7 @@ class MainApp extends React.Component {
             React.createElement(GenericNode, { unique_id: this.props.state_globals.zoomed_node_id,
                 am_in_port: false,
                 from_port: false,
-                port_chain: ["root"]
+                port_chain: "root"
             })
         );
     }

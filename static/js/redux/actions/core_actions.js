@@ -4,11 +4,12 @@ import { batch } from 'react-redux'
 
 export {createEntry, changeNode, changeSpriteParam, setNodeDict, insertNode, insertNodes, insertLine, insertLines, changeNodeMulti,
     clearClipboard, addToClipboard, setClipboardDict, createClipboardEntry, setClipboardList, changeClipboardNode,
-    replaceNode, replaceLine, removeNode, removeLine, setGlobal, setGlobals, storeFocus, changeNodePure}
+    replaceNode, replaceLine, removeNode, removeLine, setGlobal, setGlobals, storeFocus, changeNodePure,
+    clearBuffer, addToBuffer}
 export {SET_GLOBAL, CREATE_ENTRY, CHANGE_NODE, SET_NODE_DICT, INSERT_NODE, CHANGE_SPRITE_PARAM,
     INSERT_NODES, INSERT_LINE, INSERT_LINES, REMOVE_NODE, REMOVE_LINE, REPLACE_NODE, REPLACE_LINE,
     STORE_FOCUS, CLEAR_CLIPBOARD, ADD_TO_CLIPBOARD, SET_CLIPBOARD_DICT, CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST,
-    CHANGE_CLIPBOARD_NODE
+    CHANGE_CLIPBOARD_NODE, CLEAR_BUFFER, ADD_TO_BUFFER
 }
 
 
@@ -38,6 +39,23 @@ function setGlobals(val_dict) {
                 dispatch(setGlobal(param, new_val))
             }
         })
+    }
+}
+
+const CLEAR_BUFFER = "CLEAR_BUFFER";
+function clearBuffer() {
+    return {
+        type: CLEAR_BUFFER
+    }
+}
+
+const ADD_TO_BUFFER = "ADD_TO_BUFFER";
+function addToBuffer(action_dict) {
+    let act = _.cloneDeep(action_dict);
+    act.composite = false
+    return {
+        type: ADD_TO_BUFFER,
+        action_dict: act
     }
 }
 

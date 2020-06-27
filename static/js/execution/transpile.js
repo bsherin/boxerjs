@@ -27,7 +27,7 @@ function _createLocalizedFunctionCall(the_code_line, box_id, ports=null, use_vir
         line_source = vndict();
     }
     else {
-        line_source = window.store.getState().node_dict;
+        line_source = window.vstore.getState().node_dict;
     }
     let local_code_line_id = guid();
     window.vstore.dispatch(cloneLineToStore(the_code_line.unique_id, line_source, local_code_line_id));

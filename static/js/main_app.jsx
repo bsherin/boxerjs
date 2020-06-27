@@ -1,5 +1,5 @@
 
-// import "./third_party/wdyr.js";
+import "./third_party/wdyr.js";
 
 import React from "react";
 import * as ReactDOM from 'react-dom'
@@ -369,7 +369,7 @@ class MainApp extends React.Component {
                 <GenericNode unique_id={this.props.state_globals.zoomed_node_id}
                              am_in_port={false}
                              from_port={false}
-                             port_chain={["root"]}
+                             port_chain="root"
                              />
 
             </Provider>

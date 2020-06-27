@@ -5,7 +5,7 @@ import {Spring, animated} from 'react-spring/renderprops'
 
 import {DragHandle} from "./third_party/resizing_layouts.js";
 
-import {doBinding, propsAreEqual} from "./utility/utilities.js";
+import {doBinding, propsAreEqual, portChainLast, portChainDropRight} from "./utility/utilities.js";
 import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./utility/sizing_tools.js";
 import {graphics_kinds} from "./shared_consts.js";
 import {connect} from "react-redux";
@@ -395,7 +395,7 @@ class EditableTagRaw extends React.Component {
         if (event.key =="]") {
             event.preventDefault();
             if (this.props.am_in_port) {
-                this.props.positionAfterBox(_.last(this.props.port_chain), _.dropRight(this.props.port_chain));
+                this.props.positionAfterBox(portChainLast(this.props.port_chain), portChainDropRight(this.props.port_chain));
             }
             else {
                 this.props.positionAfterBox(this.props.boxId, this.props.port_chain);

@@ -17,7 +17,7 @@ export {SpriteNode}
 
 
 window.getNode = (uid) => {
-    return window.store.getState().node_dict[uid]
+    return window.vstore.getState().node_dict[uid]
 }
 
 class SpriteNode {
@@ -29,8 +29,14 @@ class SpriteNode {
         // this.saveParams = Object.keys(param_dict);
     }
 
-    getContainingGraphicsNode() {
-        return _getContainingGraphicsBox(this.unique_id, window.store.getState().node_dict)
+    getContainingGraphicsNode(use_virtual=true) {
+        if (use_virtual) {
+            return _getContainingGraphicsBox(this.unique_id, window.vstore.getState().node_dict)
+        }
+        else {
+            return _getContainingGraphicsBox(this.unique_id, window.store.getState().node_dict)
+        }
+
     }
 
     useSvg() {
@@ -38,68 +44,12 @@ class SpriteNode {
         return cgb && (this.getContainingGraphicsNode().kind == "svggraphics")
     }
 
-    getParam(pname) {
-        let llist = [... this.line_list];
-        llist.push(this.closetLine);
-        for (let lin_id of llist) {
-            for (let nd_id of window.getNode(lin_id).node_list) {
-                let nd = window.getNode(nd_id);
-                if (nd.name == pname) {
-                    if (nd.name == "shape") {
-                        return nd.drawn_components
-                    }
-                    else if (nd.name == "penColor") {
-                        let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
-                        if (this.useSvg()) {
-                            return _svgConvertColorArg(color_string)
-                        } else {
-                            return _convertColorArg(color_string)
-                        }
-                    } else {
-                        return _extractValue(nd_id)
-                    }
-                }
-            }
-        }
-        return null
-    }
-
-    getAllParams() {
-        let llist = [...this.line_list];
-        llist.push(this.closetLine);
-        let pdict = {};
-        for (let lin of llist) {
-            for (let nd_id of window.getNode(lin).node_list) {
-                let nd = window.getNode(nd_id);
-                if (sprite_params.includes(nd.name)) {
-                    if (nd.name == "shape") {
-                        pdict["shape_components"] = nd.drawn_components
-                    }
-                    else if (nd.name == "penColor") {
-                        let color_string = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text;
-                        if (this.useSvg()) {
-                            pdict.penColor = _svgConvertColorArg(color_string)
-                        } else {
-                            pdict.penColor = _convertColorArg(color_string)
-                        }
-                    } else {
-                        pdict[nd.name] = _extractValue(nd_id)
-                    }
-                }
-            }
-        }
-        return pdict
-    }
-
-    setMyParams(param_dict, callback=null) {
-        window.store.dispatch(setSpriteParams(this.unique_id, param_dict))
+    setMyParams(param_dict, callback=null, buffer=true) {
+        window.vstore.dispatch(setSpriteParams(this.unique_id, param_dict, buffer))
             .then(()=>{
-                window.vstore.dispatch(setSpriteParams(this.unique_id, param_dict))
-                    .then(()=>{
-                        if (callback) {
-                            callback(param_dict)
-                        }
-                    })
+                if (callback) {
+                    callback(param_dict)
+                }
             })
     }
 

@@ -16,6 +16,8 @@ import {cloneNodeSourceTarget, cloneLineSourceTarget} from "./action_helpers.js"
 
 import {container_kinds} from "../../shared_consts.js";
 import {text_kinds} from "../../shared_consts.js";
+import {ADD_TO_BUFFER, addToBuffer, clearBuffer} from "./core_actions";
+import {addToPortChain, portChainLast, portChainDropRight} from "../../utility/utilities";
 
 
 export {healLine, healStructure, splitLine, createCloset, mergeTextNodes, setLineList, renumberLines,
@@ -23,6 +25,7 @@ export {healLine, healStructure, splitLine, createCloset, mergeTextNodes, setLin
     zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, collectGarbage,
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
     splitTextNode, splitLineAtTextPosition, setSpriteParams, changeBoxValue, changeSpriteValueBox,
+    addCompositeToBuffer, dispatchBufferedActions,
 insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, retargetPortLastFocus, setNodeSize}
 
 
@@ -33,10 +36,13 @@ function setln(nid, ln, nn, param_name, new_val) {
     }
 }
 
-function changeBoxValue(nid, new_val) {
+function changeBoxValue(nid, new_val, buffer=false) {
     return (dispatch, getState) => {
         let the_id = _getln(nid, 0, 0, getState().node_dict);
         dispatch(changeNodePure(the_id, "the_text", new_val))
+        if (buffer) {
+            dispatch(addToBuffer(changeNodePure(the_id, "the_text", new_val)))
+        }
     }
 }
 
@@ -63,6 +69,20 @@ function renumberLines(node_id) {
             }
         })
 
+    }
+}
+
+function addCompositeToBuffer(func, arg) {
+    return (dispatch, getState) => {
+        let act = {
+            composite: true,
+            func: func,
+            arg: _.cloneDeep(arg)
+        }
+        dispatch({
+            type: ADD_TO_BUFFER,
+            action_dict: act
+        })
     }
 }
 
@@ -116,6 +136,18 @@ function collectGarbage() {
 
 }
 
+function clearVirtual() {
+    return (dispatch, getState) => {
+        batch(() =>{
+            let ndict = getState().node_dict;
+            for (let nd_id in ndict) {
+                if (ndict[nd_id].virtual) {
+                    dispatch(changeNode(nd_id, "virtual", false))
+                }
+            }
+        })
+    }
+}
 
 function healStructure(start_node_id) {
 
@@ -247,17 +279,22 @@ function cloneNodeToStore(source_node_id, source_dict, target_node_id, heal=true
 }
 
 
-function cloneLineToStore(source_line_id, source_dict, target_line_id, heal=true) {
+function cloneLineToStore(source_line_id, source_dict, target_line_id, heal = true, buffer=false) {
     return (dispatch, getState) => {
-        let new_target_dict = cloneLineSourceTarget(source_line_id, source_dict, target_line_id, getState().node_dict)
-        batch(()=>{
-            dispatch(setNodeDict(new_target_dict))
-            if (heal) {
-                dispatch(healLine(target_line_id))
+        let new_target_dict = cloneLineSourceTarget(source_line_id, source_dict, target_line_id, getState().node_dict);
+        batch(() => {
+            dispatch(setNodeDict(new_target_dict));
+            if (buffer) {
+                dispatch(addToBuffer(setNodeDict(new_target_dict)))
             }
-        })
-
-    }
+            if (heal) {
+                dispatch(healLine(target_line_id));
+                if (buffer) {
+                    dispatch(addCompositeToBuffer(healLine, argument))
+                }
+            }
+        });
+    };
 }
 
 function splitTextNode(text_id, cursor_position) {
@@ -407,8 +444,7 @@ function setFocusInBox(box_id, port_chain, pos) {
         let final_box_id = box_id;
         let final_port_chain = port_chain;
         if (targetBox.kind == "port") {
-            final_port_chain = _.cloneDeep(port_chain);
-            final_port_chain.push(box_id);
+            let final_port_chain = addToPortChain(port_chain, box_id);
             final_box_id = targetBox.target;
 
         }
@@ -507,7 +543,7 @@ function doBracket(text_id, port_chain) {
         let ndict = getState().node_dict;
         let my_line = ndict[ndict[text_id].parent];
         if (_isParentBoxInPort(text_id, port_chain, getState().node_dict)) {
-            dispatch(positionAfterBox(_.last(port_chain), _.dropRight(port_chain, 1)));
+            dispatch(positionAfterBox(portChainLast(port_chain), portChainDropRight(port_chain)));
         }
         else {
             dispatch(positionAfterBox(my_line.parent, port_chain));
@@ -566,7 +602,7 @@ function unzoomBox(uid) {
     }
 }
 
-function focusName(text_id=null, port_chain=["root"]) {
+function focusName(text_id=null, port_chain="root") {
     return (dispatch, getState) => {
         if (text_id == null) {
             text_id = document.activeElement.id
@@ -576,8 +612,8 @@ function focusName(text_id=null, port_chain=["root"]) {
 
         if (mnode.kind == "text") {
             if (_isParentBoxInPort(text_id, port_chain, getState().node_dict)) {
-                box_id = _.last(port_chain);
-                port_chain = _.dropRight(port_chain, 1)
+                box_id = portChainLast(port_chain);
+                port_chain = portChainDropRight(port_chain)
             }
             else {
                 let line_id = mnode.parent;
@@ -597,11 +633,14 @@ function focusName(text_id=null, port_chain=["root"]) {
     }
 }
 
-function addGraphicsComponent(uid, the_comp) {
+function addGraphicsComponent(uid, the_comp, buffer=true) {
     return (dispatch, getState) => {
         let mnode = getState().node_dict[uid];
         let new_drawn_components = [...mnode.drawn_components, the_comp];
-        dispatch(changeNode(uid, "drawn_components", new_drawn_components))
+        dispatch(changeNode(uid, "drawn_components", new_drawn_components));
+        if (buffer) {
+            dispatch(addToBuffer(changeNodePure(uid, "drawn_components", new_drawn_components)))
+        }
         return Promise.resolve();
     }
 
@@ -689,19 +728,45 @@ function changeSpriteValueBox(value_parent_id, new_val) {
     }
 }
 
-function setSpriteParams(uid, pdict) {
+function setSpriteParams(uid, pdict, buffer=true) {
     return (dispatch, getState) => {
         batch(() => {
             let mnode = getState().node_dict[uid];
             if (mnode) {
                 for (let sparam in pdict) {
                     dispatch(changeSpriteParam(uid, sparam, pdict[sparam]));
-                    dispatch(changeBoxValue(mnode.param_box_ids[sparam], String(pdict[sparam])))
+                    if (buffer)(
+                        dispatch(addToBuffer(changeSpriteParam(uid, sparam, pdict[sparam])))
+                    )
+                    dispatch(changeBoxValue(mnode.param_box_ids[sparam], String(pdict[sparam])), buffer)
                 }
             }
 
         })
         return Promise.resolve()
+    }
+}
+
+function dispatchList(action_list) {
+    return (dispatch, getState) => {
+        batch(() => {
+            for (let action of action_list) {
+                if (action.composite) {
+                    dispatch(action.func(action.arg))
+                }
+                else {
+                    dispatch(action)
+                }
+            }
+        })
+        return Promise.resolve()
+    }
+}
+
+function dispatchBufferedActions() {
+    return (dispatch, getState) => {
+        window.store.dispatch(dispatchList(_.cloneDeep(getState().buffered_actions)));
+        dispatch(clearBuffer())
     }
 }
 

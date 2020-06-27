@@ -8,7 +8,7 @@ import {batch} from "react-redux";
 import {data_kinds, sprite_params} from "../../shared_consts.js";
 import {cloneLineSourceTarget} from "./action_helpers.js";
 import {cloneLineToStore, healLine, setLineList, createCloset, changeBoxValue} from "./composite_actions.js";
-import {changeNode} from "./core_actions.js";
+import {changeNode, addToBuffer} from "./core_actions.js";
 import {newColorBox, createTextLine, newDataBoxNode} from "./node_creator_actions.js"
 import {container_kinds} from "../../shared_consts.js";
 import {GraphicsNode} from "../../graphics_box_commands";
@@ -54,55 +54,51 @@ function changeBase(boxname, newval, my_node_id) {
                     resolve()
                 })
             }
+            let is_virtual = mnode.hasOwnProperty("virtual") && mnode.virtual
             if (typeof(newval) == "object") {
-                let the_node = window.vstore.getState().node_dict[newval.vid];
+                let the_node = getState().node_dict[newval.vid];
                 if (!data_kinds.includes(mnode.kind) || !data_kinds.includes(the_node.kind)) {
                     return new Promise(function (resolve, reject) {
                         resolve()
                     })
                 }
 
+                let sparent_id = mnode.sprite_parent
+                if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
+                    dispatch(changeSpriteParam(sparent_id, mnode.name, _extractValue(new_val)));
+                    if (!is_virtual) {
+                        dispatch(addToBuffer(changeSpriteParam(sparent_id, mnode.name, _extractValue(new_val))));
+                    }
+                }
+
                 let new_line_list = [];
-                let target_dict = window.getNodeDict();
                 for (let lin_id of the_node.line_list) {
                     let new_line_id = guid();
-                    dispatch(cloneLineToStore(lin_id, getState().node_dict, new_line_id));
+                    dispatch(cloneLineToStore(lin_id, getState().node_dict, new_line_id, true, !is_virtual));
                     new_line_list.push(new_line_id)
                 }
 
-                mnode.line_list = new_line_list
+                dispatch(setLineList(mnode.unique_id, new_line_list));
+                return new Promise(function (resolve, reject) {
+                    dispatch(setLineList(mnode.unique_id, new_line_list));
+                    if (!is_virtual) {
+                        dispatch(addToBuffer(setLineList(node.unique_id, new_line_list)))
+                    }
+                    resolve(data)
+                })
 
-                if (!mnode.virtual) {
-                    let sparent_id = mnode.sprite_parent
-                    if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
-                        window.store.dispatch(changeSpriteParam(sparent_id, mnode.name, _extractValue(new_val)));
-                    }
-
-                    let temp_dict = {};
-                    for (let lin_id of new_line_list) {
-                        temp_dict = cloneLineSourceTarget(lin_id, getState().node_dict, lin_id, temp_dict);
-                        makeChildrenNonVirtual(lin_id, temp_dict)
-                    }
-                    for (let lin_id of new_line_list) {
-                        window.store.dispatch(cloneLineToStore(lin_id, temp_dict, lin_id));
-                    }
-                    return new Promise(function (resolve, reject) {
-                        window.store.dispatch(setLineList(mnode.unique_id, new_line_list));
-                        resolve(data)
-                    })
-                }
 
             }
             else {
-                dispatch(changeBoxValue(mnode.unique_id, String(newval)));
-                if (!mnode.virtual) {
-                    let sparent_id = mnode.sprite_parent
-                    if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
-                        window.store.dispatch(changeSpriteParam(sparent_id, mnode.name, newval));
+                let sparent_id = mnode.sprite_parent
+                if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
+                    dispatch(changeSpriteParam(sparent_id, mnode.name, newval));
+                    if (!is_virtual) {
+                        dispatch(addToBuffer(dispatch(changeSpriteParam(sparent_id, mnode.name, newval))));
                     }
-                    window.store.dispatch(changeBoxValue(mnode.unique_id, String(newval)));
-
                 }
+
+                dispatch(changeBoxValue(mnode.unique_id, String(newval), !is_virtual));
             }
         })
         return Promise.resolve()

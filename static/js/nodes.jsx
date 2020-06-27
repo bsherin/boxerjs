@@ -7,7 +7,8 @@ import _ from "lodash";
 
 import {connect} from "react-redux";
 
-import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
+import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg,
+    portChainToArray, addToPortChain} from "./utility/utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {_getln, makeSelectMyPropsAndGlobals, makeSelectMyProps, makeSelectColorProps, makeSelectMyPropsAndTextGlobals} from "./redux/selectors.js"
@@ -414,6 +415,7 @@ class TextNodeRaw extends React.Component {
         }
     }
 
+
     _displayMessage() {
         let idx = getCaretPosition(this.iRef);
         console.log("hello the index is " + String(idx))
@@ -721,13 +723,12 @@ class PortBoxRaw extends React.Component {
         let tnode;
         let inner_content;
         
-        if (this.props.port_chain.includes(this.props.unique_id) ) {
+        if (portChainToArray(this.props.port_chain).includes(this.props.unique_id) ) {
             inner_content = <div>Ad infinitum...</div>;
 
         }
         else {
-            let new_port_chain = _.cloneDeep(this.props.port_chain);
-            new_port_chain.push(this.props.unique_id);
+            let new_port_chain = addToPortChain(this.props.port_chain, this.props.unique_id);
             if (this.props.target == null) {
                 inner_content = <div>You can now target this port</div>;
             }

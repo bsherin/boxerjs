@@ -4,9 +4,9 @@ import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget,
     dataBoxToValue, boxObjectToValue, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {degreesToRadians, radiansToDegrees} from "../utility/utilities.js"
-import {setNodeDict, setGlobal, createEntry, changeNodePure} from "../redux/actions/core_actions.js";
+import {setNodeDict, setGlobal, createEntry, changeNodePure, addToBuffer, clearBuffer} from "../redux/actions/core_actions.js";
 import {newErrorNode, changeBase, makeGraphicsNode} from "../redux/actions/vnd_mutators.js";
-import {collectGarbage} from "../redux/actions/composite_actions.js";
+import {collectGarbage, dispatchBufferedActions} from "../redux/actions/composite_actions.js";
 import {guid, isKind} from "../utility/utilities.js";
 import {shape_classes, Triangle} from "../pixi_shapes";
 import {newColorBox} from "../redux/actions/node_creator_actions.js";
@@ -14,6 +14,7 @@ import {graphics_kinds} from "../shared_consts.js";
 
 export {doExecution, _mouseClickOnSprite, _mouseClickOnGraphics}
 
+// new comment
 
 var _name_index;
 var _base_node;
@@ -23,6 +24,7 @@ window.TICK_INTERVAL = 40;
 window.user_aborted = false;
 
 window.getNodeDict = () => {return window.store.getState().node_dict};
+window.getVirtualNodeDict = () => {return window.vstore.getState().node_dict};
 
 
 function delay(msecs) {
@@ -70,10 +72,11 @@ async function _mouseClickOnGraphics(graphics_box_id, base_node) {
 }
 
 async function doExecution(the_code_line_id) {
-    // window.context_functions = {};
+    // comment
     let the_code_line = window.getNodeDict()[the_code_line_id];
     let box_id = the_code_line.parent;
     window.vstore.dispatch(setNodeDict(_.cloneDeep(window.getNodeDict())));
+    window.vstore.dispatch(clearBuffer())
     startTicker();
     if (window.TICK_INTERVAL >= 0) {
         window.update_on_ticks = true;
@@ -88,7 +91,8 @@ async function doExecution(the_code_line_id) {
         _result = await getBoxValue(vstore.getState().node_dict[_inserted_start_node_id].name, box_id)()
         window._running -= 1;
         if (window._running == 0) {
-            window.store.dispatch(setGlobal("executing", false)); // To force a refresh at the end
+            window.store.dispatch(setGlobal("executing", false)); // To force a refresh at the en
+            window.vstore.dispatch(dispatchBufferedActions());// d
         }
     } catch (error) {
         window._running = 0;
@@ -136,9 +140,9 @@ async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=nul
     let estring;
     let mnode = findNamedNode(boxname, my_node_id);
     if (mnode.kind == "port") {
-        mnode = window.getNodeDict()[mnode.target]
+        mnode = window.getVirtualNodeDict()[mnode.target]
     }
-    if (!mnode || mnode.virtual || !newval.kind || !graphics_kinds.includes(mnode.kind)) {
+    if (!mnode || !newval.kind || !graphics_kinds.includes(mnode.kind)) {
         return new Promise(function (resolve, reject) {
             resolve()
         })
@@ -149,7 +153,8 @@ async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=nul
         let new_comp = <Dcomp {...comp.props}/>;
         new_drawn_components.push(new_comp)
     }
-    window.store.dispatch(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components))
+    window.vstore.dispatch(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components))
+    window.vstore.dispatch(addToBuffer(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components)));
 }
 
 
@@ -166,6 +171,7 @@ async function makeColor(r, g, b) {
     let color_string = `${r} ${g} ${b}`;
     let new_id = guid();
     window.vstore.dispatch(newColorBox(color_string, new_id));
+    window.vstore.dispatch(addToBuffer(createEntry(newgnode)))
 
     return {vid: new_id}
 }
@@ -209,6 +215,8 @@ function setTickInterval(interval) {
 }
 
 async function generateTick() {
+    window.vstore.dispatch(dispatchBufferedActions())
+
     window.tick_received += 1;
 }
 
@@ -245,7 +253,7 @@ async function redisplay() {
 }
 
 function getSprite(current_turtle_id) {
-    return window.getNodeDict()[current_turtle_id]
+    return window.getVirtualNodeDict()[current_turtle_id]
 }
 
 

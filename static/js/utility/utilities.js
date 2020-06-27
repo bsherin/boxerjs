@@ -6,7 +6,9 @@ import {_getln} from "../redux/selectors.js";
 
 export {doBinding, doSignOut, isString, guid, isKind, _extractValue, _getText,
     getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
-    degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg, isVirtualStub}
+    degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg, isVirtualStub,
+    portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain
+}
 
 function isKind(item, kind) {
     return typeof(item) == "object" && item.hasOwnProperty("kind") && item.kind == kind
@@ -19,6 +21,30 @@ function doBinding(obj, seq = "_") {
             obj[key] = obj[key].bind(obj);
         }
     }
+}
+
+function portChainToArray(port_chain) {
+    return port_chain.split("_")
+}
+
+function portChainLast(port_chain) {
+    return _.last(portChainToArray(port_chain))
+}
+
+function arrayToPortChain(the_array) {
+    let port_chain = the_array[0];
+    for (let p of the_array.slice(1,)) {
+        port_chain += "_" +  p
+    }
+    return port_chain
+}
+
+function addToPortChain(port_chain, port) {
+    return port_chain + "_" + port
+}
+
+function portChainDropRight(port_chain) {
+    return arrayToPortChain(_.dropRight(portChainToArray(port_chain)))
 }
 
 function degreesToRadians(deg) {

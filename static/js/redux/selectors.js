@@ -2,6 +2,7 @@
 import _ from "lodash";
 import {container_kinds, graphics_kinds} from "../shared_consts";
 import {createSelector} from "reselect";
+import {portChainLast} from "../utility/utilities.js";
 
 export {_getNthNode, _getln, _getNthLine, _getContainingGraphicsBox, _containsPort, _getParentNode,
     makeSelectMyPropsAndGlobals, makeSelectColorProps, makeSelectMyProps, makeSelectMyPropsAndTextGlobals,
@@ -38,15 +39,15 @@ function getTextGlobals(state, props) {
 }
 
 function _isParentBoxInPort(uid, port_chain, node_dict) {
-    if (_.last(port_chain) == "root") return false;
+    if (portChainLast(port_chain) == "root") return false;
     if (node_dict[uid].kind == "text") {
         let parent_line_id = node_dict[uid].parent;
         let parent_box_id = node_dict[parent_line_id].parent;
-        let port_box = node_dict[_.last(port_chain)]
+        let port_box = node_dict[portChainLast(port_chain)]
         return port_box.target == parent_box_id
     }
     else {
-        let port_box = node_dict[_.last(port_chain)]
+        let port_box = node_dict[portChainLast(port_chain)]
         return port_box.target == uid
     }
 }

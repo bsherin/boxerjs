@@ -3,7 +3,7 @@ import update from "immutability-helper";
 import {applyMiddleware, combineReducers, createStore} from 'redux';
 import {SET_GLOBAL, CREATE_ENTRY, CHANGE_NODE, SET_NODE_DICT, INSERT_NODE, INSERT_LINE, INSERT_LINES, REPLACE_NODE, REPLACE_LINE,
     INSERT_NODES, REMOVE_NODE, REMOVE_LINE, STORE_FOCUS, CLEAR_CLIPBOARD, ADD_TO_CLIPBOARD, SET_CLIPBOARD_DICT, CHANGE_SPRITE_PARAM,
-    CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST, CHANGE_CLIPBOARD_NODE} from "./actions/core_actions.js"
+    CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST, CHANGE_CLIPBOARD_NODE, CLEAR_BUFFER, ADD_TO_BUFFER, ADD_COMPOSITE_TO_BUFFER} from "./actions/core_actions.js"
 import thunk from "redux-thunk";
 
 export {rootReducer}
@@ -139,6 +139,18 @@ function stored_focus(state=initial_stored_focus, action) {
     }
 }
 
+function buffered_actions(state=[], action) {
+    switch(action.type) {
+        case CLEAR_BUFFER:
+            return []
+        case ADD_TO_BUFFER:
+            return update(state, {$push: [action.action_dict]})
+        default:
+            return state
+    }
+
+}
+
 
 const rootReducer = combineReducers({
     node_dict,
@@ -150,6 +162,7 @@ const rootReducer = combineReducers({
 const virtualReducer = combineReducers({
     node_dict,
     state_globals,
+    buffered_actions
 })
 
 

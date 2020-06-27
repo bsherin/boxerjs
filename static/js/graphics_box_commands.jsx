@@ -1,9 +1,8 @@
 import {doBinding} from "./utility/utilities.js";
-import {changeNode} from "./redux/actions/core_actions.js";
+import {changeNode, addToBuffer, changeNodePure} from "./redux/actions/core_actions.js";
 import {addGraphicsComponent} from "./redux/actions/composite_actions.js";
 
 export {GraphicsNode}
-
 
 class GraphicsNode {
     constructor(param_dict) {
@@ -13,22 +12,33 @@ class GraphicsNode {
         }
         this.saveParams = Object.keys(param_dict);
     }
-    clearComponents(callback=null) {
-        window.store.dispatch(changeNode(this.unique_id, "drawn_components", []));
+    clearComponents(callback=null, buffer=true) {
+
+        window.vstore.dispatch(changeNode(this.unique_id, "drawn_components", []));
+        if (buffer) {
+            window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "drawn_components", [])));
+        }
+
         callback()
     }
 
-    setWrap(wrap) {
-        window.store.dispatch(changeNode(this.unique_id, "do_wrap", wrap))
+    setWrap(wrap, buffer=true) {
+        window.vstore.dispatch(changeNode(this.unique_id, "do_wrap", wrap))
+        if (buffer) {
+            window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "do_wrap", wrap)))
+        }
     }
 
 
-    setBgColor(color) {
-        window.store.dispatch(changeNode(this.unique_id, "bgColor", color));
+    setBgColor(color, buffer=true) {
+        window.vstore.dispatch(changeNode(this.unique_id, "bgColor", color));
+        if (buffer) {
+            window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "bgColor", color)));
+        }
     }
 
-    addGraphicsComponent(the_comp, callback=null) {
-        window.store.dispatch(addGraphicsComponent(this.unique_id, the_comp)).then(callback);
+    addGraphicsComponent(the_comp, callback=null, buffer=true) {
+        window.vstore.dispatch(addGraphicsComponent(this.unique_id, the_comp, buffer)).then(callback);
     }
 
 }

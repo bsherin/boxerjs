@@ -8,7 +8,8 @@ import {
     insertNode,
     insertNodes, removeLine, removeNode, replaceLine, replaceNode, setGlobal,
     setNodeDict, storeFocus,
-    changeSpriteParam
+    changeSpriteParam,
+    clearBuffer, addToBuffer
 } from "./core_actions.js";
 import {clearSelected, deleteToLineEnd, addTextToClipboard,
     insertClipboard, copySelected, cutSelected, selectSpan, deleteBoxerSelection, deletePrecedingBox} from "./copy_select_actions.js";
@@ -36,6 +37,6 @@ function mapDispatchToProps(dispatch) {
       addGraphicsComponent, toggleBoxTransparency, setSpriteParams, changeSpriteParam, changeSpriteValueBox,
       createCloset, toggleCloset, setGraphicsSize, retargetPort, retargetPortLastFocus, setNodeSize,
       clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, copySelected, cutSelected,
-      selectSpan, deletePrecedingBox, deleteBoxerSelection
+      selectSpan, deletePrecedingBox, deleteBoxerSelection, clearBuffer, addToBuffer
      }, dispatch)
 }
