@@ -3,12 +3,28 @@
 import React from "react";
 import PropTypes from 'prop-types';
 
+import {connect} from "react-redux";
+
 import { MenuItem, Menu, Popover, MenuDivider, PopoverPosition, Button } from "@blueprintjs/core";
 
-import {showModalReact} from "./modal_react.js";
-import {doFlash} from "./toaster.js"
-import {doBinding} from "./utilities.js";
-import {postAjax} from "./communication_react";
+import {showModalReact} from "./utility/modal_react.js";
+import {doFlash} from "./utility/toaster.js"
+import {doBinding} from "./utility/utilities.js";
+import {postAjax} from "./utility/communication_react";
+
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
+
+function mapStateToProps(state, ownProps){
+    return Object.assign(
+        {last_focus_id: state.stored_focus.last_focus_id,
+            last_focus_port_chain: state.stored_focus.last_focus_port_chain
+        }, ownProps)
+}
+
+function mapStateToPropsNull(state, ownProps){
+    return Object.assign({}, ownProps)
+}
+
 
 export {ProjectMenu, MakeMenu, BoxMenu, EditMenu, MenuComponent, ViewMenu}
 
@@ -82,14 +98,13 @@ MenuComponent.defaultProps = {
     alt_button: null
 };
 
-class ProjectMenu extends React.Component {
+class ProjectMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
     }
 
     _saveProjectAs() {
-        this.props.startSpinner();
         let self = this;
         postAjax("get_project_names", {}, function (data) {
             let checkboxes;
@@ -98,7 +113,6 @@ class ProjectMenu extends React.Component {
         });
 
         function doCancel() {
-            self.props.stopSpinner()
         }
         function CreateNewProject (new_name) {
             //let console_node = cleanse_bokeh(document.getElementById("console"));
@@ -113,18 +127,14 @@ class ProjectMenu extends React.Component {
                 if (data_object["success"]) {
                     window.world_name = new_name;
                     document.title = new_name;
-                    self.props.clearStatusMessage();
                     data_object.alert_type = "alert-success";
                     data_object.timeout = 2000;
                     // postWithCallback("host", "refresh_project_selector_list", {'user_id': window.user_id});
-                    self.props.stopSpinner();
                     doFlash(data_object)
                 }
                 else {
-                    self.props.clearStatusMessage();
                     data_object["message"] = "Saving didn't work";
                     data_object["alert-type"] = "alert-warning";
-                    self.props.stopSpinner();
                     doFlash(data_object)
                 }
             }
@@ -138,11 +148,9 @@ class ProjectMenu extends React.Component {
             project_name: window.world_name,
             world_state: self.props.getStateForSave()
         };
-        this.props.startSpinner();
         postAjax("update_project", result_dict, updateSuccess);
 
         function updateSuccess(data) {
-            self.props.stopSpinner();
             if (data.success) {
                 data["alert_type"] = "alert-success";
                 data.timeout = 2000;
@@ -150,8 +158,6 @@ class ProjectMenu extends React.Component {
             else {
                 data["alert_type"] = "alert-warning";
             }
-            self.props.clearStatusMessage();
-            self.props.stopSpinner();
             doFlash(data)
         }
     }
@@ -184,12 +190,14 @@ class ProjectMenu extends React.Component {
     }
 }
 
-ProjectMenu.propTypes = {
-    world_state: PropTypes.object,
+ProjectMenuRaw.propTypes = {
     hidden_items: PropTypes.array
 };
 
-class MakeMenu extends React.Component {
+
+let ProjectMenu = connect(mapStateToPropsNull, mapDispatchToProps)(ProjectMenuRaw)
+
+class MakeMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -254,24 +262,26 @@ class MakeMenu extends React.Component {
     }
 }
 
-class BoxMenu extends React.Component {
+let MakeMenu = connect(mapStateToProps, mapDispatchToProps)(MakeMenuRaw)
+
+class BoxMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
     }
 
     _name_box() {
-        this.props.focusNameLastFocus()
+        this.props.focusName(this.props.last_focus_id, this.props.last_focus_port_chain)
     }
 
 
     get option_dict () {
         return {
             "Name": this._name_box,
-            "Unfix Box Size": this.props.unfixSizeLastFocus,
-            "Toggle Closet": this.props.toggleClosetLastFocus,
-            "Toggle Transparency": this.props.toggleBoxTransparencyLastFocus,
-            "Retarget Port": this.props.retargetPortLastFocus
+            "Unfix Box Size": ()=>{this.props.unfixSize(this.props.last_focus_id)},
+            "Toggle Closet": ()=>{this.props.toggleCloset(this.props.last_focus_id)},
+            "Toggle Transparency": ()=>{this.props.toggleBoxTransparency(this.props.last_focus_id)},
+            "Retarget Port": ()=>{this.props.retargetPort(this.props.last_focus_id)}
         }
     }
 
@@ -306,10 +316,11 @@ class BoxMenu extends React.Component {
         )
     }
 }
-BoxMenu.propTypes = {
-};
 
-class EditMenu extends React.Component {
+let BoxMenu = connect(mapStateToProps, mapDispatchToProps)(BoxMenuRaw)
+
+
+class EditMenuRaw extends React.Component {
     constructor(props) {
         super(props);
         doBinding(this)
@@ -327,17 +338,11 @@ class EditMenu extends React.Component {
         this.props.copySelected()
     }
 
-    _undo(event) {
-        this.props.undo()
-    }
-
-
     get option_dict () {
         return {
             "Cut": this._cut,
             "Copy": this._copy,
             "Paste": this._paste,
-            "Undo": this._undo,
         }
     }
 
@@ -346,7 +351,6 @@ class EditMenu extends React.Component {
             "Cut": "cut",
             "Copy": "duplicate",
             "Paste": "clipboard",
-            "Undo": "undo"
 
         }
     }
@@ -356,7 +360,6 @@ class EditMenu extends React.Component {
             "Cut": "ctr+x",
             "Copy": "ctrl+v",
             "Paste": "ctrl+v",
-            "Undo": "ctrl+z"
         }
 
     }
@@ -374,8 +377,7 @@ class EditMenu extends React.Component {
         )
     }
 }
-EditMenu.propTypes = {
-};
+let EditMenu = connect(mapStateToPropsNull, mapDispatchToProps)(EditMenuRaw)
 
 class ViewMenu extends React.Component {
     constructor(props) {

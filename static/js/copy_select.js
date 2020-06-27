@@ -104,6 +104,19 @@ let copySelectMixin = {
         return target_dict
     },
 
+
+    _findParents(node_id, target_dict) {
+        let mnode = target_dict[node_id];
+        let parents = [mnode.unique_id];
+        let par = mnode.parent;
+        while (par) {
+            parents.push(par);
+            mnode = target_dict[par];
+            par = mnode.parent
+        }
+        return parents
+    },
+
     _setClipboardToNodeList(node_list, target_dict=null) {
         if (!target_dict) {
             target_dict = this.state.node_dict
@@ -118,7 +131,7 @@ let copySelectMixin = {
         this.clipboard = [nline_id]
     },
 
-   _insertClipboard(text_id, cursor_position, portal_root, target_dict=null) {
+   _insertClipboard(text_id, cursor_position, port_chain, target_dict=null) {
         if (!this.clipboard || this.clipboard.length == 0) {
             return
         }
@@ -222,7 +235,7 @@ let copySelectMixin = {
 
         function positionCursor(){
             if (focus_type == "text") {
-                self._setFocus(focus_node_id, portal_root, focus_text_pos, null, target_dict)
+                self._setFocus(focus_node_id, port_chain, focus_text_pos, null, target_dict)
             }
             else  {
                 self._positionAfterBox(focus_node_id, target_dict)
@@ -281,7 +294,7 @@ let copySelectMixin = {
         }
         let val_dict = {
             the_text: tnode.the_text.slice(0, start) + tnode.the_text.slice(start + num,),
-            setFocus: [this.last_focus_portal_root, start]
+            setFocus: [this.last_focus_port_chain, start]
         }
         this._changeNodeMulti(tnode.unique_id, val_dict, target_dict)
     },
@@ -377,21 +390,21 @@ let copySelectMixin = {
             let focus_node_id;
             if (start_spot >= select_parent_node.node_list.length) {
                 focus_node_id= select_parent_node.node_list[select_parent_node.node_list.length - 1];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
-                    [this.last_focus_portal_root, target_dict[focus_node_id].the_text.length],
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
+                    [this.last_focus_port_chain, target_dict[focus_node_id].the_text.length],
                     target_dict);
             }
             else if (select_parent_node.node_list[start_spot].kind != "text") {
                 focus_node_id = select_parent_node.node_list[start_spot + 1];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
-                    [this.last_focus_portal_root, 0],
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
+                    [this.last_focus_port_chain, 0],
                     target_dict);
 
             }
             else {
                 focus_node_id = select_parent_node.node_list[start_spot];
-                target_dict = this.changeNodeAndReturn(focus_node_id, "setFocus",
-                    [this.last_focus_portal_root, target_dict[focus_node_id].the_text.length],
+                target_dict = this.changeNodeAndReturn(focus_node_id, "setTextFocus",
+                    [this.last_focus_port_chain, target_dict[focus_node_id].the_text.length],
                     target_dict);
             }
             this.setState({node_dict: target_dict})
@@ -414,18 +427,18 @@ let copySelectMixin = {
                 target_dict = this._setLineListAndReturn(this.state.select, [new_line_id], target_dict);
 
                 focus_node_id = target_dict[new_line_id].node_list[0];
-                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root, 0, target_dict);
+                target_dict = this._setFocus(focus_node_id, this.last_focus_port_chain, 0, target_dict);
             }
             if (this.state.select_range[0] >= target_dict[this.state.select_parent].line_list.length) {
                 let focus_line_id = target_dict[this.state.select_parent].line_list[this.state.select_range[0] - 1];
                 let focus_node_id = _.last(target_dict[focus_line_id].node_list);
-                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root,
+                target_dict = this._setFocus(focus_node_id, this.last_focus_port_chain,
                     target_dict[focus_node_id].the_text.length, target_dict);
             }
             else {
                 let focus_line_id = target_dict[this.state.select_parent].line_list[this.state.select_range[0]];
                 focus_node_id = target_dict[focus_line_id].node_list[0];
-                target_dict = this._setFocus(focus_node_id, this.last_focus_portal_root, 0, target_dict);
+                target_dict = this._setFocus(focus_node_id, this.last_focus_port_chain, 0, target_dict);
             }
             for (let lin_id of target_dict[this.state.select_parent].line_list) {
                 target_dict = this._healLine(lin_id, true, target_dict);

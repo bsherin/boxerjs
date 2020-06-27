@@ -6,12 +6,29 @@ const graphics_kinds = ["graphics", "color", "svggraphics"];
 const data_kinds = ["databox", "sprite", "svggraphics", "graphics", "color"];
 const text_kinds = ["text", "jsbox", "htmlbox"];
 
-export {defaultBgColor, defaultPenWidth, defaultPenColor,defaultFontFamily, defaultFontSize, defaultFontStyle}
+export {defaultBgColor, defaultPenWidth, defaultPenColorString, defaultFontFamily, defaultFontSize, defaultFontStyle, sprite_params}
 
 
 const defaultBgColor = "white";
 const defaultPenWidth = 1;
-const defaultPenColor = 0x000000;
+const defaultPenColorString = "0 0 0";
 const defaultFontFamily = "Arial";
 const defaultFontSize = 14;
 const defaultFontStyle = "Normal";
+
+
+const sprite_params =[
+        "xPosition",
+        "yPosition",
+        "pen",
+        "shown",
+        "heading",
+        "spriteSize",
+        "penWidth",
+        "fontFamily",
+        "fontSize",
+        "fontStyle",
+        "shape",
+        "penColor",
+        "use_svg"
+];

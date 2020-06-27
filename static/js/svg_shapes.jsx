@@ -1,8 +1,8 @@
 import React from "react";
 import PropTypes from "prop-types";
-import {doBinding, guid} from "./utilities";
+import {doBinding, guid} from "./utility/utilities";
 
-export {SvgLine, SvgRect, SvgTriangle, svg_shape_classes}
+export {SvgLine, SvgRect, SvgTriangle, SvgEllipse, svg_shape_classes}
 
 class SvgLine extends React.Component {
     constructor(props) {
@@ -58,6 +58,41 @@ SvgRect.defaultProps = {
 
 SvgRect.type_name = "SvgRect";
 
+class SvgEllipse extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+    }
+
+    render() {
+        return (
+            <ellipse key={guid()}
+                  cx={this.props.x} cy={this.props.y}
+                  rx={this.props.width / 2} ry={this.props.height / 2}
+                  strokeWidth={this.props.penWidth} stroke={this.props.penColor}
+                  fill={this.props.fill}
+                />
+        )
+    }
+}
+
+SvgEllipse.propTypes = {
+    x: PropTypes.number,
+    y: PropTypes.number,
+    width: PropTypes.number,
+    height: PropTypes.number,
+    penWidth: PropTypes.number,
+    stroke: PropTypes.string,
+    fill: PropTypes.string,
+}
+
+SvgEllipse.defaultProps = {
+    stroke: null,
+    penWidth: null
+}
+
+SvgEllipse.type_name = "SvgEllipse";
+
 class SvgTriangle extends React.Component {
     constructor(props) {
         super(props);
@@ -103,6 +138,7 @@ SvgTriangle.defaultProps = {
 const svg_shape_classes = {
     SvgLine: SvgLine,
     SvgRect: SvgRect,
-    SvgTriangle: SvgTriangle
+    SvgTriangle: SvgTriangle,
+    SvgEllipse: SvgEllipse
 };
 

@@ -1,18 +1,21 @@
 import React from "react";
-import PropTypes from "prop-types";
 import ContentEditable from "react-contenteditable";
 import {Button} from "@blueprintjs/core";
 import {Spring, animated} from 'react-spring/renderprops'
 
-import {DragHandle} from "./resizing_layouts.js";
+import {DragHandle} from "./third_party/resizing_layouts.js";
 
-import {doBinding, propsAreEqual} from "./utilities.js";
-import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./sizing_tools.js";
+import {doBinding, propsAreEqual, portChainLast, portChainDropRight} from "./utility/utilities.js";
+import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./utility/sizing_tools.js";
 import {graphics_kinds} from "./shared_consts.js";
+import {connect} from "react-redux";
+import {mapDispatchToProps} from "./redux/actions/dispatch_mapper";
+
+import {ErrorBoundary} from "./error_boundary.js";
 
 const resizeTolerance = 2;
 
-export {EditableTag, withName, CloseButton, TypeLabel, ZoomButton, NamedBox_propTypes, NamedBox_defaultProps}
+export {EditableTag, withName, CloseButton, TypeLabel, ZoomButton}
 
 function withName(WrappedComponent) {
     return class extends React.Component {
@@ -32,59 +35,54 @@ function withName(WrappedComponent) {
                 startingWidth: null,
                 startingHeight: null
             };
+            this.last_tick_processed = 0
         }
-
-        // shouldComponentUpdate(nextProps, nextState) {
-        //     if (window.freeze && window._running > 0){
-        //         return false
-        //     }
-        //     return !propsAreEqual(nextState, this.state) || !propsAreEqual(nextProps, this.props) || this.props.kind == "port"
-        //         || this.props.funcs.containsPort(this.props.unique_id)
-        // }
 
         _flipMe() {
             this.boxRef = React.createRef();
-            this.props.funcs.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+            this.props.changeNode(this.props.unique_id, "showGraphics", !this.props.showGraphics)
+        }
+
+        shouldComponentUpdate(nextProps, nextState) {
+            if (window._running > 0 && window.update_on_ticks) {
+                if (this.last_tick_processed < window.tick_received) {
+                    this.last_tick_processed = window.tick_received;
+                    return true
+                }
+                else {
+                    return false
+                }
+            }
+            return true
         }
 
         _convertMe() {
             this.boxRef = React.createRef();
-            this.props.funcs.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
+            this.props.changeNode(this.props.unique_id, "showConverted", !this.props.showConverted)
         }
 
         _closeMe() {
             if (this.props.am_zoomed) {
                 this._unzoomMe();
+                this.props.positionAfterBox(this.props.unique_id, this.props.port_chain)
                 return
-            }
-            if (this.props.am_in_portal) {
-                if (this.props.portal_is_zoomed) {
-                    this.props.funcs.unzoomBox(this.props.am_in_portal)
-                } else {
-                    let have_focus = this.boxRef.current.contains(document.activeElement);
-                    this.props.funcs.changeNode(this.props.am_in_portal, "closed", true, () => {
-                        if (have_focus) {
-                            this.props.funcs.positionAfterBox(this.props.am_in_portal, this.props.portal_parent)
-                        }
-                    });
-                }
             } else {
                 let have_focus = this.boxRef.current.contains(document.activeElement);
-                this.props.funcs.changeNode(this.props.unique_id, "closed", true, () => {
-                    if (have_focus) {
-                        this.props.funcs.positionAfterBox(this.props.unique_id, this.props.portal_root)
-                    }
-                })
+                this.props.changeNode(this.props.unique_id, "closed", true)
+                if (have_focus) {
+                    this.props.positionAfterBox(this.props.unique_id, this.props.port_chain)
+                }
             }
         }
 
         _openMe() {
             this.setState({opening: true});
-            if (this.props.am_in_portal) {
-                this.props.funcs.changeNode(this.props.am_in_portal, "closed", false)
-                return
+            this.props.changeNode(this.props.unique_id, "closed", false);
+            if (this.props.kind == "port") {
+                this.props.changeNode(this.props.target, "closed", false);
             }
-            this.props.funcs.changeNode(this.props.unique_id, "closed", false)
+
+            this.props.setFocusInBox(this.props.unique_id, this.props.port_chain, 0)
         }
 
         _submitNameRef(the_ref) {
@@ -112,11 +110,11 @@ function withName(WrappedComponent) {
 
         componentDidUpdate() {
             let self = this;
-            if (this.props.focusName && this.props.focusName == this.props.portal_root) {
+            if (this.props.focusNameTag && _.isEqual(this.props.focusNameTag, this.props.port_chain)) {
                 if (this.nameRef) {
                     $(this.nameRef).focus();
                     this.setState({focusingName: true}, () => {
-                        self.props.funcs.changeNode(this.props.unique_id, "focusName", false);
+                        self.props.changeNode(this.props.unique_id, "focusNameTag", false);
                     });
                 }
             }
@@ -131,16 +129,13 @@ function withName(WrappedComponent) {
         }
 
         _zoomMe() {
-            if (this.props.am_in_portal) {
-                this.props.funcs.zoomBox(this.props.am_in_portal)
-            } else {
-                this.props.funcs.zoomBox(this.props.unique_id)
-            }
-
+            this.props.zoomBox(this.props.unique_id);
+            this.props.setFocusInBox(this.props.unique_id, this.props.port_chain, 0)
         }
 
         _unzoomMe() {
-            this.props.funcs.unzoomBox(this.props.unique_id)
+            this.props.unzoomBox(this.props.unique_id);
+            this.props.positionAfterBox(this.props.unique_id);
 
         }
 
@@ -170,9 +165,9 @@ function withName(WrappedComponent) {
 
         _setSize(new_width, new_height) {
             if (graphics_kinds.includes(this.props.kind) && this.props.showGraphics) {
-                this.props.funcs.setGraphicsSize(this.props.unique_id, new_width, new_height)
+                this.props.setGraphicsSize(this.props.unique_id, new_width, new_height)
             } else {
-                this.props.funcs.setNodeSize(this.props.unique_id, new_width, new_height)
+                this.props.setNodeSize(this.props.unique_id, new_width, new_height)
             }
         }
 
@@ -316,11 +311,9 @@ function withName(WrappedComponent) {
             return (
                 <div className={outer_class} style={outer_style} ref={this.outerRef}>
                     <EditableTag the_name={this.props.name}
-                                 portal_root={this.props.portal_root}
-                                 portal_parent={this.props.portal_parent}
+                                 port_chain={this.props.port_chain}
                                  focusingMe={this.state.focusingName}
                                  boxWidth={this.state.boxWidth}
-                                 funcs={this.props.funcs}
                                  am_sprite={this.props.kind == "sprite"}
                                  doneEditingName={this._doneEditingName}
                                  submitRef={this._submitNameRef}
@@ -344,31 +337,32 @@ function withName(WrappedComponent) {
                                     </div>
                                 )
                             } else {
-                                return (<div style={wrapper_style}>
-                                        <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
-                                             style={inner_props}>
-                                            <CloseButton handleClick={this._closeMe}/>
-                                            <WrappedComponent {...this.props} ref={this.props.inner_ref}
-                                                              inner_width={inner_props.width}
-                                                              inner_height={inner_props.height}
-                                                              graphics_width={this.props.graphics_fixed_width}
-                                                              graphics_height={this.props.graphics_fixed_height}
-                                            />
-                                            <ZoomButton handleClick={this._zoomMe}/>
-                                            <DragHandle position_dict={draghandle_position_dict}
-                                                        dragStart={this._startResize}
-                                                        onDrag={this._onResize}
-                                                        dragEnd={this._stopResize}
-                                                        direction="both"
-                                                        iconSize={15}/>
+                                return (
+                                    <ErrorBoundary>
+                                        <div style={wrapper_style}>
+                                            <div ref={this.boxRef} className={dbclass} id={this.props.unique_id}
+                                                 style={inner_props}>
+                                                {!this.props.am_in_port && <CloseButton handleClick={this._closeMe}/>}
 
+                                                <WrappedComponent ref={this.props.inner_ref}
+                                                                  {...this.props}
+                                                />
+                                                {!this.props.am_in_port && <ZoomButton handleClick={this._zoomMe}/> }
+                                                <DragHandle position_dict={draghandle_position_dict}
+                                                            dragStart={this._startResize}
+                                                            onDrag={this._onResize}
+                                                            dragEnd={this._stopResize}
+                                                            direction="both"
+                                                            iconSize={15}/>
+
+                                            </div>
+                                            {!this.props.am_zoomed &&
+                                            <TypeLabel clickable={clickable_label}
+                                                       clickFunc={label_function}
+                                                       the_label={type_label}/>
+                                            }
                                         </div>
-                                        {!this.props.am_zoomed &&
-                                        <TypeLabel clickable={clickable_label}
-                                                   clickFunc={label_function}
-                                                   the_label={type_label}/>
-                                        }
-                                    </div>
+                                    </ErrorBoundary>
                                 )
                             }
                         }}
@@ -380,103 +374,31 @@ function withName(WrappedComponent) {
     }
 }
 
-let NamedBox_propTypes = {
-    name: PropTypes.string,
-    kind: PropTypes.string,
-    closed: PropTypes.bool,
-    clickable_label: PropTypes.bool,
-    label_function: PropTypes.func,
-    unique_id: PropTypes.string,
-    line_list: PropTypes.array,
-    funcs: PropTypes.object,
-    selected: PropTypes.bool,
-    am_zoomed: PropTypes.bool,
-    fixed_size: PropTypes.bool,
-    am_in_portal: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.string]),
-    portal_is_zoomed: PropTypes.bool,
-    type_label: PropTypes.string,
-    inner_ref: PropTypes.object,
-    fixed_width: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number]),
-    fixed_height: PropTypes.oneOfType([
-        PropTypes.bool,
-        PropTypes.number])
-};
 
-let NamedBox_defaultProps = {
-    kind: "databox",
-    closed: false,
-    clickable_label: false,
-    am_zoomed: false,
-    innerWidth: 0,
-    innerHeight: 0,
-    am_in_portal: false,
-    portal_is_zoomed: false,
-    type_label: null,
-    inner_ref: null
-
-};
-
-class EditableTag extends React.Component {
+class EditableTagRaw extends React.Component {
     constructor (props) {
         super(props);
         doBinding(this);
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        if (window.freeze && window._running > 0){
-                return false
-            }
-        return this.props.focusingMe || !propsAreEqual(nextProps, this.props, ["funcs"])
+        this.last_tick_processed = 0
     }
 
     _handleChange(event) {
-        this.props.funcs.changeNode(this.props.boxId, "name", event.target.value)
+        this.props.changeNode(this.props.boxId, "name", event.target.value)
     }
 
     _handleKeyDown(event) {
         if ((event.key == "Enter") || (event.key == "ArrowDown")) {
+            this.props.downFromTag(this.props.boxId, this.props.port_chain);
             event.preventDefault();
-            let myDataBox = this.props.funcs.getNode(this.props.boxId);
-            if (myDataBox.kind == "port") {
-                let targetBox = this.props.funcs.getNode(myDataBox.target);
-                if (targetBox.kind == "jsbox") {
-                    this.props.funcs.setFocus(targetBox.unique_id, this.props.boxId, 0);
-                }
-                else if (targetBox.showCloset) {
-                    let firstTextNodeId = targetBox.closetLine.node_list[0].unique_id;
-                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
-                }
-                else {
-                    let firstTextNodeId = targetBox.line_list[0].node_list[0].unique_id;
-                    this.props.funcs.setFocus(firstTextNodeId, this.props.boxId, 0);
-                }
-            }
-            else if (myDataBox.kind == "jsbox") {
-                this.props.funcs.setFocus(this.props.boxId, this.props.portal_root, 0);
-            }
-            else if (myDataBox.showCloset) {
-                let closet = this.props.funcs.getNode(myDataBox.closetLine)
-                let firstTextNodeId = this.props.funcs.getNode(closet.node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
-            }
-            else {
-                let the_line = this.props.funcs.getNode(myDataBox.line_list[0])
-                let firstTextNodeId = this.props.funcs.getNode(the_line.node_list[0]).unique_id;
-                this.props.funcs.setFocus(firstTextNodeId, this.props.portal_root, 0);
-            }
 
         }
         if (event.key =="]") {
             event.preventDefault();
-            if (this.props.am_in_portal) {
-                this.props.funcs.positionAfterBox(this.props.portal_root, this.props.portal_parent);
+            if (this.props.am_in_port) {
+                this.props.positionAfterBox(portChainLast(this.props.port_chain), portChainDropRight(this.props.port_chain));
             }
             else {
-                this.props.funcs.positionAfterBox(this.props.boxId, this.props.portal_root);
+                this.props.positionAfterBox(this.props.boxId, this.props.port_chain);
             }
         }
     }
@@ -484,7 +406,7 @@ class EditableTag extends React.Component {
     _onBlur(event) {
         this.props.doneEditingName(()=>{
             if (this.props.the_name == "") {
-                this.props.funcs.changeNode(this.props.boxId, "name", null);
+                this.props.changeNode(this.props.boxId, "name", null);
 
             }
         })
@@ -538,21 +460,15 @@ class EditableTag extends React.Component {
     }
 }
 
-EditableTag.propTypes = {
-    the_name: PropTypes.string,
-    funcs: PropTypes.object,
-    boxId: PropTypes.string,
-    submitRef: PropTypes.func,
-    doneEditingName: PropTypes.func,
-    focusingMe: PropTypes.bool,
-    selected: PropTypes.bool,
-    boxWidth: PropTypes.number,
-    am_sprite: PropTypes.bool,
-};
 
-EditableTag.defaultProps = {
-    am_sprite: false
-};
+function mapStateToPropsNull(state, ownProps) {
+    return ownProps;
+}
+
+let EditableTag = connect(
+    mapStateToPropsNull,
+    mapDispatchToProps
+    )(EditableTagRaw);
 
 class CloseButton extends React.Component {
     constructor (props) {
@@ -578,10 +494,6 @@ class CloseButton extends React.Component {
         )
     }
 }
-
-CloseButton.propTypes = {
-    handlClick: PropTypes.func
-};
 
 class TypeLabel extends React.Component {
     constructor (props) {
@@ -609,16 +521,6 @@ class TypeLabel extends React.Component {
     }
 }
 
-TypeLabel.propTypes = {
-    the_label: PropTypes.string,
-    clickable: PropTypes.bool,
-    clickFunc: PropTypes.func
-};
-
-TypeLabel.defaultProps = {
-    clickable: false
-};
-
 class ZoomButton extends React.Component {
     constructor (props) {
         super(props);
@@ -643,7 +545,3 @@ class ZoomButton extends React.Component {
         )
     }
 }
-
-ZoomButton.propTypes = {
-    handlClick: PropTypes.func
-};
