@@ -6,7 +6,7 @@ import {_getText, _extractValue, guid, doBinding, degreesToRadians, _convertColo
 import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColorString, defaultPenWidth} from "./shared_consts.js";
 import {setSpriteParams} from "./redux/actions/composite_actions.js";
 import {Ellipse, Rectangle, Line} from "./pixi_shapes.js";
-import {SvgRect, SvgLine, } from "./svg_shapes.js";
+import {SvgRect, SvgLine, SvgEllipse} from "./svg_shapes.js";
 import PIXI from "pixi.js";
 import {Container, Text} from "react-pixi-fiber";
 
@@ -194,7 +194,7 @@ class SpriteNode {
         }
         else {
             new_comp = (<SvgRect x={this.sparams["xPosition"]} y={this.sparams["yPosition"]} key={guid()}
-                        width={w} height={h} fill={hollow ? null : this.pcolor}
+                        width={w} height={h} fill={hollow ? "none" : this.pcolor}
                         penWidth={this.sparams["penWidth"]} penColor={this.pcolor}/>)
         }
 
@@ -206,10 +206,20 @@ class SpriteNode {
     }
 
     stampEllipse(w, h, hollow=false) {
-        let new_comp = (<Ellipse x={this.sparams.xPosition} y={this.sparams.yPosition} key={guid()}
+        let new_comp;
+        if (!this.useSvg()) {
+            new_comp = (<Ellipse x={this.sparams.xPosition} y={this.sparams.yPosition} key={guid()}
                                  width={w} height={h} fill={hollow ? null : this.pcolor}
                                  penWidth={this.sparams.penWidth} penColor={this.pcolor}
-        />);
+            />);
+        }
+        else {
+            new_comp = (<SvgEllipse x={this.sparams["xPosition"]} y={this.sparams["yPosition"]} key={guid()}
+                        width={w} height={h} fill={hollow ? "none" : this.pcolor}
+                        penWidth={this.sparams["penWidth"]} penColor={this.pcolor}/>)
+        }
+
+
         this.addComponent(new_comp)
     }
 

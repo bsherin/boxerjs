@@ -4,7 +4,7 @@ import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget,
     dataBoxToValue, boxObjectToValue, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {degreesToRadians, radiansToDegrees} from "../utility/utilities.js"
-import {setNodeDict, setGlobal, createEntry} from "../redux/actions/core_actions.js";
+import {setNodeDict, setGlobal, createEntry, changeNodePure} from "../redux/actions/core_actions.js";
 import {newErrorNode, changeBase, makeGraphicsNode} from "../redux/actions/vnd_mutators.js";
 import {collectGarbage} from "../redux/actions/composite_actions.js";
 import {guid, isKind} from "../utility/utilities.js";
@@ -131,18 +131,14 @@ function getBoxValue(boxName, startId) {
 }
 
 async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=null) {
-    let newval = window.vstore.getState().node_dict[newvalstud.vid]
-    if (!isKind(newval, "graphics")) return;
+    let newval = window.vstore.getState().node_dict[newvalstub.vid]
+    if (!newval.kind || !graphics_kinds.includes(newval.kind)) return;
     let estring;
-    if (!eval_in_place) {
-        eval_in_place = eval
-    }
-    let _my_context_name = await eval_in_place("_context_name");
     let mnode = findNamedNode(boxname, my_node_id);
     if (mnode.kind == "port") {
         mnode = window.getNodeDict()[mnode.target]
     }
-    if (!mnode || mnode.virtual || !isKind(mnode, "graphics")) {
+    if (!mnode || mnode.virtual || !newval.kind || !graphics_kinds.includes(mnode.kind)) {
         return new Promise(function (resolve, reject) {
             resolve()
         })
@@ -153,7 +149,7 @@ async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=nul
         let new_comp = <Dcomp {...comp.props}/>;
         new_drawn_components.push(new_comp)
     }
-    return await change (mnode.unique_id, "drawn_components", new_drawn_components);
+    window.store.dispatch(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components))
 }
 
 
@@ -174,11 +170,13 @@ async function makeColor(r, g, b) {
     return {vid: new_id}
 }
 
-async function snap(gbox) {
+async function snap(vstub) {
+    let gbox = window.vstore.getState().node_dict[vstub.vid]
     if (!graphics_kinds.includes(gbox.kind)) return;
-    let newgnode = makeGraphicsNode("", gbox.kind, gbox["graphics_fixed_width"], gbox["graphics_fixed_height"]);
+    let newgnode = makeGraphicsNode("", gbox.kind, gbox["graphics_fixed_width"],
+        gbox["graphics_fixed_height"],
+        gbox["drawn_components"]);
     window.vstore.dispatch(createEntry(newgnode));
-    // repairCopiedDrawnComponents(newbox, false);
     return {vid: newgnode.unique_id}
 }
 
@@ -190,8 +188,6 @@ async function doRepeat(times, statement_list) {
     }
 
 }
-
-
 
 async function turtleShape() {
     const tw = 11;

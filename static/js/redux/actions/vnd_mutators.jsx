@@ -115,12 +115,11 @@ function makeGraphicsNode(inner_text, kind, graphics_fixed_height, graphics_fixe
     let new_line_id = guid();
     window.vstore.dispatch(createTextLine("", new_line_id));
 
-    let newbox = graphicsNodeDict(newboxid, gbox.kind, [new_line_id]);
-    newbox.drawn_components = gbox.drawn_components;
-    newbox.graphics_fixed_height = gbox.graphics_fixed_height;
-    newbox.graphics_fixed_width = gbox.graphics_fixed_width;
+    let newbox = graphicsNodeDict(newboxid, kind, [new_line_id]);
+    newbox.drawn_components = drawn_components;
+    newbox.graphics_fixed_height = graphics_fixed_height;
+    newbox.graphics_fixed_width = graphics_fixed_width;
     let newgnode = new GraphicsNode(newbox)
-    window.vstore.dispatch(createEntry(newgnode))
     return newgnode
 }
 

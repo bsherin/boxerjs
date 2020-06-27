@@ -486,7 +486,7 @@ function findNamedNode(name, starting_id) {
 }
 
 // For a tell statement, we essentially start the whole thing over again
-// We wrap the the statement list in a doit box and insert it in the
+// We wrap the statement list in a doit box and insert it in the
 // hierarchy in the right location.
 function convertTell(token_list, context) {
 
@@ -494,17 +494,49 @@ function convertTell(token_list, context) {
     // the context built earlier. There's nothing special to do
     let startBox = findNamedNode(token_list[1], context.doitId);
     let box_id = startBox.unique_id;
-    let node_id, the_node;
-    if (typeof(token_list[2]) == "object") {
-        the_node = token_list[2]
-        node_id = the_node.unique_id;
+
+
+    // Sequential text tokens need to be recombined first
+    let remaining_tokens = [];
+    let running_text = null;
+    for (let token of token_list.slice(2,)) {
+        if (typeof(token) == "object") {
+            if (running_text) {
+                remaining_tokens.push(running_text)
+            }
+            running_text = null
+            remaining_tokens.push(token)
+        }
+        else {
+            if (!running_text) {
+                running_text = token
+            }
+            else {
+                running_text += " " + token
+            }
+        }
     }
-    else {
-        node_id = guid();
-        window.vstore.dispatch(newTextNode(token_list[2], node_id));
+
+    if (running_text) {
+        remaining_tokens.push(running_text)
     }
+
+
+    // Now can wrap the rest of the tokens in a doit box before inserting
+    let node_id_list = [];
+    for (let token of remaining_tokens) {
+        if (typeof(token) == "object") {
+            node_id_list.push(token.unique_id)
+        }
+        else {
+            let node_id = guid();
+            window.vstore.dispatch(newTextNode(token, node_id));
+            node_id_list.push(node_id)
+        }
+    }
+
     let the_code_line_id = guid();
-    window.vstore.dispatch(newLineNode([node_id], the_code_line_id));
+    window.vstore.dispatch(newLineNode(node_id_list, the_code_line_id));
     let the_code_line = vndict()[the_code_line_id];
     let _inserted_start_node_id = _createLocalizedFunctionCall(the_code_line, box_id, context.local_var_nodes, true);
 
