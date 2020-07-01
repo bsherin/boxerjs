@@ -1,17 +1,17 @@
 
 import {batch} from "react-redux";
-import {changeNode, changeNodeMulti} from "./core_actions.js";
+import {} from "./action_creators.js";
 import {_getParentNode, _getNthLine, _getln, _getNthNode} from "../selectors.js"
-import {cloneLineToStore, splitLine, setFocus, setLineList, splitTextNode, createCloset,
-    positionAfterBox, healLine, healStructure} from "./composite_actions.js"
+import {changeNode, cloneLineToStore, splitLine, setFocus, setLineList, splitTextNode, createCloset,
+    positionAfterBox, healLine, healStructure, setFocusInBox} from "./composite_actions.js"
 import{cloneNodeSourceTarget, cloneLineSourceTarget} from "./action_helpers.js";
-import {setGlobal, setGlobals, insertNodes, insertLines, clearClipboard, addToClipboard, setClipboardDict, removeLine, removeNode,
-    createClipboardEntry, changeClipboardNode, setClipboardList} from "./core_actions.js";
+import {setGlobal, insertNodes, insertLines, clearClipboard, addToClipboard, setClipboardDict, removeLine, removeNode,
+    createClipboardEntry, changeClipboardNode, setClipboardList} from "./action_creators.js";
 import {newLineNode, textNodeDict, lineNodeDict, dataBoxNodeDict} from "./node_creator_actions.js";
 import {guid} from "../../utility/utilities.js";
 import _ from "lodash";
 import {container_kinds} from "../../shared_consts.js";
-import {cloneNodeToStore} from "./composite_actions";
+import {cloneNodeToStore, setGlobals, changeNodeMulti} from "./composite_actions.js";
 
 export {clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, copySelected, cutSelected, selectSpan,
     deleteBoxerSelection, deletePrecedingBox}
@@ -351,25 +351,39 @@ function removeNodeList(node_list, parent_id) {
     }
 }
 
-function deleteToLineEnd(text_id, caret_pos) {
+function deleteToLineEnd(text_id, caret_pos, port_chain) {
     return (dispatch, getState) => {
         batch(() => {
             let mnode = getState().node_dict[text_id];
             let parentLine = getState().node_dict[mnode.parent];
+            let parentBoxId = parentLine.parent
+            let line_position = parentLine.position;
+            let node_position = mnode.position;
             let nodes_to_delete;
             if (caret_pos == 0) {
-                if (mnode.position == 0) {
+                if (node_position == 0) {
                     // We are at the start of the first node
                     // So delete the entire line
+                    dispatch(clearClipboard())
                     dispatch(addToClipboardFromNodeDict(mnode.parent, true));
                     if (parentLine.amCloset) {
                         dispatch(createCloset(parentLine.parent, getState().node_dict[parentLine.parent].showCloset));
                     } else {
-
                         dispatch(removeLine(parentLine.unique_id, parentLine.parent));
                     }
                     dispatch(clearSelected())
-                    dispatch(healStructure(parentLine.parent))
+                    dispatch(healStructure(parentBoxId))  // This will recreate the line
+                    if (line_position == 0) {
+                        dispatch(setFocusInBox(parentBoxId, port_chain, 0))
+                    }
+                    else if (line_position >= getState().node_dict[parentBoxId].line_list.length) {
+                        let last_line_position = getState().node_dict[parentBoxId].line_list.length - 1
+                        dispatch(setFocus(_getln(parentBoxId, last_line_position, 0, getState().node_dict), port_chain, 0))
+                    }
+                    else {
+                        dispatch(setFocus(_getln(parentBoxId, line_position, 0, getState().node_dict), port_chain, 0))
+                    }
+                    dispatch(clearSelected());
                     return
                 }
                 else {
@@ -377,6 +391,12 @@ function deleteToLineEnd(text_id, caret_pos) {
                     // So delete it and all following nodes.
                     parentLine = getState().node_dict[mnode.parent];
                     nodes_to_delete = parentLine.node_list.slice(mnode.position, );
+                    dispatch(clearClipboard());
+                    dispatch(setClipboardToNodeList(nodes_to_delete));
+                    dispatch(removeNodeList(nodes_to_delete, parentLine.unique_id));  // This does the healing
+                    dispatch(clearSelected());
+                    dispatch(setFocus(_getln(parentBoxId, line_position, node_position, getState().node_dict), port_chain, 0))
+                    return
                 }
             }
             else {
@@ -387,21 +407,20 @@ function deleteToLineEnd(text_id, caret_pos) {
                     parentLine = getState().node_dict[mnode.parent];
                 }
 
-                // Now are at the end of one text node and want to delete the rest
+                // Now are at the end of one text node and want to delete it and the rest
                 // Check that there are some nodes to delete
                 if (mnode.position == (parentLine.node_list.length - 1)) {
                     return
                 }
 
                 // Remove all following nodes
-                nodes_to_delete = parentLine.node_list.slice(mnode.position + 1,);
+                nodes_to_delete = parentLine.node_list.slice(node_position + 1,);
+                dispatch(clearClipboard())
+                dispatch(setClipboardToNodeList(nodes_to_delete));
+                dispatch(removeNodeList(nodes_to_delete, parentLine.unique_id));
+                dispatch(clearSelected());
+                dispatch(setFocus(_getln(parentBoxId, line_position, node_position, getState().node_dict), port_chain, -1))
             }
-
-            dispatch(clearClipboard())
-            dispatch(setClipboardToNodeList(nodes_to_delete));
-            dispatch(removeNodeList(nodes_to_delete, parentLine.unique_id));
-            dispatch(clearSelected());
-
         })
     }
 }
@@ -700,15 +719,18 @@ function insertClipboardBase(text_id, cursor_position, port_chain) {
                     let preceding_node = getState().node_dict[text_id];
                     if (inserted_node.kind == "text" && preceding_node.kind == "text") {
                         focus_node_id = text_id;
+                        focus_text_pos = cursor_position + inserted_node.the_text.length
                     }
                     else {
                         focus_node_id = inserted_node.unique_id
+                        focus_text_pos = -1
                     }
                 }
                 else {
                     // We are inserting multiple nodes
                     // So what we are doing only depends on the last node
                     let focus_node_id = _.last(new_node_ids);
+                    focus_text_pos = inserted_node.the_text.length
                 }
 
                 dispatch(insertNodes(new_node_ids, parent_line.unique_id, getState().node_dict[text_id].position + 1));
@@ -727,6 +749,7 @@ function insertClipboardBase(text_id, cursor_position, port_chain) {
                 // Figure out where to focus when done
                 let last_line = getState().node_dict[_.last(updated_line_list)]
                 focus_node_id = _.last(last_line.node_list)
+                focus_text_pos = -1;
 
                 // Insert nodes from the last clipboard line at the start of the second line resulting
                 // from the split
@@ -747,14 +770,14 @@ function insertClipboardBase(text_id, cursor_position, port_chain) {
             }
             dispatch(clearSelected(true));
         })
-        return Promise.resolve(focus_node_id)
+        return Promise.resolve({focus_node_id, focus_text_pos})
     }
 }
  function insertClipboard(text_id, cursor_position, port_chain) {
      return (dispatch, getState) => {
          dispatch(insertClipboardBase(text_id, cursor_position, port_chain))
-             .then((focus_node_id) => {
-                     dispatch(focusInOrAfter(focus_node_id, port_chain, -1));
+             .then((data) => {
+                     dispatch(focusInOrAfter(data.focus_node_id, port_chain, data.focus_text_pos));
             })
      }
  }

@@ -3,30 +3,32 @@ import React from "react";
 import {batch} from "react-redux";
 
 
-import {guid} from "../../utility/utilities.js"
-import { changeNodeMulti, changeNode, changeNodePure, changeSpriteParam, setNodeDict, insertNode, insertLine,
-    removeNode, setGlobal } from "./core_actions.js";
-import {_getNthNode, _getln, _getContainingGraphicsBox, _isParentBoxInPort, _getclosetn} from "../selectors.js";
-
+import { changeNodePure, changeSpriteParam, setNodeDict, insertNode, insertLine,
+    removeNode, setGlobal } from "./action_creators.js";
+import {_getNthNode, _getln, _getContainingGraphicsBox, _isParentBoxInPort} from "../selectors.js";
 import {newTextNode, newLineNode, newClosetLine, newSpriteBox, createNode,
-} from "./node_creator_actions.js"
-
-
+} from "./node_creator_actions.js";
 import {cloneNodeSourceTarget, cloneLineSourceTarget} from "./action_helpers.js";
 
-import {container_kinds} from "../../shared_consts.js";
+import {container_kinds, initial_globals} from "../../shared_consts.js";
 import {text_kinds} from "../../shared_consts.js";
-import {ADD_TO_BUFFER, addToBuffer, clearBuffer} from "./core_actions";
-import {addToPortChain, portChainLast, portChainDropRight} from "../../utility/utilities";
+import {ADD_TO_BUFFER, addToBuffer, clearBuffer, updateNodeDict} from "./action_creators";
+import {guid, addToPortChain, portChainLast, portChainDropRight} from "../../utility/utilities.js";
+import {_dehydrateComponents} from "../../utility/save_utilities";
+import _ from "lodash";
+import {postAjax} from "../../utility/communication_react";
+import {doFlash} from "../../utility/toaster";
+import {showModalReact} from "../../utility/modal_react";
 
 
-export {healLine, healStructure, splitLine, createCloset, mergeTextNodes, setLineList, renumberLines,
+export {healLine, healStructure, splitLine, createCloset, setLineList,
     toggleBoxTransparency, setPortTarget, enterPortTargetMode, setFocusInBox,
-    zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, collectGarbage,
+    setGlobals, zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, collectGarbage,
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
-    splitTextNode, splitLineAtTextPosition, setSpriteParams, changeBoxValue, changeSpriteValueBox,
-    addCompositeToBuffer, dispatchBufferedActions,
-insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, retargetPortLastFocus, setNodeSize}
+    splitTextNode, splitLineAtTextPosition, changeSpriteValueBox, addCompositeToBuffer, saveProject, saveProjectAs,
+    dispatchBufferedActions, initializeMissingGlobals, updateTextNode, changeNode, changeNodeMulti,
+insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, setNodeSize}
+
 
 
 function setln(nid, ln, nn, param_name, new_val) {
@@ -36,13 +38,45 @@ function setln(nid, ln, nn, param_name, new_val) {
     }
 }
 
-function changeBoxValue(nid, new_val, buffer=false) {
+function setGlobals(val_dict) {
     return (dispatch, getState) => {
-        let the_id = _getln(nid, 0, 0, getState().node_dict);
-        dispatch(changeNodePure(the_id, "the_text", new_val))
-        if (buffer) {
-            dispatch(addToBuffer(changeNodePure(the_id, "the_text", new_val)))
+        batch(() => {
+            for (let param in val_dict) {
+                let new_val = val_dict[param]
+                dispatch(setGlobal(param, new_val))
+            }
+        })
+    }
+}
+
+
+function changeNodeMulti(uid, valdict) {
+    return (dispatch, getState) => {
+        batch(() => {
+            for (let param in valdict) {
+                let new_val = valdict[param]
+                dispatch(changeNode(uid, param, new_val))
+            }
+        })
+    }
+}
+
+
+function changeNode(uid, param_name, new_val) {
+    return (dispatch, getState) => {
+        if (param_name == "the_text" && getState().node_dict[uid].kind == "text") {
+            dispatch(updateTextNode(uid, new_val, null))
         }
+        else {
+            dispatch(changeNodePure(uid, param_name, new_val));
+        }
+    }
+}
+
+function updateTextNode(nid, new_val, display_text=null) {
+    return (dispatch, getSatate) => {
+        dispatch(changeNodePure(nid, "the_text", new_val));
+        dispatch(changeNodePure(nid, "display_text", display_text));
     }
 }
 
@@ -50,7 +84,7 @@ function changeBoxValue(nid, new_val, buffer=false) {
 function mergeTextNodes(n1, n2, line_id) {
     return (dispatch, getState) => {
         batch(() => {
-            dispatch(changeNode(_getNthNode(line_id, n1, getState()["node_dict"]).unique_id,
+            dispatch(changeNodePure(_getNthNode(line_id, n1, getState()["node_dict"]).unique_id,
                 "the_text",
                 _getNthNode(line_id, n1, getState()["node_dict"]).the_text + _getNthNode(line_id, n2, getState()["node_dict"]).the_text));
             dispatch(removeNode(_getNthNode(line_id, n2, getState()["node_dict"]).unique_id, line_id))
@@ -72,12 +106,12 @@ function renumberLines(node_id) {
     }
 }
 
-function addCompositeToBuffer(func, arg) {
+function addCompositeToBuffer(func, ...args) {
     return (dispatch, getState) => {
         let act = {
             composite: true,
             func: func,
-            arg: _.cloneDeep(arg)
+            args: _.cloneDeep(args)
         }
         dispatch({
             type: ADD_TO_BUFFER,
@@ -136,42 +170,32 @@ function collectGarbage() {
 
 }
 
-function clearVirtual() {
-    return (dispatch, getState) => {
-        batch(() =>{
-            let ndict = getState().node_dict;
-            for (let nd_id in ndict) {
-                if (ndict[nd_id].virtual) {
-                    dispatch(changeNode(nd_id, "virtual", false))
-                }
-            }
-        })
-    }
-}
 
 function healStructure(start_node_id) {
 
     return (dispatch, getState) => {
 
         batch(() => {
-            // if (node_dict[start_node_id].kind.includes("turtle")) {
-            //     let new_turtle_box_id;
-            //     [new_turtle_box_id, target_dict] = this._newTurtleBox();
-            //     target_dict = this._replaceNodeAndReturn(new_turtle_box_id, target_dict[start_node_id].parent,
-            //         target_dict[start_node_id].position, target_dict)
-            // }
-            // target_dict = this._addMissingParams(start_node_id, target_dict);
             let node_dict = getState()["node_dict"];
             let start_node = node_dict[start_node_id];
             if (start_node.kind == "line") {
                 dispatch(healLine(start_node_id, true))
             }
             else if (container_kinds.includes(start_node.kind)) {
-                for (let lin_id of start_node.line_list) {
-                    // noinspection JSPrimitiveTypeWrapperUsage
+                if (start_node.line_list.length == 0) {
+                    let lin_id = guid();
+                    dispatch(newLineNode([], lin_id));
                     dispatch(changeNode(lin_id, "parent", start_node_id));
-                    dispatch(healStructure(lin_id))
+                    dispatch(setLineList(start_node.unique_id, [lin_id]));
+                    dispatch(healStructure(lin_id));
                 }
+                else {
+                    for (let lin_id of start_node.line_list) {
+                        dispatch(changeNode(lin_id, "parent", start_node_id));
+                        dispatch(healStructure(lin_id))
+                    }
+                }
+
                 dispatch(renumberLines(start_node_id));
                 node_dict = getState()["node_dict"];
                 if (node_dict[start_node_id].closetLine) {
@@ -267,9 +291,11 @@ function setLineList(uid, new_line_list) {
 
 function cloneNodeToStore(source_node_id, source_dict, target_node_id, heal=true) {
     return (dispatch, getState) => {
-        let new_target_dict = cloneNodeSourceTarget(source_node_id, source_dict, target_node_id, getState().node_dict)
+        let temp_dict = {};
+        temp_dict[target_node_id] = _.cloneDeep(getState().node_dict[target_node_id]);
+        let new_temp_dict = cloneNodeSourceTarget(source_node_id, source_dict, target_node_id, temp_dict)
         batch(()=>{
-            dispatch(setNodeDict(new_target_dict))
+            dispatch(updateNodeDict(new_temp_dict))
             if (heal) {
                 dispatch(healStructure(target_node_id))
             }
@@ -281,16 +307,18 @@ function cloneNodeToStore(source_node_id, source_dict, target_node_id, heal=true
 
 function cloneLineToStore(source_line_id, source_dict, target_line_id, heal = true, buffer=false) {
     return (dispatch, getState) => {
-        let new_target_dict = cloneLineSourceTarget(source_line_id, source_dict, target_line_id, getState().node_dict);
+        let temp_dict = {};
+        temp_dict[target_line_id] = _.cloneDeep(getState().node_dict[target_line_id]);
+        let new_temp_dict = cloneLineSourceTarget(source_line_id, source_dict, target_line_id, temp_dict);
         batch(() => {
-            dispatch(setNodeDict(new_target_dict));
+            dispatch(updateNodeDict(new_temp_dict));
             if (buffer) {
-                dispatch(addToBuffer(setNodeDict(new_target_dict)))
+                dispatch(addToBuffer(updateNodeDict(new_temp_dict)))
             }
             if (heal) {
                 dispatch(healLine(target_line_id));
                 if (buffer) {
-                    dispatch(addCompositeToBuffer(healLine, argument))
+                    dispatch(addCompositeToBuffer(healLine, target_line_id))
                 }
             }
         });
@@ -307,7 +335,7 @@ function splitTextNode(text_id, cursor_position) {
             let pos = mnode.position;
             let text_split = [mnode.the_text.slice(0, cursor_position), mnode.the_text.slice(cursor_position,)];
             dispatch(newTextNode(text_split[1], new_node_id));
-            dispatch(changeNode(text_id, "the_text", text_split[0]));
+            dispatch(changeNodePure(text_id, "the_text", text_split[0]));
             dispatch(insertNode(new_node_id, parent, pos + 1));
             dispatch(changeNode(new_node_id, "parent", parent))
         })
@@ -434,6 +462,9 @@ function retargetPortLastFocus() {
 
 function setFocus(focus_node_id, port_chain, pos) {
     return (dispatch, getState) => {
+        if (pos == -1) {
+            pos = getState().node_dict[focus_node_id].the_text.length
+        }
         dispatch(changeNode(focus_node_id, "setTextFocus", [port_chain, pos]))
     }
 }
@@ -565,6 +596,19 @@ function downFromTag(boxId, port_chain) {
     }
 }
 
+// This is for updating legacy saves when new globals are introduced
+function initializeMissingGlobals() {
+    return (dispatch, getState) => {
+        batch(() => {
+            for (let k in initial_globals) {
+                if (!getState().state_globals.hasOwnProperty(k)){
+                    dispatch(setGlobal(k, initial_globals[k]))
+                }
+            }
+        })
+    }
+
+}
 
 function zoomBox(uid) {
     return (dispatch, getState) => {
@@ -728,31 +772,12 @@ function changeSpriteValueBox(value_parent_id, new_val) {
     }
 }
 
-function setSpriteParams(uid, pdict, buffer=true) {
-    return (dispatch, getState) => {
-        batch(() => {
-            let mnode = getState().node_dict[uid];
-            if (mnode) {
-                for (let sparam in pdict) {
-                    dispatch(changeSpriteParam(uid, sparam, pdict[sparam]));
-                    if (buffer)(
-                        dispatch(addToBuffer(changeSpriteParam(uid, sparam, pdict[sparam])))
-                    )
-                    dispatch(changeBoxValue(mnode.param_box_ids[sparam], String(pdict[sparam])), buffer)
-                }
-            }
-
-        })
-        return Promise.resolve()
-    }
-}
-
 function dispatchList(action_list) {
     return (dispatch, getState) => {
         batch(() => {
             for (let action of action_list) {
                 if (action.composite) {
-                    dispatch(action.func(action.arg))
+                    dispatch(action.func(...action.args))
                 }
                 else {
                     dispatch(action)
@@ -769,5 +794,78 @@ function dispatchBufferedActions() {
         dispatch(clearBuffer())
     }
 }
+
+function saveProject() {
+    return (dispatch, getState) => {
+        if (window.world_name == "") {
+            dispatch(saveProjectAs())
+            return
+        }
+        dispatch(collectGarbage())
+        let new_state = _.cloneDeep(getState());
+        _dehydrateComponents(new_state.node_dict);
+
+        const result_dict = {
+            project_name: window.world_name,
+            world_state: new_state
+        };
+        postAjax("update_project", result_dict, updateSuccess);
+
+        function updateSuccess(data) {
+            if (data.success) {
+                data["alert_type"] = "alert-success";
+                data.timeout = 2000;
+            }
+            else {
+                data["alert_type"] = "alert-warning";
+            }
+            doFlash(data)
+        }
+    }
+}
+
+function saveProjectAs() {
+    return (dispatch, getState) => {
+        postAjax("get_project_names", {}, function (data) {
+            let checkboxes;
+            showModalReact("Save Project As", "New Project Name", CreateNewProject,
+                "NewProject", data["project_names"], null, doCancel)
+        });
+
+        function doCancel() {
+        }
+
+        function CreateNewProject(new_name) {
+            //let console_node = cleanse_bokeh(document.getElementById("console"));
+            dispatch(collectGarbage())
+            let new_state = _.cloneDeep(getState());
+            _dehydrateComponents(new_state.node_dict);
+
+            const result_dict = {
+                "project_name": new_name,
+                "world_state": new_state
+            };
+
+            postAjax("save_new_project", result_dict, save_as_success);
+
+            function save_as_success(data_object) {
+                if (data_object["success"]) {
+                    window.world_name = new_name;
+                    document.title = new_name;
+                    data_object.alert_type = "alert-success";
+                    data_object.timeout = 2000;
+                    // postWithCallback("host", "refresh_project_selector_list", {'user_id': window.user_id});
+                    doFlash(data_object)
+                } else {
+                    data_object["message"] = "Saving didn't work";
+                    data_object["alert-type"] = "alert-warning";
+                    doFlash(data_object)
+                }
+            }
+        }
+    }
+}
+
+
 
 

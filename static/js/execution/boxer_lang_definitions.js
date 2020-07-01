@@ -4,7 +4,7 @@ export {boxer_statements, operators, isOperator, isBoxerStatement}
 let boxer_statements = {
     forward: {
         args: [
-            ["steps", "number"]
+            ["steps", "standard"]
         ],
         converter: (arglist) => {
             return `await forward(current_turtle_id, ${arglist[0]})`
@@ -12,7 +12,7 @@ let boxer_statements = {
     },
     back: {
         args: [
-            ["steps", "number"]
+            ["steps", "standard"]
         ],
         converter: (arglist) => {
             return `await back(current_turtle_id, ${arglist[0]})`
@@ -20,7 +20,7 @@ let boxer_statements = {
     },
     right: {
         args: [
-            ["angle", "number"]
+            ["angle", "standard"]
         ],
         converter: (arglist) => {
             return `await right(current_turtle_id, ${arglist[0]})`
@@ -28,7 +28,7 @@ let boxer_statements = {
     },
     left: {
         args: [
-            ["angle", "number"]
+            ["angle", "standard"]
         ],
         converter: (arglist) => {
             return `await left(current_turtle_id, ${arglist[0]})`
@@ -60,8 +60,8 @@ let boxer_statements = {
     },
     setxy: {
         args: [
-            ["xcoord", "number"],
-            ["ycoord", "number"]
+            ["xcoord", "standard"],
+            ["ycoord", "standard"]
         ],
         converter: (arglist) => {
             return `await setxy(current_turtle_id, ${arglist[0]}, ${arglist[1]})`
@@ -69,7 +69,7 @@ let boxer_statements = {
     },
     setheading: {
         args: [
-            ["angle", "number"]
+            ["angle", "standard"]
         ],
         converter: (arglist) => {
             return `await setheading(${arglist[0]}, my_node_id)`
@@ -89,7 +89,7 @@ let boxer_statements = {
     },
     "set-pen-width": {
         args:[
-            ["width", "number"]
+            ["width", "standard"]
         ],
         converter: (arglist) => {
             return `await setPenWidth(current_turtle_id, ${arglist[0]})`
@@ -98,7 +98,7 @@ let boxer_statements = {
 
     "set-pen-color": {
         args:[
-            ["the_color", "boxorstring"]
+            ["the_color", "standard"]
         ],
         converter: (arglist) => {
             return `await setPenColor(current_turtle_id, ${arglist[0]})`
@@ -107,7 +107,7 @@ let boxer_statements = {
 
     "set-background-color": {
         args:[
-            ["the_color", "boxorstring"]
+            ["the_color", "standard"]
         ],
         converter: (arglist) => {
             return `await setBackgroundColor(current_turtle_id, ${arglist[0]})`
@@ -116,8 +116,8 @@ let boxer_statements = {
 
     "stamp-rectangle": {
         args:[
-            ["width", "number"],
-            ["height", "number"]
+            ["width", "standard"],
+            ["height", "standard"]
         ],
         converter: (arglist) => {
             return `await stampRectangle(current_turtle_id, ${arglist[0]},${arglist[1]})`
@@ -126,8 +126,8 @@ let boxer_statements = {
 
     "stamp-hollow-rectangle": {
         args:[
-            ["width", "number"],
-            ["height", "number"]
+            ["width", "standard"],
+            ["height", "standard"]
         ],
         converter: (arglist) => {
             return `await stampHollowRectangle(current_turtle_id, ${arglist[0]},${arglist[1]})`
@@ -141,8 +141,8 @@ let boxer_statements = {
     },
     "stamp-ellipse": {
         args:[
-            ["width", "number"],
-            ["height", "number"]
+            ["width", "standard"],
+            ["height", "standard"]
         ],
         converter: (arglist) => {
             return `await stampEllipse(current_turtle_id, ${arglist[0]},${arglist[1]})`
@@ -151,8 +151,8 @@ let boxer_statements = {
 
     "stamp-hollow-ellipse": {
         args:[
-            ["width", "number"],
-            ["height", "number"]
+            ["width", "standard"],
+            ["height", "standard"]
         ],
         converter: (arglist) => {
             return `await stampHollowEllipse(current_turtle_id, ${arglist[0]},${arglist[1]})`
@@ -160,7 +160,7 @@ let boxer_statements = {
     },
     "stamp-circle": {
         args:[
-            ["radius", "number"]
+            ["radius", "standard"]
         ],
         converter: (arglist) => {
             return `await stampCircle(current_turtle_id, ${arglist[0]})`
@@ -169,7 +169,7 @@ let boxer_statements = {
 
     "stamp-hollow-circle": {
         args:[
-            ["radius", "number"],
+            ["radius", "standard"],
         ],
         converter: (arglist) => {
             return `await stampHollowCircle(current_turtle_id, ${arglist[0]})`
@@ -178,7 +178,7 @@ let boxer_statements = {
 
     "set-graphics-mode": {
         args:[
-            ["the_text", "text"]
+            ["the_text", "standard"]
         ],
         converter: (arglist) => {
             return `await setGraphicsMode(current_turtle_id, ${arglist[0]})`
@@ -187,7 +187,7 @@ let boxer_statements = {
 
     type: {
         args:[
-            ["the_text", "text"],
+            ["the_text", "standard"],
         ],
         converter: (arglist) => {
             return `await type(current_turtle_id, ${arglist[0]})`
@@ -196,7 +196,7 @@ let boxer_statements = {
 
     "set-type-font": {
         args:[
-            ["font_string", "text"],
+            ["font_string", "standard"],
         ],
         converter: (arglist) => {
             return `await setTypeFont(current_turtle_id, ${arglist[0]})`
@@ -205,7 +205,7 @@ let boxer_statements = {
 
     "set-sprite-size": {
         args:[
-            ["the_size", "number"],
+            ["the_size", "standard"],
         ],
         converter: (arglist) => {
             return `await setSpriteSize(current_turtle_id, ${arglist[0]})`
@@ -214,9 +214,9 @@ let boxer_statements = {
 
     "make-color": {
         args:[
-            ["red", "number"],
-            ["green", "number"],
-            ["blue", "number"]
+            ["red", "standard"],
+            ["green", "standard"],
+            ["blue", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -226,16 +226,25 @@ let boxer_statements = {
 
     "set-tick-interval": {
         args: [
-            ["interval", "number"],
+            ["interval", "standard"],
         ],
         converter: (arglist) => {
             return `await setTickInterval(${arglist[0]})`
         }
     },
 
+    "set-printing-precision": {
+        args: [
+            ["interval", "standard"],
+        ],
+        converter: (arglist) => {
+            return `await setPrintingPrecision(${arglist[0]})`
+        }
+    },
+
     snap: {
         args:[
-            ["gbox", "graphics"]
+            ["gbox", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -318,7 +327,7 @@ let boxer_statements = {
     },
     repeat: {
         args: [
-            ["repeats", "number"],
+            ["repeats", "standard"],
             ["actions", "statement_list"]
         ],
         converter: (arglist) => {
@@ -333,8 +342,8 @@ let boxer_statements = {
     },
     change: {
         args: [
-            ["boxname", "raw_string"],
-            ["newval", "expression"]
+            ["boxname", "port_to"],
+            ["newval", "standard"]
         ],
         converter: (arglist) => {
             return `await change("${arglist[0]}", ${arglist[1]}, my_node_id)`
@@ -343,8 +352,8 @@ let boxer_statements = {
 
     "change-graphics": {
         args: [
-            ["boxname", "raw_string"],
-            ["newval", "expression"]
+            ["boxname", "port_to"],
+            ["newval", "standard"]
         ],
         converter: (arglist) => {
             return `await changeGraphics("${arglist[0]}", ${arglist[1]}, my_node_id)`
@@ -353,16 +362,16 @@ let boxer_statements = {
 
     setshape: {
         args: [
-            ["newval", "expression"]
+            ["newval", "standard"]
         ],
         converter: (arglist) => {
-            return `await changeGraphics("shape", ${arglist[0]}, my_node_id)`
+            return `await changeGraphicsByName("shape", ${arglist[0]}, my_node_id)`
         }
     },
 
     setposition: {
         args: [
-            ["pos", "expression"]
+            ["pos", "standard"]
         ],
         converter: (arglist) => {
             return `await setPosition(current_turtle_id, ${arglist[0]})`
@@ -387,7 +396,7 @@ let boxer_statements = {
 
     if: {
         args: [
-            ["condition", "expression"],
+            ["condition", "standard"],
             ["actions", "statement_list"],
             ["more-actions", "statement_list", "optional"]
         ],
@@ -414,7 +423,7 @@ let boxer_statements = {
     },
     when: {
         args: [
-            ["condition", "expression"],
+            ["condition", "standard"],
             ["actions", "statement_list"]
         ],
         converter: (arglist) => {
@@ -428,7 +437,7 @@ let boxer_statements = {
 
     sin:  {
         args:[
-            ["angle", "number"],
+            ["angle", "standard"],
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -438,8 +447,8 @@ let boxer_statements = {
 
     asin:  {
         args:[
-            ["x", "number"],
-            ["y", "number"]
+            ["x", "standard"],
+            ["y", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -449,7 +458,7 @@ let boxer_statements = {
 
     cos:  {
         args:[
-            ["angle", "number"],
+            ["angle", "standard"],
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -459,8 +468,8 @@ let boxer_statements = {
 
     acos:  {
         args:[
-            ["x", "number"],
-            ["y", "number"]
+            ["x", "standard"],
+            ["y", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -471,7 +480,7 @@ let boxer_statements = {
 
     tan:  {
         args:[
-            ["angle", "number"],
+            ["angle", "standard"],
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -481,8 +490,8 @@ let boxer_statements = {
 
     atan:  {
         args:[
-            ["x", "number"],
-            ["y", "number"]
+            ["x", "standard"],
+            ["y", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {
@@ -491,7 +500,7 @@ let boxer_statements = {
     },
     sqrt:  {
         args:[
-            ["x", "number"]
+            ["x", "standard"]
         ],
         allow_return: true,
         converter: (arglist) => {

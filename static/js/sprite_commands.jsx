@@ -1,16 +1,14 @@
 import React from "react";
 
-import {graphics_kinds, sprite_params} from "./shared_consts.js";
 import {_getText, _extractValue, guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
 
 import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColorString, defaultPenWidth} from "./shared_consts.js";
-import {setSpriteParams} from "./redux/actions/composite_actions.js";
+import {setSpriteParams} from "./redux/actions/vnd_mutators.js";
 import {Ellipse, Rectangle, Line} from "./pixi_shapes.js";
 import {SvgRect, SvgLine, SvgEllipse} from "./svg_shapes.js";
 import PIXI from "pixi.js";
 import {Container, Text} from "react-pixi-fiber";
 
-import {_getln} from "./redux/selectors.js";
 import {_getContainingGraphicsBox} from "./redux/selectors";
 
 export {SpriteNode}

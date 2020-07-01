@@ -104,69 +104,11 @@ class ProjectMenuRaw extends React.Component {
         doBinding(this)
     }
 
-    _saveProjectAs() {
-        let self = this;
-        postAjax("get_project_names", {}, function (data) {
-            let checkboxes;
-            showModalReact("Save Project As", "New Project Name", CreateNewProject,
-                      "NewProject", data["project_names"], null, doCancel)
-        });
-
-        function doCancel() {
-        }
-        function CreateNewProject (new_name) {
-            //let console_node = cleanse_bokeh(document.getElementById("console"));
-            const result_dict = {
-                "project_name": new_name,
-                "world_state": self.props.getStateForSave()
-            };
-
-            postAjax("save_new_project", result_dict, save_as_success);
-
-            function save_as_success(data_object) {
-                if (data_object["success"]) {
-                    window.world_name = new_name;
-                    document.title = new_name;
-                    data_object.alert_type = "alert-success";
-                    data_object.timeout = 2000;
-                    // postWithCallback("host", "refresh_project_selector_list", {'user_id': window.user_id});
-                    doFlash(data_object)
-                }
-                else {
-                    data_object["message"] = "Saving didn't work";
-                    data_object["alert-type"] = "alert-warning";
-                    doFlash(data_object)
-                }
-            }
-        }
-    }
-
-    _saveProject () {
-        // let console_node = cleanse_bokeh(document.getElementById("console"));
-        let self = this;
-        const result_dict = {
-            project_name: window.world_name,
-            world_state: self.props.getStateForSave()
-        };
-        postAjax("update_project", result_dict, updateSuccess);
-
-        function updateSuccess(data) {
-            if (data.success) {
-                data["alert_type"] = "alert-success";
-                data.timeout = 2000;
-            }
-            else {
-                data["alert_type"] = "alert-warning";
-            }
-            doFlash(data)
-        }
-    }
-
 
     get option_dict () {
         return {
-            "Save As...": this._saveProjectAs,
-            "Save": this._saveProject
+            "Save As...": this.props.saveProjectAs,
+            "Save": this.props.saveProject
         }
     }
 
@@ -177,6 +119,14 @@ class ProjectMenuRaw extends React.Component {
         }
     }
 
+    get label_dict() {
+        return {
+            "Save As...": "ctrl+s",
+            "Save": "ctrl+s",
+        }
+
+    }
+
     render () {
         return (
             <MenuComponent menu_name="Project"
@@ -184,6 +134,7 @@ class ProjectMenuRaw extends React.Component {
                            icon_dict={this.icon_dict}
                            disabled_items={this.props.disabled_items}
                            disable_all={false}
+                           label_dict={this.label_dict}
                            hidden_items={this.props.hidden_items}
             />
         )

@@ -1,9 +1,11 @@
 
 import update from "immutability-helper";
 import {applyMiddleware, combineReducers, createStore} from 'redux';
+
+import {initial_globals} from "../shared_consts.js";
 import {SET_GLOBAL, CREATE_ENTRY, CHANGE_NODE, SET_NODE_DICT, INSERT_NODE, INSERT_LINE, INSERT_LINES, REPLACE_NODE, REPLACE_LINE,
     INSERT_NODES, REMOVE_NODE, REMOVE_LINE, STORE_FOCUS, CLEAR_CLIPBOARD, ADD_TO_CLIPBOARD, SET_CLIPBOARD_DICT, CHANGE_SPRITE_PARAM,
-    CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST, CHANGE_CLIPBOARD_NODE, CLEAR_BUFFER, ADD_TO_BUFFER, ADD_COMPOSITE_TO_BUFFER} from "./actions/core_actions.js"
+    CREATE_CLIPBOARD_ENTRY, SET_CLIPBOARD_LIST, CHANGE_CLIPBOARD_NODE, CLEAR_BUFFER, ADD_TO_BUFFER, UPDATE_NODE_DICT} from "./actions/action_creators.js"
 import thunk from "redux-thunk";
 
 export {rootReducer}
@@ -29,6 +31,8 @@ function node_dict(state={}, action) {
                 {[action.line_id]: {node_list: {$splice: [[pos, 0, action.new_node_id]]}}})
         case SET_NODE_DICT:
             return action.new_node_dict
+        case UPDATE_NODE_DICT:
+            return Object.assign(state, action.update_dict)
         case INSERT_NODES:
             if (action.position == -1) {
                 pos = state[action.line_id].node_list.length
@@ -73,17 +77,6 @@ function node_dict(state={}, action) {
         default:
           return state
       }
-}
-
-
-const initial_globals = {
-    executing: false,
-    zoomed_node_id: "world",
-    boxer_selected: false,
-    select_parent: null,
-    select_range: null,
-    innerWidth: window.innerWidth,
-    innerHeight: window.innerHeight
 }
 
 function state_globals(state=initial_globals, action) {

@@ -1,6 +1,6 @@
 import {doBinding} from "./utility/utilities.js";
-import {changeNode, addToBuffer, changeNodePure} from "./redux/actions/core_actions.js";
-import {addGraphicsComponent} from "./redux/actions/composite_actions.js";
+import {addToBuffer, changeNodePure} from "./redux/actions/action_creators.js";
+import {addGraphicsComponent, changeNode} from "./redux/actions/composite_actions.js";
 
 export {GraphicsNode}
 
@@ -14,7 +14,7 @@ class GraphicsNode {
     }
     clearComponents(callback=null, buffer=true) {
 
-        window.vstore.dispatch(changeNode(this.unique_id, "drawn_components", []));
+        window.vstore.dispatch(changeNodePure(this.unique_id, "drawn_components", []));
         if (buffer) {
             window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "drawn_components", [])));
         }
@@ -23,7 +23,7 @@ class GraphicsNode {
     }
 
     setWrap(wrap, buffer=true) {
-        window.vstore.dispatch(changeNode(this.unique_id, "do_wrap", wrap))
+        window.vstore.dispatch(changeNodePure(this.unique_id, "do_wrap", wrap))
         if (buffer) {
             window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "do_wrap", wrap)))
         }
@@ -31,7 +31,7 @@ class GraphicsNode {
 
 
     setBgColor(color, buffer=true) {
-        window.vstore.dispatch(changeNode(this.unique_id, "bgColor", color));
+        window.vstore.dispatch(changeNodePure(this.unique_id, "bgColor", color));
         if (buffer) {
             window.vstore.dispatch(addToBuffer(changeNodePure(this.unique_id, "bgColor", color)));
         }

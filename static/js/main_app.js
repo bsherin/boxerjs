@@ -1,6 +1,5 @@
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
 
-import "./third_party/wdyr.js";
+// import "./third_party/wdyr.js";
 
 import React from "react";
 import * as ReactDOM from 'react-dom';
@@ -18,8 +17,7 @@ import { rootReducer } from './redux/reducers.js';
 import { mapDispatchToProps } from "./redux/actions/dispatch_mapper.js";
 
 import { newDataBoxNode } from "./redux/actions/node_creator_actions.js";
-import { healStructure, collectGarbage } from "./redux/actions/composite_actions.js";
-import { changeNodeMulti } from "./redux/actions/core_actions.js";
+import { healStructure, collectGarbage, changeNodeMulti } from "./redux/actions/composite_actions.js";
 
 import { doBinding, guid } from "./utility/utilities.js";
 import { loader, GenericNode } from "./nodes.js";
@@ -29,18 +27,12 @@ import { postAjax } from "./utility/communication_react.js";
 
 import { BoxerSocket } from "./utility/boxer_socket.js";
 import { container_kinds } from "./shared_consts.js";
-import { shape_classes } from "./pixi_shapes.js";
-import { svg_shape_classes } from "./svg_shapes.js";
+import { _rehydrateComponents, convertLegacySave } from "./utility/save_utilities";
 
 import { SpriteNode } from "./sprite_commands.js";
 import { GraphicsNode } from "./graphics_box_commands.js";
-import { _getContainingGraphicsBox, makeSelectAllStateGlobals } from "./redux/selectors.js";
-
-const node_classes = {
-    "sprite": SpriteNode,
-    "graphics": GraphicsNode,
-    "svggraphics": GraphicsNode
-};
+import { makeSelectAllStateGlobals } from "./redux/selectors.js";
+import { initializeMissingGlobals } from "./redux/actions/composite_actions";
 
 window.freeze = false;
 
@@ -78,7 +70,7 @@ function _main_main() {
                 Provider,
                 { store: store },
                 React.createElement(MainAppPlus, null),
-                "}/>"
+                '}/>'
             ), domContainer);
         });
     } else {
@@ -95,6 +87,7 @@ function _main_main() {
             store = createStore(rootReducer, world_state, applyMiddleware(thunk));
             store.dispatch(healStructure("world"));
             store.dispatch(collectGarbage());
+            store.dispatch(initializeMissingGlobals());
             window.store = store;
             loader.load(() => {
                 ReactDOM.render(React.createElement(
@@ -103,90 +96,6 @@ function _main_main() {
                     React.createElement(MainAppPlus, null)
                 ), domContainer);
             });
-        }
-    }
-}
-
-function convertLegacySave(base_node) {
-    base_node.unique_id = "world";
-
-    return convertNode(base_node, {});
-
-    function convertNode(the_node, ndict) {
-        if (container_kinds.includes(the_node.kind)) {
-            let llist = [];
-            for (let line of the_node.line_list) {
-                llist.push(line.unique_id);
-                ndict = convertNode(line, ndict);
-            }
-            the_node.line_list = llist;
-            if (the_node.closetLine) {
-                let saved_id = the_node.closetLine.unique_id;
-                ndict = convertNode(the_node.closetLine, ndict);
-                the_node.closetLine = saved_id;
-            }
-        } else if (the_node.kind == "line") {
-            let nlist = [];
-            for (let nd of the_node.node_list) {
-                nlist.push(nd.unique_id);
-                ndict = convertNode(nd, ndict);
-            }
-            the_node.node_list = nlist;
-        }
-        ndict[the_node.unique_id] = the_node;
-        return ndict;
-    }
-}
-
-function _rehydrateComponents(ndict) {
-    for (let nd_id in ndict) {
-        let nd = ndict[nd_id];
-        if (node_classes.hasOwnProperty(nd.kind)) {
-            ndict[nd_id] = new node_classes[nd.kind](nd);
-            nd = ndict[nd_id];
-        }
-        if (nd.kind == "graphics") {
-            nd["drawn_components"] = [];
-            if (nd.hasOwnProperty("component_specs")) {
-                for (let comp of nd.component_specs) {
-                    let Dcomp = shape_classes[comp.type];
-                    let new_comp = React.createElement(Dcomp, comp.props);
-                    nd.drawn_components.push(new_comp);
-                }
-                nd.component_specs = [];
-            }
-        } else if (nd.kind == "svggraphics") {
-            nd["drawn_components"] = [];
-            if (nd.hasOwnProperty("component_specs")) {
-                for (let comp of nd.component_specs) {
-                    let Dcomp = svg_shape_classes[comp.type];
-                    let new_comp = React.createElement(Dcomp, comp.props);
-                    nd.drawn_components.push(new_comp);
-                }
-                nd.component_specs = [];
-            }
-        } else if (nd.kind == "sprite") {
-            if (!nd.hasOwnProperty("sparams")) {
-                nd.sparams = {};
-            } else {
-                nd.sparams["shape_components"] = [];
-                let cgb = _getContainingGraphicsBox(nd.unique_id, ndict);
-                let use_svg = cgb && cgb.kind == "svggraphics";
-                if (nd.hasOwnProperty("component_specs")) {
-                    for (let comp of nd.component_specs) {
-                        let Dcomp;
-                        if (use_svg) {
-                            Dcomp = svg_shape_classes[comp.type];
-                        } else {
-                            Dcomp = shape_classes[comp.type];
-                        }
-
-                        let new_comp = React.createElement(Dcomp, comp.props);
-                        nd.sparams.shape_components.push(new_comp);
-                    }
-                    nd.component_specs = [];
-                }
-            }
         }
     }
 }
@@ -220,49 +129,6 @@ class MainApp extends React.Component {
             this.props.setGlobal("innerWidth", window.innerWidth);
             this.props.setGlobal("innerHeight", window.innerHeight);
         });
-    }
-
-    _getStateForSave() {
-        window.store.dispatch(collectGarbage());
-        let new_state = _.cloneDeep(window.store.getState());
-        this._dehydrateComponents(new_state.node_dict);
-        return new_state;
-    }
-
-    _dehydrateComponents(ndict) {
-        for (let nd_id in ndict) {
-            let nd = ndict[nd_id];
-            if (nd.kind == "graphics") {
-                nd.component_specs = [];
-                for (let comp of nd.drawn_components) {
-                    let new_spec = { type: comp.type, props: comp.props };
-                    nd.component_specs.push(new_spec);
-                }
-                nd.drawn_components = [];
-            } else if (nd.kind == "svggraphics") {
-                nd.component_specs = [];
-                for (let comp of nd.drawn_components) {
-                    let new_spec = { type: comp.type.type_name, props: comp.props };
-                    nd.component_specs.push(new_spec);
-                }
-                nd.drawn_components = [];
-            } else if (nd.kind == "sprite") {
-                let cgb = _getContainingGraphicsBox(nd.unique_id, ndict);
-                let use_svg = cgb && cgb.kind == "svggraphics";
-                nd.component_specs = [];
-                for (let comp of nd.sparams.shape_components) {
-                    let new_spec;
-                    if (use_svg) {
-                        new_spec = { type: comp.type.type_name, props: comp.props };
-                    } else {
-                        new_spec = { type: comp.type, props: comp.props };
-                    }
-
-                    nd.component_specs.push(new_spec);
-                }
-                nd.sparams.shape_components = [];
-            }
-        }
     }
 
     _compareNode(n1, n2, fields) {
@@ -333,9 +199,7 @@ class MainApp extends React.Component {
         let menus = React.createElement(
             React.Fragment,
             null,
-            React.createElement(ProjectMenu, _extends({}, this.props.statusFuncs, {
-                getStateForSave: this._getStateForSave
-            })),
+            React.createElement(ProjectMenu, this.props.statusFuncs),
             React.createElement(EditMenu, this.funcs),
             React.createElement(MakeMenu, this.funcs),
             React.createElement(BoxMenu, this.funcs),
@@ -352,7 +216,7 @@ class MainApp extends React.Component {
             React.createElement(GenericNode, { unique_id: this.props.state_globals.zoomed_node_id,
                 am_in_port: false,
                 from_port: false,
-                port_chain: "root"
+                port_chain: 'root'
             })
         );
     }

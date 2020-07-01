@@ -1,6 +1,7 @@
 import React from "react";
 
-import {createEntry, changeNode, changeNodePure, changeNodeMulti} from "./core_actions.js"
+import {createEntry, changeNodePure} from "./action_creators.js"
+import {changeNode, changeNodeMulti} from "./composite_actions.js"
 import {guid} from "../../utility/utilities.js"
 import {batch} from "react-redux";
 import {
@@ -30,6 +31,7 @@ function textNodeDict(the_text, uid) {
         the_text: the_text,
         parent: null,
         setTextFocus: null,
+        display_text: null
     }
 }
 
