@@ -8,12 +8,12 @@ import _ from "lodash";
 import {connect} from "react-redux";
 
 import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg,
-    portChainToArray, addToPortChain} from "./utility/utilities.js";
+    portChainToArray, addToPortChain, roundToPlaces} from "./utility/utilities.js";
 import {ReactCodemirror} from "./react-codemirror.js";
 
 import {_getln, makeSelectMyPropsAndGlobals, makeSelectMyProps, makeSelectColorProps, makeSelectMyPropsAndTextGlobals} from "./redux/selectors.js"
 
-import {doExecution, _mouseClickOnSprite, _mouseClickOnGraphics} from "./execution/eval_space.js";
+import {doExecution} from "./execution/eval_space.js";
 import {ErrorBoundary} from "./error_boundary.js";
 
 import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
@@ -99,6 +99,11 @@ class SpriteBoxRaw extends React.Component {
         let sparams = this.props.sparams;
         let in_svg = this.props.in_svg;
         let the_sprite;
+        let keyed_components = sparams.shape_components.map((comp, index) => {
+                    let new_comp = comp;
+                    new_comp.key = index;
+                    return new_comp;
+                })
         if (!in_svg) {
             the_sprite = (
                 <Sprite x={sparams["xPosition"]}
@@ -108,7 +113,7 @@ class SpriteBoxRaw extends React.Component {
                         scale={sparams["spriteSize"]}
                         angle={-1 * sparams["heading"]}
                         anchor={[0.5, 0.5]}>
-                    {sparams.shape_components}
+                    {keyed_components}
                 </Sprite>
             );
         }
@@ -116,9 +121,10 @@ class SpriteBoxRaw extends React.Component {
             let trans_string = `translate(${sparams["xPosition"]}, ${sparams["yPosition"]}) 
             rotate(${-1 * sparams["heading"]}) 
             scale(${sparams["spriteSize"]}, ${sparams["spriteSize"]})`
+
             the_sprite = (
                 <g transform={trans_string} style={{overflow: "visible"}}>
-                    {sparams.shape_components}
+                    {keyed_components}
                 </g>
                 // <circle cx={sparams["xPosition"]} cy={sparams["yPosition"]} strokeWidth={1} r={5} stroke="green" fill="yellow"/>
             )
@@ -244,6 +250,11 @@ class GraphicsBoxRaw extends React.Component {
                 let offsetPoint = new PIXI.Point(gwidth / 2, gheight / 2);
                 let scalePoint = [-1, 1];  // This reflects over y axis
                 // I need the Provider hack below because of a react-pixi issue.
+                let keyed_components = this.props.drawn_components.map((comp, index) => {
+                    let new_comp = comp;
+                    new_comp.key = index;
+                    return new_comp;
+                })
                 return (
                     <Stage options={{width: gwidth, height:gheight, antialias: true}}>
                         <Container position={offsetPoint} angle={180} scale={scalePoint}>
@@ -255,7 +266,7 @@ class GraphicsBoxRaw extends React.Component {
                                         interactive={true}
                                         tint={bgcolor} />
                                 {sprite_components.length > 0 && sprite_components}
-                                {(this.props.drawn_components.length > 0) && this.props.drawn_components}
+                                {(this.props.drawn_components.length > 0) && keyed_components}
                             </Provider>
                         </Container>
                     </Stage>
@@ -409,7 +420,7 @@ class TextNodeRaw extends React.Component {
 
     _handleChange(event) {
         let txt = this.trimSpaces(event.target.value);  // Otherwise we end up with junk
-        this.props.changeNode(this.props.unique_id, "the_text", txt)
+        this.props.updateTextNode(this.props.unique_id, txt)
         if (this.props.in_sprite_value) {
             this.props.changeSpriteValueBox(this.props.value_parent, txt)
         }
@@ -504,7 +515,7 @@ class TextNodeRaw extends React.Component {
                 if (event.ctrlKey || event.metaKey) {
                     event.preventDefault();
                     let caret_pos = getCaretPosition(this.iRef);
-                    this.props.deleteToLineEnd(this.props.unique_id, caret_pos)
+                    this.props.deleteToLineEnd(this.props.unique_id, caret_pos, this.props.port_chain);
                 }
                 return
             case "|":
@@ -557,6 +568,9 @@ class TextNodeRaw extends React.Component {
                     event.preventDefault();
                     // needs doint
                     return
+                case "s":
+                    event.preventDefault();
+                    this.props.saveProject()
 
             }
         }
@@ -691,7 +705,7 @@ class TextNodeRaw extends React.Component {
                                  onKeyDown={this._handleKeyDown}
                                  onBlur={this._onBlur}
                                  onFocus={this._onBlur}
-                                 html={this.unTrimSpaces(this.props.the_text)}
+                                 html={this.props.display_text ? this.props.display_text : this.props.the_text}
                                  />
              </React.Fragment>
 
@@ -1008,16 +1022,12 @@ class DataboxLineRaw extends React.Component {
         this.last_tick_processed = 0
     }
 
-    _handleSelection(selectedKeys) {
-        this.props.setSelected(selectedKeys);
-    }
 
     render() {
         let the_content = this.props.node_list.map((the_node_id, index) => {
             return (
-                <ErrorBoundary>
-                    <GenericNode key={the_node_id}
-                                 am_in_port={false}
+                <ErrorBoundary key={the_node_id}>
+                    <GenericNode am_in_port={false}
                                  from_port={false}
                                  port_chain={this.props.port_chain}
                                  unique_id={the_node_id}

@@ -8,9 +8,10 @@ import {container_kinds, data_kinds} from "../shared_consts.js";
 import {guid} from "../utility/utilities.js";
 
 import {cloneLineToStore, cloneNodeToStore} from "../redux/actions/composite_actions";
-import {changeNode, changeNodeMulti} from "../redux/actions/core_actions.js";
+import {changeNode, changeNodeMulti} from "../redux/actions/composite_actions.js";
 import {newDoitBoxNode, newDataBoxNode, newPort, newTextNode, newLineNode} from "../redux/actions/node_creator_actions.js";
 import {insertVirtualNode} from "../redux/actions/vnd_mutators.js";
+import {changeNodePure} from "../redux/actions/action_creators";
 
 export {_createLocalizedFunctionCall, _convertFunctionNode, getPortTarget,
     findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
@@ -34,15 +35,18 @@ function _createLocalizedFunctionCall(the_code_line, box_id, ports=null, use_vir
     let _tempDoitNodeId = guid();
     window.vstore.dispatch(newDoitBoxNode([local_code_line_id], _tempDoitNodeId))
     window.vstore.dispatch(changeNodeMulti(_tempDoitNodeId, {name: "_tempFunc", virtual: true, ports: ports}));
+
+    window.vstore.dispatch(changeNodePure(_tempDoitNodeId, "original_node_id", null));
     window.vstore.dispatch(insertVirtualNode(_tempDoitNodeId, box_id));
     return _tempDoitNodeId
 }
 
 class TranspileError extends Error {
-    constructor(doit_name = "Transpile Error", body = "", ...params) {
+    constructor(doit_name = "Unknown", body = "", original_node_id, ...params) {
         super(...params)
         this.name = `Error transpiling doit box '${doit_name}'`;
         this.message = body;
+        this.original_node_id = original_node_id
     }
 }
 
@@ -107,7 +111,8 @@ function _convertFunctionNode(doitNode) {
                 continue
             }
             let new_doit_id = guid();
-            window.vstore.dispatch(cloneNodeToStore(called_doit.node.unique_id, vndict(), new_doit_id))
+            window.vstore.dispatch(cloneNodeToStore(called_doit.node.unique_id, vndict(), new_doit_id));
+            window.vstore.dispatch(changeNodePure(new_doit_id, "original_node_id", called_doit.node.unique_id));
             window.vstore.dispatch(insertVirtualNode(new_doit_id, doitNode.unique_id));
             // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
@@ -144,7 +149,8 @@ function _convertFunctionNode(doitNode) {
         // We need lines to put the input values into the virtual nodes created when the box is run
         let assign_input_string = "";
         for (let arg of input_names) {
-            let assign_string = `await change("${arg}", ${arg}, "${context.doitId}")\n` ;
+
+            let assign_string = `await changeByName("${arg}", ${arg}, "${context.doitId}")\n` ;
             assign_input_string += assign_string
         }
 
@@ -159,9 +165,14 @@ function _convertFunctionNode(doitNode) {
         return
     }
     catch(error) {
-        throw new TranspileError(doitNode.name, error.message + "\n" + error.stack);
-        //window.addErrorDrawerEntry({title: title, content: `<pre>${error}\n${error.stack}</pre>`})
-
+        let message;
+        if (error.hasOwnProperty("message")) {
+            message = error.messaage
+        }
+        else {
+            message = String(error)
+        }
+        throw new TranspileError(doitNode.name, message, doitNode.original_node_id);
     }
 }
 
@@ -433,8 +444,9 @@ function convertStatementLine(token_list, context, is_last_line=false) {
         }
         // Some boxer statements take statement lists as arguments. They are treated specially.
         if (arg[1] != "statement_list") {
-            let is_raw = arg[1] == "raw_string"
-            consume_result = consumeAndConvertNextArgument(consuming_line, context, is_raw);
+            let port_to = arg[1] == "port_to"
+
+            consume_result = consumeAndConvertNextArgument(consuming_line, context, port_to);
             consuming_line = consuming_line.slice(consume_result[1]);
             converted_args.push(consume_result[0])
         }
@@ -547,7 +559,7 @@ function convertTell(token_list, context) {
 // It can be a single token, such as a number or variable name, or a box
 // It can be multiple tokens, such as a function call
 // It can also be multiple tokens consisting of tokens separated by operators.
-function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
+function consumeAndConvertNextArgument(consuming_line, context, port_to=false) {
     let first_node = consuming_line[0];
     let first_token;
     let tokens_consumed = 1;
@@ -555,15 +567,24 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
     let nd = vndict();
 
     // If the first token is an object, then it is treated as the next argument in its entirety
+
+
     if (typeof(first_node) == "object") {
+
         if (first_node.kind == "port") {
             first_node = getPortTarget(first_node, nd)
         }
-        if (first_node.kind == "doitbox") {
+
+        if (port_to) {
+            first_token = first_node.unique_id;
+        }
+
+        else if (first_node.kind == "doitbox") {
             let fstring = convertStatementList(first_node.line_list, context, true);
             first_token = `await (async ()=>{${fstring}})()\n`
         }
         // If we have a one line databox, then we can attempt to extract the contents as a string or number
+
         else if (first_node.kind == "databox" && first_node.line_list.length == 1) {
             let first_line = nd[first_node.line_list[0]];
             if (first_line.node_list.length == 1) {
@@ -601,8 +622,10 @@ function consumeAndConvertNextArgument(consuming_line, context, is_raw=false) {
             // check if variable name
             // If it is, then we call getBoxValue to get the value.
             if (ntype == "user_data" || ntype == "input_name") {
-                if (is_raw) {
-                    first_token = first_node;
+                if (port_to) {
+                    let target_node_id = findNamedNode(first_node, context.doitId).unique_id;
+
+                    first_token = target_node_id;
                 }
                 else{
                     first_token = `getBoxValue("${first_node}", "${context.doitId}")`;

@@ -3,11 +3,12 @@ import _ from "lodash";
 
 import {data_kinds} from "../shared_consts.js";
 import {_getln} from "../redux/selectors.js";
+import {_getContainingGraphicsBox} from "../redux/selectors";
 
 export {doBinding, doSignOut, isString, guid, isKind, _extractValue, _getText,
     getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
     degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg, isVirtualStub,
-    portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain
+    portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain, roundToPlaces, convertAndRound
 }
 
 function isKind(item, kind) {
@@ -55,7 +56,30 @@ function radiansToDegrees(radians) {
     return radians * 180 / Math.PI
 }
 
+function unTrimSpaces(astring) {
+    if (typeof(astring) == "string") {
+        return astring.replace(/\s/g, '\u00A0')
+    }
+    else {
+        return astring
+    }
+}
 
+
+function convertAndRound(astring, places) {
+    let tstring = unTrimSpaces(astring);
+    if (!tstring || isNaN(tstring)) {
+        return tstring
+    }
+    let tnum = eval(tstring);
+    return roundToPlaces(tnum, places)
+}
+
+
+function roundToPlaces(num, places) {
+    let mplier = 10 ** places;
+    return Math.round(num * mplier ) / mplier;
+}
 
 function isEqualOmit(p1, p2) {
     return _.isEqualWith(_.omit(p1, ["_owner"]), _.omit(p2, ["_ownere"]))
@@ -294,3 +318,4 @@ function _convertColorArg(the_color_string) {
     }
     return bgcolor
 }
+

@@ -4,7 +4,7 @@ import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget,
     dataBoxToValue, boxObjectToValue, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {degreesToRadians, radiansToDegrees} from "../utility/utilities.js"
-import {setNodeDict, setGlobal, createEntry, changeNodePure, addToBuffer, clearBuffer} from "../redux/actions/core_actions.js";
+import {setNodeDict, setGlobal, createEntry, changeNodePure, addToBuffer, clearBuffer} from "../redux/actions/action_creators.js";
 import {newErrorNode, changeBase, makeGraphicsNode} from "../redux/actions/vnd_mutators.js";
 import {collectGarbage, dispatchBufferedActions} from "../redux/actions/composite_actions.js";
 import {guid, isKind} from "../utility/utilities.js";
@@ -84,7 +84,7 @@ async function doExecution(the_code_line_id) {
     window.store.dispatch(setGlobal("executing", true));
     // window.tell_function_counter = 0;
     let _inserted_start_node_id = _createLocalizedFunctionCall(the_code_line, box_id);
-    let _result
+    let _result;
     try {
         window._running += 1;
         window.user_aborted = false;
@@ -98,7 +98,7 @@ async function doExecution(the_code_line_id) {
         window._running = 0;
         window.store.dispatch(setGlobal("executing", false))  // This is to force a refresh
         // window.addErrorDrawerEntry({title: error.message, content: `<pre>${error.stack}</pre>`})
-        _result = window.vstore.dispatch(newErrorNode(error.name, error.message + "\n" + error.stack));
+        _result = window.vstore.dispatch(newErrorNode(error.name, error.message, error.original_node_id));
     } finally {
         window.clearInterval(window.ticker);
         window.store.dispatch(collectGarbage())
@@ -134,11 +134,18 @@ function getBoxValue(boxName, startId) {
     return _node.cfunc
 }
 
-async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=null) {
+async function changeGraphicsByName(targetName, newvalstub, my_node_id, eval_in_place=null) {
+    let targetid = findNamedNode(targetName, my_node_id).unique_id;
+    await changeGraphics(targetid, newvalstub, my_node_id, eval_in_place)
+}
+
+
+async function changeGraphics(targetid, newvalstub, my_node_id, eval_in_place=null) {
     let newval = window.vstore.getState().node_dict[newvalstub.vid]
     if (!newval.kind || !graphics_kinds.includes(newval.kind)) return;
     let estring;
-    let mnode = findNamedNode(boxname, my_node_id);
+
+    let mnode = window.vstore.getState().node_dict[targetid];
     if (mnode.kind == "port") {
         mnode = window.getVirtualNodeDict()[mnode.target]
     }
@@ -158,20 +165,30 @@ async function changeGraphics(boxname, newvalstub, my_node_id, eval_in_place=nul
 }
 
 
-async function change(boxname, newval, my_node_id) {
+async function change(targetid, newval, my_node_id) {
 
     return new Promise(async (resolve, reject) => {
-        window.vstore.dispatch(changeBase(boxname, newval, my_node_id)).then(()=>{
+        window.vstore.dispatch(changeBase(targetid, newval, my_node_id)).then(()=>{
             resolve()
         })
     })
 }
 
+async function changeByName(targetName, newval, my_node_id) {
+    let targetid = findNamedNode(targetName, my_node_id).unique_id;
+    return new Promise(async (resolve, reject) => {
+        window.vstore.dispatch(changeBase(targetid, newval, my_node_id)).then(()=>{
+            resolve()
+        })
+    })
+}
+
+
 async function makeColor(r, g, b) {
     let color_string = `${r} ${g} ${b}`;
     let new_id = guid();
     window.vstore.dispatch(newColorBox(color_string, new_id));
-    window.vstore.dispatch(addToBuffer(createEntry(newgnode)))
+    window.vstore.dispatch(addToBuffer(createEntry(new_id)))
 
     return {vid: new_id}
 }
@@ -192,7 +209,14 @@ async function doRepeat(times, statement_list) {
         eval(`async function lfunc() {${statement_list}}; lfunc();`)
         await delay(1)
     }
+}
 
+async function setPrintingPrecision(new_precision) {
+    if (isNaN(new_precision)) {
+        return
+    }
+    let new_val = eval(new_precision);
+    window.store.dispatch(setGlobal("printing_precision", new_val))
 }
 
 async function turtleShape() {
@@ -313,12 +337,12 @@ async function setGraphicsMode(current_turtle_id, boxorstring) {
 }
 
 async function showTurtle(my_node_id) {
-    return change("shown", true, my_node_id);
+    return changeByName("shown", true, my_node_id);
 }
 
 
 function hideTurtle(my_node_id) {
-    return change("shown", false, my_node_id);
+    return changeByName("shown", false, my_node_id);
 }
 
 
@@ -436,7 +460,7 @@ async function setxy(current_turtle_id, x, y, eval_in_place=null) {
 
 
 async function setheading(degrees, my_node_id) {
-    return change("heading", degrees, my_node_id);
+    return changeByName("heading", degrees, my_node_id);
 }
 
 async function setPenColor(current_turtle_id, the_text, eval_in_place=null) {

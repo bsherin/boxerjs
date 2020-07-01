@@ -21,7 +21,7 @@ $search-highlight-color: yellow;
     }
 
     &.port {
-        border: 3px double black;
+        border: 4px double gray;
     }
 
     &.transparent {
@@ -120,6 +120,10 @@ div[id^='selectableItem'] {
     }
     &.doit-box {
         border-radius: 0
+    }
+
+    &.port {
+        border: 4px double gray;
     }
 
     .closed-button-inner {
