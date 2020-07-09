@@ -729,8 +729,8 @@ function insertClipboardBase(text_id, cursor_position, port_chain) {
                 else {
                     // We are inserting multiple nodes
                     // So what we are doing only depends on the last node
-                    let focus_node_id = _.last(new_node_ids);
-                    focus_text_pos = inserted_node.the_text.length
+                    focus_node_id = _.last(new_node_ids);
+                    focus_text_pos = getState().node_dict[focus_node_id].the_text.length
                 }
 
                 dispatch(insertNodes(new_node_ids, parent_line.unique_id, getState().node_dict[text_id].position + 1));

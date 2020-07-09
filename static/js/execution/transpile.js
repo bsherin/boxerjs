@@ -12,9 +12,10 @@ import {changeNode, changeNodeMulti} from "../redux/actions/composite_actions.js
 import {newDoitBoxNode, newDataBoxNode, newPort, newTextNode, newLineNode} from "../redux/actions/node_creator_actions.js";
 import {insertVirtualNode} from "../redux/actions/vnd_mutators.js";
 import {changeNodePure} from "../redux/actions/action_creators";
+import {newValueBox} from "../redux/actions/node_creator_actions";
 
 export {_createLocalizedFunctionCall, _convertFunctionNode, getPortTarget,
-    findNamedBoxesInScope, dataBoxToValue, boxObjectToValue, findNamedNode}
+    findNamedBoxesInScope, dataBoxToStub, findNamedNode}
 
 var vndict = ()=>{return window.vstore.getState().node_dict}
 
@@ -74,15 +75,22 @@ function _convertFunctionNode(doitNode) {
         context.local_var_nodes = {}
 
         window.vstore.dispatch(changeNode(doit_id, "input_names", input_names));
-        // doitNode.input_names = input_names;
         context.input_names = input_names;
 
-        // Insert virtual data boxes for each input
-        // This makes them easy to refer to
+        // Insert virtual boxes for each input
+        // Insert a port if the flavor is port_to
         let inserted_lines = 0;
-        for (let input_name of input_names) {
+        for (let arg of arglist) {
+            let input_name = arg[0];
+            let flavor = arg[1];
             let new_node_id = guid();
-            window.vstore.dispatch(newDataBoxNode([], false, new_node_id));
+            if (flavor == "port_to") {
+                 window.vstore.dispatch(newPort(null, new_node_id));
+            }
+            else {
+                window.vstore.dispatch(newDataBoxNode([], false, new_node_id));
+
+            }
             window.vstore.dispatch(changeNode(new_node_id, "name", input_name));
             window.vstore.dispatch(insertVirtualNode(new_node_id, doitNode.unique_id));
             context.local_var_nodes[input_name] = new_node_id;
@@ -101,7 +109,6 @@ function _convertFunctionNode(doitNode) {
         }
 
         // Find all called doit boxes and copy them locally
-        // Then recursively call this function to convert them
         let called_doits = findCalledDoits(doitNode, vndict(), context);
         let called_doit_string = "";
         context.copied_doits = {};
@@ -112,17 +119,16 @@ function _convertFunctionNode(doitNode) {
             }
             let new_doit_id = guid();
             window.vstore.dispatch(cloneNodeToStore(called_doit.node.unique_id, vndict(), new_doit_id));
+            // We keep track of the original id for the purpose of getting a port if we display an error.
             window.vstore.dispatch(changeNodePure(new_doit_id, "original_node_id", called_doit.node.unique_id));
             window.vstore.dispatch(insertVirtualNode(new_doit_id, doitNode.unique_id));
-            // inserted_lines += 1;
             context.copied_doits[called_doit.node.name] = {
-                // node: vnode,
                 args: called_doit.args
             };
         }
 
         // process remaining lines in doit box we're converting
-        // skip new lines added at the end as well as the input line, if there is one.
+        // skip the input line, if there is one.
         // (In the current version, inserted_lines will always be zero.)
         let line_list = doitNode.line_list;
         let endat = line_list.length - inserted_lines;
@@ -146,11 +152,17 @@ function _convertFunctionNode(doitNode) {
         }
         name_string += ")";
 
-        // We need lines to put the input values into the virtual nodes created when the box is run
+        // We need lines to put the input values into the virtual nodes created
         let assign_input_string = "";
-        for (let arg of input_names) {
+        for (let arg of arglist) {
+            let assign_string;
+            if (arg[1] == "port_to") {
+                assign_string = `await targetPort("${arg[0]}", ${arg[0]}, "${context.doitId}")\n` ;
+            }
+            else {
+                assign_string = `await changeByName("${arg[0]}", ${arg[0]}, "${context.doitId}")\n` ;
 
-            let assign_string = `await changeByName("${arg}", ${arg}, "${context.doitId}")\n` ;
+            }
             assign_input_string += assign_string
         }
 
@@ -165,14 +177,14 @@ function _convertFunctionNode(doitNode) {
         return
     }
     catch(error) {
-        let message;
-        if (error.hasOwnProperty("message")) {
-            message = error.messaage
+        let msg;
+        if (error.hasOwnProperty("message") && error.message) {
+            msg = error.message
         }
         else {
-            message = String(error)
+            msg = String(error)
         }
-        throw new TranspileError(doitNode.name, message, doitNode.original_node_id);
+        throw new TranspileError(doitNode.name, msg, doitNode.original_node_id);
     }
 }
 
@@ -270,7 +282,6 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
 
 
 // Finds doit boxes that are called
-// The names are adjusted if we have a port to a doit box
 function findCalledDoits(doitNode, nd, context) {
     let called_doits = []
     for (let line_id of doitNode.line_list){
@@ -296,9 +307,33 @@ function findCalledDoits(doitNode, nd, context) {
     return called_doits
 }
 
-// This handles named boxes that are discovered inside a doit box
+const flavors = ["port_to", "datafy"]
+
+function processInputs(input_line) {
+    let ilist = [];
+    let have_flavor = null;
+    for (let token of input_line) {
+        if (have_flavor) {
+            ilist.push([token, have_flavor]);
+            have_flavor = false
+        }
+        else {
+            if (flavors.includes(token)) {
+                have_flavor = token;
+            }
+            else {
+                ilist.push([token, "standard"])
+            }
+        }
+    }
+    return ilist
+
+}
+
+// This handles named boxes that are discovered
 // building three dictionaries, indexed by name, data_boxes, doit_boxes, js_boxes
 // All data kinds are treated the same way
+// If we get a doit box, then we get info about the arguments
 // If we get a port, then we index by the port name, but put the node context as thevalue
 function preprocessNamedBoxes(namedNodes, virtualNodeDict) {
     let doit_boxes = {};
@@ -314,16 +349,12 @@ function preprocessNamedBoxes(namedNodes, virtualNodeDict) {
         }
         else if (node.kind == "doitbox") {
             let first_tokenized = tokenizeLine(node.line_list[0], virtualNodeDict);
-            let arglist;
+            let args;
             if (first_tokenized[0] == "input") {
-                arglist = first_tokenized.slice(1,);
+                args = processInputs(first_tokenized.slice(1,));
             }
             else {
-                arglist = []
-            }
-            let args = [];
-            for (let arg of arglist) {
-                args.push([arg, "expression"])
+                args = []
             }
             doit_boxes[name] = {
                 node: node,
@@ -354,7 +385,7 @@ function preprocessNamedBoxes(namedNodes, virtualNodeDict) {
     }
 }
 
-// Loop over a list of lines converting them
+// Loop over a list of lines converting them to javascript
 function convertStatementList(line_list, context, return_last_line=false) {
     let nd = vndict();
     let converted_string = "";
@@ -363,6 +394,7 @@ function convertStatementList(line_list, context, return_last_line=false) {
         let line = nd[line_id];
         if (line.amCloset) continue;
         let token_list = tokenizeLine(line_id, nd);
+        token_list = infixToPrefix(token_list);
         counter += 1;
         let is_last_line = return_last_line && counter == line_list.length;
         converted_string += convertStatementLine(token_list, context, is_last_line) + ";\n"
@@ -370,7 +402,7 @@ function convertStatementList(line_list, context, return_last_line=false) {
     return converted_string
 }
 
-// convert a tokenized statement
+// convert a tokenized statement to javascript
 function convertStatementLine(token_list, context, is_last_line=false) {
     if (token_list.length == 0){
         return ""
@@ -380,13 +412,14 @@ function convertStatementLine(token_list, context, is_last_line=false) {
 
     // If the first token is an object, then it cant be the start of a statement or function call
     if ((typeof(first_token) == "object")) {
-        if (!first_token.name) { // A raw doit box on the last line
+        if (!first_token.name) { // A raw box on the last line
             let lresult = consumeAndConvertNextArgument(consuming_line, context)[0] + ";"
             if (is_last_line) {
                 lresult = "\nreturn " + lresult
             }
-            return lresult
+            return lresult   // If it was a databox, this wouldn't do anything.
         }
+        // If it had a name just ignore it
         return ""
     }
 
@@ -421,6 +454,8 @@ function convertStatementLine(token_list, context, is_last_line=false) {
         // We've got something that's not recognizable as a statement or function call
         // If it's the last line, we return it, on the assumption that it's a variable name.
         // Otherwise there's nothing we can do with it that will have any effect.
+        // It it was an object, we would already have caught it. So I'm not sure
+        // this will ever have a meaningful use
         if (is_last_line) {
             return "\nreturn " + consumeAndConvertNextArgument(token_list, context)[0] + ";"
         }
@@ -505,8 +540,13 @@ function convertTell(token_list, context) {
     // If the target is a port, this case should already be handled correctly in
     // the context built earlier. There's nothing special to do
     let startBox = findNamedNode(token_list[1], context.doitId);
-    let box_id = startBox.unique_id;
-
+    let box_id
+    if (startBox.kind == "port") {
+        box_id = startBox.target
+    }
+    else {
+        box_id = startBox.unique_id;
+    }
 
     // Sequential text tokens need to be recombined first
     let remaining_tokens = [];
@@ -558,8 +598,7 @@ function convertTell(token_list, context) {
 // Identifies the first argument in the given token list and converts it to a javascript string
 // It can be a single token, such as a number or variable name, or a box
 // It can be multiple tokens, such as a function call
-// It can also be multiple tokens consisting of tokens separated by operators.
-function consumeAndConvertNextArgument(consuming_line, context, port_to=false) {
+function consumeAndConvertNextArgument(consuming_line, context) {
     let first_node = consuming_line[0];
     let first_token;
     let tokens_consumed = 1;
@@ -567,7 +606,7 @@ function consumeAndConvertNextArgument(consuming_line, context, port_to=false) {
     let nd = vndict();
 
     // If the first token is an object, then it is treated as the next argument in its entirety
-
+    // Note that there are no infix operators at this point.
 
     if (typeof(first_node) == "object") {
 
@@ -575,63 +614,30 @@ function consumeAndConvertNextArgument(consuming_line, context, port_to=false) {
             first_node = getPortTarget(first_node, nd)
         }
 
-        if (port_to) {
-            first_token = first_node.unique_id;
-        }
-
-        else if (first_node.kind == "doitbox") {
+        if (first_node.kind == "doitbox") {
             let fstring = convertStatementList(first_node.line_list, context, true);
             first_token = `await (async ()=>{${fstring}})()\n`
         }
-        // If we have a one line databox, then we can attempt to extract the contents as a string or number
 
-        else if (first_node.kind == "databox" && first_node.line_list.length == 1) {
-            let first_line = nd[first_node.line_list[0]];
-            if (first_line.node_list.length == 1) {
-                let the_text = nd[first_line.node_list[0]].the_text.trim();
-                if (!the_text) {
-                    first_token = '""';
-                }
-                else if (isNaN(the_text)) {
-                    first_token = `"${the_text}"`
-                }
-                else {
-                    first_token =`${the_text}`
-                }
-            }
-            else {
-                first_token = JSON.stringify({vid: first_node.unique_id});
-            }
-        }
         else {
             first_token = JSON.stringify({vid: first_node.unique_id});
         }
-        new_consuming_line = new_consuming_line.slice(1,)
-
     }
     else {
-        // if the token is a number, then we convert it just by taking the number as a string.
+        // if the token is a number, make a box with the number and create a stub to point to it
         if (!isNaN(first_node)) {
-            first_token = first_node;
-            new_consuming_line = new_consuming_line.slice(1,);
+            let vboxid = guid();
+            window.vstore.dispatch(newValueBox("null", first_node, vboxid))
+            first_token = JSON.stringify({vid: vboxid})
         }
         // If it's not a number, figure out what it is
         else {
             let args;
             let ntype = getNameType(first_node, context);
             // check if variable name
-            // If it is, then we call getBoxValue to get the value.
+            // If it is, then we call box stub.
             if (ntype == "user_data" || ntype == "input_name") {
-                if (port_to) {
-                    let target_node_id = findNamedNode(first_node, context.doitId).unique_id;
-
-                    first_token = target_node_id;
-                }
-                else{
-                    first_token = `getBoxValue("${first_node}", "${context.doitId}")`;
-                }
-
-                new_consuming_line = new_consuming_line.slice(1,);
+                first_token = `getBoxValue("${first_node}", "${context.doitId}")`;
             }
             // If not a variable name, it must be the name of a statement or function call
             else {
@@ -681,27 +687,7 @@ function consumeAndConvertNextArgument(consuming_line, context, port_to=false) {
         }
     }
 
-    // There will be more to do if the next token is an operator
-    // If there is, we conver the operator, and then find the next argument
-    let result_string = first_token;
-    if (new_consuming_line.length > 0) {
-        let next_token = new_consuming_line[0];
-        if (typeof(next_token) == "string") {
-            next_token = next_token.trim();
-            if (isOperator(next_token)) {
-                result_string += " " + operators[next_token] + " ";
-                tokens_consumed += 1;
-                if (new_consuming_line.length <= 1) {
-                    throw `Not enough arguments for operator '${next_token}'`
-                }
-                let cresult = consumeAndConvertNextArgument(new_consuming_line.slice(1, ), context);
-                tokens_consumed += cresult[1];
-                result_string += cresult[0];
-            }
-        }
-    }
-
-    return [result_string, tokens_consumed]
+    return [first_token, tokens_consumed]
 }
 
 // This is for consuming a statement list that appears as an argument
@@ -726,36 +712,11 @@ function consumeAndConvertNextStatementList(consuming_line, context) {
 }
 
 
-function boxObjectToValue(dbox) {
+function dataBoxToStub(dbox) {
     let dbstring = JSON.stringify({vid: dbox.unique_id});
     let cdbstring = null;
     eval("cdbstring = " + dbstring)
     return cdbstring
-}
-
-function dataBoxToValue(dbox) {
-    let nd = vndict();
-    if (dbox.line_list.length == 1){
-        let the_line = nd[dbox.line_list[0]];
-        if (the_line.node_list.length == 1) {
-            let the_text = nd[the_line.node_list[0]].the_text.trim();
-            if (!the_text) {
-                return null
-            }
-            if (isNaN(the_text)) {
-                return the_text
-            }
-            else {
-                return eval(the_text)
-            }
-        }
-        else {
-            return boxObjectToValue(dbox)
-        }
-    }
-    else {
-        return boxObjectToValue(dbox)
-    }
 }
 
 
@@ -789,7 +750,7 @@ function tokenizeLine(line_id, nd) {
     let line = nd[line_id];
     let token_list = [];
     for (let node_id of line.node_list) {
-        let node = nd[node_id]
+        let node = nd[node_id];
         if (node.kind == "text") {
             let ttext = node.the_text.trim();
             if (ttext.length != 0) {
@@ -807,6 +768,21 @@ function tokenizeLine(line_id, nd) {
         }
     }
     return pruned_list
+}
+
+function infixToPrefix(token_list) {
+    let new_token_list = _.cloneDeep(token_list);
+    for (let op in operators) {
+        let ind = new_token_list.indexOf(op);
+        while (ind > -1) {
+            let preceding = new_token_list[ind - 1];
+            let following = new_token_list [ind + 1];
+            new_token_list.splice(ind - 1, 3, [operators[op], preceding, following]);
+            ind = new_token_list.indexOf(op)
+        }
+    }
+    new_token_list = new_token_list.flat(Infinity);
+    return new_token_list
 }
 
 function getNameType(token, context, allow_other=false) {

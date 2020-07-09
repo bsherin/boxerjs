@@ -3,13 +3,15 @@ import _ from "lodash";
 
 import {data_kinds} from "../shared_consts.js";
 import {_getln} from "../redux/selectors.js";
-import {_getContainingGraphicsBox} from "../redux/selectors";
 
-export {doBinding, doSignOut, isString, guid, isKind, _extractValue, _getText,
+export {doBinding, doSignOut, isString, guid, isKind, _extractValue,
     getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
     degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg, isVirtualStub,
-    portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain, roundToPlaces, convertAndRound
+    portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain, roundToPlaces, convertAndRound,
+    makeStub, dataBoxToNumber, dataBoxToString
 }
+
+var vndict = ()=>{return window.vstore.getState().node_dict};
 
 function isKind(item, kind) {
     return typeof(item) == "object" && item.hasOwnProperty("kind") && item.kind == kind
@@ -54,6 +56,10 @@ function degreesToRadians(deg) {
 
 function radiansToDegrees(radians) {
     return radians * 180 / Math.PI
+}
+
+function makeStub(nid) {
+    return {vid: nid}
 }
 
 function unTrimSpaces(astring) {
@@ -159,8 +165,8 @@ function extractText(abox, ndict = null) {
     return ndict[_getln(abox.unique_id, 0, 0, ndict)].the_text
 }
 
-function _extractValue(nd_id) {
-    let the_text = window.getNode(_getln(nd_id, 0, 0, window.store.getState().node_dict)).the_text
+function _extractValue(nd_id, ndict) {
+    let the_text = ndict(_getln(nd_id, 0, 0, ndict)).the_text
     if (isNaN(the_text)){
         if (the_text.toLowerCase() == "false") {
             return false
@@ -175,32 +181,42 @@ function _extractValue(nd_id) {
     }
 }
 
+
+function dataBoxToNumber(dbox) {
+    let nd = vndict();
+    if (dbox.line_list.length != 1) {
+        throw "Invalid argument: didn't get a number"
+    }
+    let the_line = nd[dbox.line_list[0]];
+    if (the_line.node_list.length != 1) {
+        throw "Invalid argument: didn't get a number"
+    }
+    let the_text = nd[the_line.node_list[0]].the_text.trim();
+    if (isNaN(the_text)) {
+        throw `Invalid argument: didn't get a number, got "${the_text}"`
+    }
+    return eval(the_text)
+}
+
+
+function dataBoxToString(dbox) {
+    let nd = vndict();
+    if (dbox.line_list.length != 1) {
+        throw "Invalid argument: didn't get a string"
+    }
+    let the_line = nd[dbox.line_list[0]];
+    if (the_line.node_list.length != 1) {
+        throw "Invalid argument: didn't get a string"
+    }
+    let the_text = nd[the_line.node_list[0]].the_text.trim();
+    return the_text
+}
+
 function isVirtualStub(aboxorstring) {
     let klist = Object.keys(aboxorstring);
     return klist.length == 1 && klist.includes("vid")
 }
 
-
-function _getText(aboxorstring) {
-    let the_text = null;
-
-    if (typeof(aboxorstring) == "object") {
-        if (isVirtualStub(aboxorstring)) {
-            let vnode = window.vstore.getState().node_dict[aboxorstring.vid]
-            the_text = extractText(vnode, window.vstore.getState().node_dict)
-        }
-        else {
-            the_text = extractText(aboxorstring);
-        }
-    }
-    else if (typeof(aboxorstring) == "string") {
-        the_text = aboxorstring
-    }
-    else if (typeof(aboxorstring) == "number") {
-        the_text = aboxorstring
-    }
-    return the_text
-}
 
 function _svgConvertColorArg(the_color_string) {
     let bgcolor;
