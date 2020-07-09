@@ -257,35 +257,35 @@ let boxer_statements = {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(255, 0, 0)"
+            return "await makeColorBase(255, 0, 0)"
         }
     },
     green: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(0, 255, 0)"
+            return "await makeColorBase(0, 255, 0)"
         }
     },
     blue: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(0, 0, 255)"
+            return "await makeColorBase(0, 0, 255)"
         }
     },
     black: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(0, 0, 0)"
+            return "await makeColorBase(0, 0, 0)"
         }
     },
     white: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(255, 255, 255)"
+            return "await makeColorBase(255, 255, 255)"
         }
     },
 
@@ -293,28 +293,28 @@ let boxer_statements = {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(255, 166, 0)"
+            return "await makeColorBase(255, 166, 0)"
         }
     },
     yellow: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(255, 255, 0)"
+            return "await makeColorBase(255, 255, 0)"
         }
     },
     gray: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(127, 127, 127)"
+            return "await makeColorBase(127, 127, 127)"
         }
     },
     purple: {
         args: [],
         allow_return: true,
         converter: (arglist) => {
-            return "await makeColor(161, 33, 240)"
+            return "await makeColorBase(161, 33, 240)"
         }
     },
 
@@ -332,7 +332,8 @@ let boxer_statements = {
         ],
         converter: (arglist) => {
             return `
-                for (let _i = 0; _i < ${arglist[0]}; ++_i) {
+                let _times = stubToNumber(${arglist[0]});
+                for (let _i = 0; _i < _times; ++_i) {
                     if (window.user_aborted) break;
                     ${arglist[1]}
                     await delay(1)
@@ -346,7 +347,7 @@ let boxer_statements = {
             ["newval", "standard"]
         ],
         converter: (arglist) => {
-            return `await change("${arglist[0]}", ${arglist[1]}, my_node_id)`
+            return `await change(${arglist[0]}, ${arglist[1]}, my_node_id)`
         }
     },
 
@@ -356,7 +357,7 @@ let boxer_statements = {
             ["newval", "standard"]
         ],
         converter: (arglist) => {
-            return `await changeGraphics("${arglist[0]}", ${arglist[1]}, my_node_id)`
+            return `await changeGraphics(${arglist[0]}, ${arglist[1]}, my_node_id)`
         }
     },
 
@@ -507,6 +508,106 @@ let boxer_statements = {
             return `sqrt(${arglist[0]})`
         }
     },
+    _mult:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_mult(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _div:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_div(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _add:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_add(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _subtract:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_subtract(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _equals:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_equals(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _lt:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_lt(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _lt:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_lt(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _gt:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_gt(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _ltet:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_ltet(${arglist[0]}, ${arglist[1]})`
+        }
+    },
+    _gtet:  {
+        args:[
+            ["x", "standard"],
+            ["y", "standard"]
+        ],
+        allow_return: true,
+        converter: (arglist) => {
+            return `_gtet(${arglist[0]}, ${arglist[1]})`
+        }
+    },
 };
 
 let synonyms = {
@@ -536,15 +637,15 @@ function isBoxerStatement(token) {
 }
 
 let operators = {
-    "+": "+",
-    "-": "-",
-    "*": "*",
-    "=": "==",
-    "<": "<",
-    ">": ">",
-    "<=": "<=",
-    ">=": ">=",
-    "/": "/"
+    "*": "_mult",
+    "/": "_div",
+    "+": "_add",
+    "-": "_subtract",
+    "=": "_equals",
+    "<": "_lt",
+    ">": "_gt",
+    "<=": "_ltet",
+    ">=": "_gtet"
 };
 
 function isOperator(token) {

@@ -3,21 +3,23 @@
 import {
     graphicsNodeDict, newLineNode
 } from "./node_creator_actions.js";
-import {findNamedNode} from "../../execution/transpile.js";
 import {batch} from "react-redux";
 import {data_kinds, sprite_params} from "../../shared_consts.js";
-import {changeNode,cloneLineToStore, healLine, setLineList, createCloset, addCompositeToBuffer} from "./composite_actions.js";
+import {changeNode,cloneLineToStore, healLine, setLineList, createCloset,
+    addCompositeToBuffer} from "./composite_actions.js";
 import { addToBuffer} from "./action_creators.js";
 import {createTextLine, newDataBoxNode, newPort} from "./node_creator_actions.js"
 import {container_kinds} from "../../shared_consts.js";
 import {GraphicsNode} from "../../graphics_box_commands";
 import {changeNodePure, changeSpriteParam} from "./action_creators";
-import {_extractValue, guid, convertAndRound} from "../../utility/utilities.js";
+import { guid, convertAndRound, dataBoxToString} from "../../utility/utilities.js";
 import {_getln} from "../selectors";
 import {healStructure} from "./composite_actions";
+import {graphics_kinds} from "../../shared_consts";
+import _ from "lodash";
 
 export {newErrorNode, changeBase, makeChildrenVirtual, makeChildrenNonVirtual, insertVirtualNode, makeGraphicsNode,
-    setSpriteParams}
+    setSpriteParams, setTargetBase, changeGraphicsBase}
 
 function newErrorNode(first_part, body, original_node_id = null) {
     return (dispatch, getState) => {
@@ -91,36 +93,70 @@ function setSpriteParams(uid, pdict, buffer=true) {
     }
 }
 
+function setTargetBase(port_id, target_id) {
+    return (dispatch, getState) => {
+        let mnode = getState().node_dict[port_id];
+        if (mnode.kind != "port") {
+            return null
+        }
+        dispatch(changeNodePure(port_id, "target", target_id));
+        if (!mnode.virtual) {
+            dispatch(changeNodePure(port_id, "target", target_id))
+        }
 
-function changeBase(targetid, newval, my_node_id) {
+    }
+}
+
+function changeGraphicsBase(targetid, newval) {
+    if (!newval.kind || !graphics_kinds.includes(newval.kind)) return;
+    let estring;
+
+    let mnode = window.vstore.getState().node_dict[targetid];
+    if (mnode.kind == "port") {
+        mnode = window.getVirtualNodeDict()[mnode.target]
+    }
+    if (!mnode || !newval.kind || !graphics_kinds.includes(mnode.kind)) {
+        return new Promise(function (resolve, reject) {
+            resolve()
+        })
+    }
+    let new_drawn_components  = _.cloneDeep(newval.drawn_components);
+    window.vstore.dispatch(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components))
+    window.vstore.dispatch(addToBuffer(changeNodePure(mnode.unique_id, "drawn_components", new_drawn_components)));
+}
+
+
+function changeBase(targetid, newval) {
+    if (typeof(newval == "object") && (newval.hasOwnProperty("value"))) {
+        newval = newval.value
+    }
     return (dispatch, getState) => {
         batch(() => {
-            // let mnode = findNamedNode(boxname, my_node_id);
-            let mnode = getState().node_dict[targetid];
-            if (mnode.kind == "port") {
-                mnode = getState().node_dict[mnode.target]
+            let target_node = getState().node_dict[targetid];
+            if (target_node.kind == "port") {
+                target_node = getState().node_dict[target_node.target]
             }
-            if (!mnode) {
+            if (!target_node) {
                 return new Promise(function(resolve, reject) {
                     resolve()
                 })
             }
-            let is_virtual = mnode.hasOwnProperty("virtual") && mnode.virtual
+            let is_virtual = target_node.hasOwnProperty("virtual") && target_node.virtual
             if (typeof(newval) == "object") {
-                let the_node = getState().node_dict[newval.vid];
-                if (!data_kinds.includes(mnode.kind) || !data_kinds.includes(the_node.kind)) {
+                let source_node = getState().node_dict[newval.vid];
+                if (!data_kinds.includes(target_node.kind) || !data_kinds.includes(source_node.kind)) {
                     return new Promise(function (resolve, reject) {
                         resolve()
                     })
                 }
 
-                let sparent_id = mnode.sprite_parent
-                if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
-                    if (mnode.name == "shape") {
-                        if (the_node.hasOwnProperty("drawn_components")) {
-                            dispatch(changeSpriteParam(sparent_id, "shape_components", the_node.drawn_components))
+                let sparent_id = target_node.sprite_parent
+                if (sparent_id && target_node.name && sprite_params.includes(target_node.name)) {
+                    if (target_node.name == "shape") {
+                        if (source_node.hasOwnProperty("drawn_components")) {
+                            dispatch(changeSpriteParam(sparent_id, "shape_components", source_node.drawn_components))
                             if (!is_virtual) {
-                                dispatch(addToBuffer(changeSpriteParam(sparent_id, "shape_components", the_node.drawn_components)));
+                                dispatch(addToBuffer(changeSpriteParam(sparent_id, "shape_components", source_node.drawn_components)));
                             }
                         }
 
@@ -128,26 +164,29 @@ function changeBase(targetid, newval, my_node_id) {
                     // I'm not sure this can ever be followed productively
                     // If there's a value to be extracted then I think newval shouldn't be an object
                     else {
-                        dispatch(changeSpriteParam(sparent_id, mnode.name, _extractValue(the_node)));
+                        dispatch(changeSpriteParam(sparent_id, target_node.name, dataBoxToString(source_node)));
                         if (!is_virtual) {
-                            dispatch(addToBuffer(changeSpriteParam(sparent_id, mnode.name, _extractValue(the_node))));
+                            dispatch(addToBuffer(changeSpriteParam(sparent_id, target_node.name, dataBoxToString(source_node))));
                         }
                     }
 
                 }
 
                 let new_line_list = [];
-                for (let lin_id of the_node.line_list) {
+                for (let lin_id of source_node.line_list) {
                     let new_line_id = guid();
                     dispatch(cloneLineToStore(lin_id, getState().node_dict, new_line_id, true, !is_virtual));
                     new_line_list.push(new_line_id)
                 }
 
-                dispatch(setLineList(mnode.unique_id, new_line_list));
+                dispatch(setLineList(target_node.unique_id, new_line_list));
+                if (graphics_kinds.includes(target_node.kind) && graphics_kinds.includes(source_node.kind)) {
+                    changeGraphicsBase(targetid, source_node)
+                }
                 return new Promise(function (resolve, reject) {
-                    dispatch(setLineList(mnode.unique_id, new_line_list));
+                    dispatch(setLineList(target_node.unique_id, new_line_list));
                     if (!is_virtual) {
-                        dispatch(addCompositeToBuffer(setLineList, mnode.unique_id, new_line_list))
+                        dispatch(addCompositeToBuffer(setLineList, target_node.unique_id, new_line_list))
                     }
                     resolve()
                 })
@@ -155,15 +194,15 @@ function changeBase(targetid, newval, my_node_id) {
 
             }
             else {
-                let sparent_id = mnode.sprite_parent
-                if (sparent_id && mnode.name && sprite_params.includes(mnode.name)) {
-                    dispatch(changeSpriteParam(sparent_id, mnode.name, newval));
+                let sparent_id = target_node.sprite_parent
+                if (sparent_id && target_node.name && sprite_params.includes(target_node.name)) {
+                    dispatch(changeSpriteParam(sparent_id, target_node.name, newval));
                     if (!is_virtual) {
-                        dispatch(addToBuffer(dispatch(changeSpriteParam(sparent_id, mnode.name, newval))));
+                        dispatch(addToBuffer(dispatch(changeSpriteParam(sparent_id, target_node.name, newval))));
                     }
                 }
 
-                dispatch(changeBoxValue(mnode.unique_id, String(newval), !is_virtual));
+                dispatch(changeBoxValue(target_node.unique_id, String(newval), !is_virtual));
             }
         })
         return Promise.resolve()

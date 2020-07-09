@@ -452,6 +452,10 @@ class TextNodeRaw extends React.Component {
         let new_line_id = guid();
         let new_databox_id = guid();
 
+        if (typeof(result) == "object" && result.hasOwnProperty("value")) {
+            result = result.value
+        }
+
         if (typeof(result) != "object") {
             batch(()=>{
                 this.props.createTextDataBox(String(result), new_databox_id);
@@ -571,7 +575,11 @@ class TextNodeRaw extends React.Component {
                 case "s":
                     event.preventDefault();
                     this.props.saveProject()
-
+                    return
+                case "a":
+                    event.preventDefault();
+                    this.props.focusLineStart(this.props.unique_id, this.props.port_chain)
+                    return
             }
         }
 
@@ -657,12 +665,15 @@ class TextNodeRaw extends React.Component {
         try {
             let node = this.iRef;
             var textNode = node.firstChild;
-            var range = document.createRange();
-            range.setStart(textNode, pos);
-            range.setEnd(textNode, pos);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            if (textNode) {
+                var range = document.createRange();
+                range.setStart(textNode, pos);
+                range.setEnd(textNode, pos);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+
         }
         catch (e) {
             console.log("Got an error positioning the cursor.")
@@ -673,9 +684,7 @@ class TextNodeRaw extends React.Component {
         if (this.props.setTextFocus != null && _.isEqual(this.props.setTextFocus[0], this.props.port_chain)) {
             if (this.iRef) {
                 $(this.iRef).focus();
-                if (this.props.setTextFocus[1] != 0) {
-                    this._positionCursor(this.props.setTextFocus[1])
-                }
+                this._positionCursor(this.props.setTextFocus[1])
                 this.props.changeNode(this.props.unique_id, "setTextFocus", null);
             }
         }

@@ -21,7 +21,7 @@ import {doFlash} from "../../utility/toaster";
 import {showModalReact} from "../../utility/modal_react";
 
 
-export {healLine, healStructure, splitLine, createCloset, setLineList,
+export {healLine, healStructure, splitLine, createCloset, setLineList, focusLineStart,
     toggleBoxTransparency, setPortTarget, enterPortTargetMode, setFocusInBox,
     setGlobals, zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, collectGarbage,
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
@@ -434,6 +434,7 @@ function setPortTarget(port_id, target_id) {
     }
 }
 
+
 function enterPortTargetMode(port_id) {
     return (dispatch, getState) => {
         document.addEventListener("click", gotClick);
@@ -566,6 +567,14 @@ function focusRight(text_id, position, port_chain) {
                 return
             }
         }
+    }
+}
+
+function focusLineStart(text_id, port_chain) {
+    return (dispatch, getState) => {
+        let ndict = getState().node_dict;
+        let my_line = ndict[ndict[text_id].parent];
+        dispatch(setFocus(my_line.node_list[0], port_chain, 0))
     }
 }
 

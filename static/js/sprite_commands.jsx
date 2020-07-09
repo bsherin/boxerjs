@@ -1,6 +1,6 @@
 import React from "react";
 
-import {_getText, _extractValue, guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
+import {guid, doBinding, degreesToRadians, _convertColorArg, _svgConvertColorArg} from "./utility/utilities.js";
 
 import {defaultFontFamily, defaultFontSize, defaultFontStyle, defaultPenColorString, defaultPenWidth} from "./shared_consts.js";
 import {setSpriteParams} from "./redux/actions/vnd_mutators.js";
@@ -171,8 +171,7 @@ class SpriteNode {
         this.addComponent(new_comp)
     }
 
-    setGraphicsMode(aboxorstring) {
-        let the_text = _getText(aboxorstring);
+    setGraphicsMode(the_text) {
         if (!the_text) return;
         let gnode = this.getContainingGraphicsNode()
         if (gnode) {
@@ -184,23 +183,20 @@ class SpriteNode {
         }
     }
 
-    setTypeFont(aboxorstring, callback=null) {
-        let the_text = _getText(aboxorstring);
+    setTypeFont(the_text, callback=null) {
         if (!the_text) return;
         let [fname, fstyle, fsize] = the_text.trim().split(" ");
         this.setMyParams({fontFamily: fname, fontStyle: fstyle, fontsize: parseInt(fsize)}, callback)
     }
 
-    setPenColor(aboxorstring, callback=null) {
-        let the_text = _getText(aboxorstring);
+    setPenColor(the_text, callback=null) {
         if (!the_text) return;
         let the_color_strings = the_text.trim().split(" ");
         // let pcolor = _convertColorArg(the_color_strings);
         this.setMyParams({penColor: the_text}, callback);
     }
 
-    setBackgroundColor(aboxorstring) {
-        let the_text = _getText(aboxorstring);
+    setBackgroundColor(the_text) {
         if (!the_text) return;
         let gnode = this.getContainingGraphicsNode()
         if (gnode) {
@@ -208,8 +204,7 @@ class SpriteNode {
         }
     }
 
-    type(aboxorstring) {
-        let the_text = _getText(aboxorstring);
+    type(the_text) {
         if (!the_text) return;
         const style = new PIXI.TextStyle({
           fontFamily: this.sparams.fontFamily,
@@ -224,8 +219,7 @@ class SpriteNode {
         this.addComponent(new_comp)
     }
 
-    setPosition(abox) {
-        let the_text = _getText(abox);
+    setPosition(the_text) {
         if (!the_text) return;
         let [x, y] = the_text.split(" ");
         this.moveTo(parseInt(x), parseInt(y))
@@ -235,8 +229,7 @@ class SpriteNode {
         this.setMyParams({penWidth: w}, callback);
     }
 
-    setSpriteSize(aboxorstring, callback=null) {
-        let the_arg = _getText(aboxorstring);
+    setSpriteSize(the_arg, callback=null) {
         if (typeof(the_arg) == "string") {
             the_arg = parseInt(the_arg)
         }
