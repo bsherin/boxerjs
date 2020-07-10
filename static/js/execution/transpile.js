@@ -53,7 +53,7 @@ class TranspileError extends Error {
 
 // This takes a doit node, and transpiles it to javascript
 // Then the result javascript is attached to the node in raw_func
-// This is called from getBoxValue, when it tries to execute the doitBox but doesn't find raw_func already there.
+// _convertFunctionNode is called from getBoxValue, when it tries to execute the doitBox but doesn't find raw_func already there.
 function _convertFunctionNode(doitNode) {
     try {
 
@@ -635,7 +635,7 @@ function consumeAndConvertNextArgument(consuming_line, context) {
             let args;
             let ntype = getNameType(first_node, context);
             // check if variable name
-            // If it is, then we call box stub.
+            // If it is, then we create js code that will get the box value.
             if (ntype == "user_data" || ntype == "input_name") {
                 first_token = `getBoxValue("${first_node}", "${context.doitId}")`;
             }

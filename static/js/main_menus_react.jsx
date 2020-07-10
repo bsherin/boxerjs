@@ -7,16 +7,14 @@ import {connect} from "react-redux";
 
 import { MenuItem, Menu, Popover, MenuDivider, PopoverPosition, Button } from "@blueprintjs/core";
 
-import {showModalReact} from "./utility/modal_react.js";
-import {doFlash} from "./utility/toaster.js"
 import {doBinding} from "./utility/utilities.js";
-import {postAjax} from "./utility/communication_react";
 
 import {mapDispatchToProps} from "./redux/actions/dispatch_mapper.js";
 
 function mapStateToProps(state, ownProps){
     return Object.assign(
         {last_focus_id: state.stored_focus.last_focus_id,
+            last_focus_pos: state.stored_focus.last_focus_pos,
             last_focus_port_chain: state.stored_focus.last_focus_port_chain
         }, ownProps)
 }
@@ -251,7 +249,6 @@ class BoxMenuRaw extends React.Component {
             "Name": "|",
             "Toggle Closet": "F9"
         }
-
     }
 
 
@@ -278,7 +275,8 @@ class EditMenuRaw extends React.Component {
     }
 
     _paste(event) {
-        this.props.insertClipboardLastFocus();
+        this.props.insertClipboard(this.props.last_focus_id, this.props.last_focus_pos,
+            this.props.last_focus_port_chain);
     }
 
     _cut(event) {
@@ -328,7 +326,7 @@ class EditMenuRaw extends React.Component {
         )
     }
 }
-let EditMenu = connect(mapStateToPropsNull, mapDispatchToProps)(EditMenuRaw)
+let EditMenu = connect(mapStateToProps, mapDispatchToProps)(EditMenuRaw)
 
 class ViewMenu extends React.Component {
     constructor(props) {
