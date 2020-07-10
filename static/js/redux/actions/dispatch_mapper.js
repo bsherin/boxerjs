@@ -13,7 +13,7 @@ import {
     setFocusInBox,
     changeSpriteValueBox, focusLineStart,
     toggleBoxTransparency, unzoomBox, zoomBox, toggleCloset, setGraphicsSize,
-    retargetPort, setNodeSize,
+    retargetPort, setNodeSize, unfixSize,
     splitLineAtTextPosition, insertBoxInText, insertBoxLastFocus, updateTextNode,
     saveProject, saveProjectAs
 } from "./composite_actions.js";
@@ -28,7 +28,7 @@ function mapDispatchToProps(dispatch) {
       setFocus, positionAfterBox, zoomBox, unzoomBox, focusName, focusLeft, focusLineStart,
       focusRight, arrowDown, arrowUp, doBracket, downFromTag,
       addGraphicsComponent, toggleBoxTransparency, changeSpriteValueBox,
-      toggleCloset, setGraphicsSize, retargetPort, setNodeSize,
+      toggleCloset, setGraphicsSize, retargetPort, setNodeSize, unfixSize,
       clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, copySelected, cutSelected,
       selectSpan, deletePrecedingBox, deleteBoxerSelection, updateTextNode,
       saveProject, saveProjectAs

@@ -27,7 +27,7 @@ export {healLine, healStructure, splitLine, createCloset, setLineList, focusLine
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
     splitTextNode, splitLineAtTextPosition, changeSpriteValueBox, addCompositeToBuffer, saveProject, saveProjectAs,
     dispatchBufferedActions, initializeMissingGlobals, updateTextNode, changeNode, changeNodeMulti,
-insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, setNodeSize}
+insertBoxInText, insertBoxLastFocus, toggleCloset, setGraphicsSize, retargetPort, setNodeSize, unfixSize}
 
 
 
@@ -724,6 +724,21 @@ function setNodeSize(uid, new_width, new_height) {
             val_dict["fixed_height"] = new_height;
         }
         dispatch(changeNodeMulti(uid, val_dict));
+    }
+}
+
+function unfixSize(text_id) {
+    return (dispatch, getState) => {
+        let ndict = getState()["node_dict"]
+        let mline = ndict[ndict[text_id].parent];
+        if (mline.parent == null) return;
+        let mbox = ndict[mline.parent];
+        if (mbox.name == "world") return;
+        let val_dict = {};
+        val_dict["fixed_size"] = false;
+        val_dict["fixed_width"] = null;
+        val_dict["fixed_height"] = null
+        dispatch(changeNodeMulti(mbox.unique_id, val_dict));
     }
 }
 
