@@ -3,7 +3,7 @@ import _ from "lodash";
 
 
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
-import {container_kinds, data_kinds} from "../shared_consts.js";
+import {container_kinds, data_kinds, text_kinds} from "../shared_consts.js";
 
 import {guid} from "../utility/utilities.js";
 
@@ -15,7 +15,7 @@ import {changeNodePure} from "../redux/actions/action_creators";
 import {newValueBox} from "../redux/actions/node_creator_actions";
 
 export {_createLocalizedFunctionCall, _convertFunctionNode, getPortTarget,
-    findNamedBoxesInScope, dataBoxToStub, findNamedNode}
+    findNamedBoxesInScope, dataBoxToStub, portBoxToStub, findNamedNode}
 
 var vndict = ()=>{return window.vstore.getState().node_dict}
 
@@ -259,7 +259,7 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
             if (!current_turtle_id && (node.kind == "sprite")) {
                 current_turtle_id = node.unique_id;
             }
-            if ((node.kind != "text") && node.name) {
+            if (!text_kinds.includes(node.kind)  && node.name) {
                 if (!name_list.includes(node.name) && !new_names.includes(node.name)) {
                     new_names.push(node.name);
                     new_nodes.push(node)
@@ -719,6 +719,13 @@ function dataBoxToStub(dbox) {
     return cdbstring
 }
 
+function portBoxToStub(port_box) {
+    let dbox = getPortTarget(port_box, window.vstore.getState().node_dict);
+    let dbstring = JSON.stringify({vid: dbox.unique_id, via_port: port_box.unique_id});
+    let cdbstring = null;
+    eval("cdbstring = " + dbstring)
+    return cdbstring
+}
 
 function getPortTarget(portNode, node_dict) {
     if (portNode.target == null) return null;

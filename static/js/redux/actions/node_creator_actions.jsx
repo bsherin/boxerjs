@@ -86,6 +86,28 @@ function newHtmlBoxNode(the_code, uid) {
     }
 }
 
+function newMarkdownBoxNode(the_code, uid) {
+    return (dispatch, getState) => {
+        if (the_code == null) {
+            the_code = ""
+        }
+        let new_node = {
+            name: null,
+            key: uid,
+            kind: "markdownbox",
+            selected: false,
+            unique_id: uid,
+            position: 0,
+            the_code: the_code,
+            parent: null,
+            focusNameTag: false,
+            closed: false,
+            setTextFocus: null,
+        };
+        dispatch(createEntry(new_node))
+    }
+}
+
 function newJsBoxNode(the_code, uid) {
     return (dispatch, getState) => {
         if (the_code == null) {
@@ -546,6 +568,9 @@ function createNode(kind, new_id, use_svg) {
             case "htmlbox":
                 dispatch(newHtmlBoxNode(null, new_id))
                 return
+            case "markdownbox":
+                dispatch(newMarkdownBoxNode(null, new_id))
+                return
             case "doitbox":
                 dispatch(newDoitBoxNode([], new_id))
                 return
@@ -583,6 +608,7 @@ function nodeModels() {
     return {
         jsbox: (new_id)=>{return this._newJsBoxNode(null, new_id)},
         htmlbox: (new_id)=>{return this._newHtmlBoxNode(null, new_id)},
+        markdownbox: (new_id)=>{return this._newMarkdownBoxNode(null, new_id)},
         text: (new_id)=>{return this._newTextNode("", new_id)},
         doitbox: (new_id)=>{return this._newDoitBoxNode([], new_id)},
         databox: (new_id)=>{return this._newDataBoxNode([], false, new_id)},

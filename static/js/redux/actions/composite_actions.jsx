@@ -527,7 +527,7 @@ function arrowUp(text_id, am_in_port, port_chain) {
         }
         else if (my_line.position == 0) {
             let firstTextNodeId =
-                ndict[ndictt[myDataBox.closetLine].node_list[0]].unique_id;
+                ndict[ndict[myDataBox.closetLine].node_list[0]].unique_id;
             dispatch(setFocus(firstTextNodeId, port_chain, 0));
         }
         else {
