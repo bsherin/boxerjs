@@ -183,7 +183,7 @@ function withName(WrappedComponent) {
             )
 
         }
-
+        // comment
         render() {
             let dbclass;
             let type_label;
@@ -201,7 +201,7 @@ function withName(WrappedComponent) {
             if (graphics_kinds.includes(this.props.kind)) {
                 clickable_label = true;
                 label_function = this._flipMe;
-            } else if (this.props.kind == "htmlbox") {
+            } else if (this.props.kind == "htmlbox"  || this.props.kind == "markdownbox") {
                 clickable_label = true;
                 label_function = this._convertMe;
             } else {
@@ -298,7 +298,7 @@ function withName(WrappedComponent) {
             if (this.props.name == null && !this.state.focusingName) {
                 outer_class += " empty-name"
             }
-            // let WrappedComponent = this.props.WrappedComponent;
+
             if (!this.from_style) {
                 this.from_style = inner_style
             }

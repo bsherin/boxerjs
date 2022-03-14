@@ -4,7 +4,6 @@ import React from "react";
 import ContentEditable from "react-contenteditable";
 import { Provider, batch } from 'react-redux';
 import _ from "lodash";
-
 import {connect} from "react-redux";
 
 import {doBinding, getCaretPosition, guid, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg,
@@ -28,6 +27,9 @@ import {data_kinds} from "./shared_consts.js";
 import {withName} from "./named_box.js";
 import {Button} from "@blueprintjs/core";
 
+import markdownIt from 'markdown-it'
+const mdi = markdownIt({html: true});
+
 export {DataBox, PortBox, JsBox, loader, GenericNode}
 
 let currentlyDeleting = false;
@@ -49,7 +51,7 @@ PIXI.settings.RESOLUTION = 1;
 const loader = PIXI.Loader.shared;
 loader.add('turtle', "/static/assets/turtle_image.png");
 
-
+// test comment
 
 class SpriteBoxRaw extends React.Component {
     constructor(props) {
@@ -373,6 +375,7 @@ class SvgGraphicsBoxRaw extends React.Component {
             }
             let bgcolor = _svgConvertColorArg(this.props.bgColor)
             let trans_string = `scale(1, -1) translate( ${gwidth / 2}, ${gheight / 2} )`
+            // let trans_string = `scale(1, -1) translate(-50%, -50%)`
             return (
                 <React.Fragment>
                     <svg key={guid()} width={gwidth} height={gheight} transform={trans_string} style={{overflow: "visible"}}>
@@ -468,11 +471,13 @@ class TextNodeRaw extends React.Component {
         else {
             let new_id = guid();
             batch(()=> {
-                this.props.cloneNodeToStore(result.vid, window.vstore.getState().node_dict, new_id, true);
-
-                if (data_kinds.includes(window.store.getState().node_dict[new_id].kind)) {
-                    this.props.changeNode(new_id, "name", null);
+                if (result.via_port) {
+                    this.props.cloneNodeToStore(result.via_port, window.vstore.getState().node_dict, new_id, true);
                 }
+                else {
+                    this.props.cloneNodeToStore(result.vid, window.vstore.getState().node_dict, new_id, true);
+                }
+                this.props.changeNode(new_id, "name", null);
                 // repairCopiedDrawnComponents(target_dict[vid], true, target_dict);
                 this.props.insertNode(new_id, this.props.parent, -1);
                 this.props.healStructure(this.props.parent);
@@ -809,20 +814,18 @@ class DataBoxRaw extends React.Component {
             );
             the_content.unshift(clinenode)
         }
-        //return <NamedBox {...this.props} type_label={type_label} wrapped_content={the_content}/>
         return (
             <React.Fragment>
                 {the_content}
-        </React.Fragment>)
+            </React.Fragment>
+        )
     }
 }
-
 
 let DataBox = connect(
     makeMapStateToPropsAndGlobals(),
     mapDispatchToProps,
 )(withName(DataBoxRaw))
-
 
 class HtmlBoxRaw extends React.Component {
     constructor(props) {
@@ -894,10 +897,18 @@ class HtmlBoxRaw extends React.Component {
         if (this.props.closed) {
             return null
         }
+        let inner_style = {};
+        if (this.props.fixed_size) {
+            inner_style = {
+                width:  this.props.fixed_width,
+                height: this.props.fixed_height,
+                position: "relative"
+            };
+        }
         if (this.props.showConverted) {
             let converted_dict = {__html: this.props.the_code};
             return (
-                <div dangerouslySetInnerHTML={converted_dict}></div>
+                <div style={inner_style} dangerouslySetInnerHTML={converted_dict}></div>
             )
         }
         else {
@@ -924,6 +935,119 @@ var HtmlBox = connect(
     makeMapStateToPropsAndGlobals(),
     mapDispatchToProps,
 )(withName(HtmlBoxRaw));
+
+class MarkdownBoxRaw extends React.Component {
+    constructor(props) {
+        super(props);
+        doBinding(this);
+        this.state = {};
+        this.nameRef = null;
+        this.boxRef = React.createRef();
+        this.state.focusingName = false;
+        this.state.boxWidth = null;
+        this.cmobject = null;
+        this.last_tick_processed = 0
+    }
+
+    _handleCodeChange(new_code) {
+        this.props.changeNode(this.props.unique_id, "the_code", new_code)
+    }
+
+    _handleBlur() {
+        this.props.storeFocus(this.props.unique_id, 0, this.props.port_chain);
+    }
+
+    _setCMObject(cmobject) {
+        this.cmobject = cmobject
+    }
+
+    componentDidMount() {
+        this._setFocusIfRequired()
+    }
+
+    componentDidUpdate () {
+        this._setFocusIfRequired()
+    }
+
+    _setFocusIfRequired () {
+        if (this.props.setTextFocus != null && this.props.setTextFocus[0] == this.props.port_chain) {
+            if (this.cmobject) {
+                this.cmobject.focus();
+                this.props.changeNode(this.props.unique_id, "setTextFocus", null);
+            }
+        }
+    }
+
+    _nameMe() {
+        this.props.focusName(this.props.unique_id, this.props.port_chain)
+    }
+
+    _upArrow() {
+        let head = this.cmobject.getCursor();
+        if (head.line == 0) {
+            this._nameMe()
+        }
+        else {
+            this.cmobject.setCursor({line:head.line - 1, ch:head.ch})
+        }
+    }
+
+    _extraKeys() {
+        let self = this;
+        return {
+                'Ctrl-N': ()=>self._nameMe(),
+                'ArrowUp': ()=>self._upArrow(),
+                'Up': ()=>self._upArrow()
+            }
+    }
+
+    render() {
+        let dbclass;
+        if (this.props.closed) {
+            return null
+        }
+        let inner_style = {};
+        if (this.props.fixed_size) {
+            inner_style = {
+                width:  this.props.fixed_width,
+                height: this.props.fixed_height,
+                position: "relative"
+            };
+        }
+        if (this.props.showConverted) {
+
+            var converted_markdown;
+            converted_markdown = mdi.render(this.props.the_code)
+            let converted_dict = {__html: converted_markdown};
+            inner_style["margin"] = 10;
+            return (
+                <div style={inner_style} dangerouslySetInnerHTML={converted_dict}></div>
+            )
+        }
+        else {
+            return (
+                <React.Fragment>
+                    <ReactCodemirror code_content={this.props.the_code}
+                                     mode="markdown"
+                                     handleChange={this._handleCodeChange}
+                                     handleBlur={this._handleBlur}
+                                     saveMe={null}
+                                     setCMObject={this._setCMObject}
+                                     readOnly={false}
+                                     extraKeys={this._extraKeys()}
+                                     first_line_number={null}
+                    />
+                </React.Fragment>
+            )
+        }
+
+    }
+}
+
+var MarkdownBox = connect(
+    makeMapStateToPropsAndGlobals(),
+    mapDispatchToProps,
+)(withName(MarkdownBoxRaw));
 
 class JsBoxRaw extends React.Component {
     constructor(props) {
@@ -1102,7 +1226,13 @@ class GenericNodeRaw extends React.Component {
                            port_chain={this.props.port_chain}
                            unique_id={this.props.unique_id}/>
                 )
-
+            case "markdownbox":
+                return (
+                    <MarkdownBox key={this.props.unique_id}
+                           am_in_port={this.props.am_in_port}
+                           port_chain={this.props.port_chain}
+                           unique_id={this.props.unique_id}/>
+                )
             case "sprite":
                 return (
                     <SpriteBox key={this.props.unique_id}

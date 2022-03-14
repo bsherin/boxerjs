@@ -2,7 +2,7 @@
 import _ from 'lodash';
 import React from "react";
 import {findNamedBoxesInScope,_createLocalizedFunctionCall, getPortTarget,
-    dataBoxToStub, _convertFunctionNode, findNamedNode} from "./transpile.js";
+    dataBoxToStub, portBoxToStub, _convertFunctionNode, findNamedNode} from "./transpile.js";
 import {degreesToRadians, radiansToDegrees} from "../utility/utilities.js"
 import {setNodeDict, setGlobal, createEntry, addToBuffer, clearBuffer} from "../redux/actions/action_creators.js";
 import {newErrorNode, changeBase, makeGraphicsNode, setTargetBase, changeGraphicsBase} from "../redux/actions/vnd_mutators.js";
@@ -74,10 +74,12 @@ function getBoxValue(boxName, startId) {
     let _node = findNamedNode(boxName, startId);
     let _node_id = _node.unique_id;
     if (_node.kind == "port") {
-        _node = getPortTarget(_node,window.vstore.getState().node_dict);
-        if (!_node) {
+        let _target_node = getPortTarget(_node,window.vstore.getState().node_dict);
+        if (!_target_node) {
             return null;
         }
+        return portBoxToStub(_node)
+
     }
     if (_node.kind != "doitbox") {
         return dataBoxToStub(_node)
