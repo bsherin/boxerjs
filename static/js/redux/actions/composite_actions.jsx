@@ -11,7 +11,7 @@ import {newTextNode, newLineNode, newClosetLine, newSpriteBox, createNode,
 import {cloneNodeSourceTarget, cloneLineSourceTarget} from "./action_helpers.js";
 
 import {container_kinds, initial_globals} from "../../shared_consts.js";
-import {text_kinds} from "../../shared_consts.js";
+import {text_kinds, border_hideable_kinds} from "../../shared_consts.js";
 import {ADD_TO_BUFFER, addToBuffer, clearBuffer, updateNodeDict} from "./action_creators";
 import {guid, addToPortChain, portChainLast, portChainDropRight} from "../../utility/utilities.js";
 import {_dehydrateComponents} from "../../utility/save_utilities";
@@ -22,7 +22,7 @@ import {showModalReact} from "../../utility/modal_react";
 
 
 export {healLine, healStructure, splitLine, createCloset, setLineList, focusLineStart,
-    toggleBoxTransparency, setPortTarget, enterPortTargetMode, setFocusInBox,
+    toggleBoxTransparency, toggleBorder, setPortTarget, enterPortTargetMode, setFocusInBox,
     setGlobals, zoomBox, unzoomBox, focusName, addGraphicsComponent, cloneLineToStore, cloneNodeToStore, collectGarbage,
     setFocus, arrowDown, arrowUp, focusLeft, focusRight, positionAfterBox, doBracket, downFromTag,
     splitTextNode, splitLineAtTextPosition, changeSpriteValueBox, addCompositeToBuffer, saveProject, saveProjectAs,
@@ -707,6 +707,17 @@ function toggleBoxTransparency(boxId) {
         let mbox = ndict[mline.parent];
         if (mbox.name == "world") return;
         dispatch(changeNode(mbox.unique_id, "transparent", !mbox.transparent))
+    }
+}
+
+function toggleBorder(boxId) {
+    return (dispatch, getState) => {
+        let ndict = getState()["node_dict"]
+        let mbox = ndict[boxId];
+        if (mbox.name == "world") return;
+        if (border_hideable_kinds.includes(mbox.kind)) {
+            dispatch(changeNode(mbox.unique_id, "hide_border", !mbox.hide_border))
+        }
     }
 
 }

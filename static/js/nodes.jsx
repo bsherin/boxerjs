@@ -908,7 +908,9 @@ class HtmlBoxRaw extends React.Component {
         if (this.props.showConverted) {
             let converted_dict = {__html: this.props.the_code};
             return (
-                <div style={inner_style} dangerouslySetInnerHTML={converted_dict}></div>
+                <div style={inner_style}
+                     onClick={this.props.convertMe}
+                     dangerouslySetInnerHTML={converted_dict}></div>
             )
         }
         else {
@@ -1021,7 +1023,9 @@ class MarkdownBoxRaw extends React.Component {
             let converted_dict = {__html: converted_markdown};
             inner_style["margin"] = 10;
             return (
-                <div style={inner_style} dangerouslySetInnerHTML={converted_dict}></div>
+                <div style={inner_style}
+                     onClick={this.props.convertMe}
+                     dangerouslySetInnerHTML={converted_dict}></div>
             )
         }
         else {

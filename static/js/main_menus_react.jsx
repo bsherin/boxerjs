@@ -232,6 +232,7 @@ class BoxMenuRaw extends React.Component {
             "Unfix Box Size": ()=>{this.props.unfixSize(this.props.last_focus_id)},
             "Toggle Closet": ()=>{this.props.toggleCloset(this.props.last_focus_id)},
             "Toggle Transparency": ()=>{this.props.toggleBoxTransparency(this.props.last_focus_id)},
+            "Toggle Border": ()=>{this.props.toggleBorder(this.props.last_focus_id)},
             "Retarget Port": ()=>{this.props.retargetPort(this.props.last_focus_id)}
         }
     }
@@ -239,9 +240,10 @@ class BoxMenuRaw extends React.Component {
     get icon_dict () {
         return {
             "Name": "label",
-            "Unfix Size":"undo",
+            "Unfix Box Size": "undo",
             "Toggle Closet": "one-column",
             "Toggle Transparency": "eye-open",
+            "Toggle Border": "square",
             "Retarget Port": "feed-subscribed"
         }
     }

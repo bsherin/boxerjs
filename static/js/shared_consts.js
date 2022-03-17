@@ -1,10 +1,11 @@
 
-export {container_kinds, text_kinds, data_kinds, graphics_kinds}
+export {container_kinds, text_kinds, data_kinds, graphics_kinds, border_hideable_kinds}
 
 const container_kinds = ["doitbox", "databox", "sprite", "graphics", "svggraphics", "color"];
 const graphics_kinds = ["graphics", "color", "svggraphics"];
 const data_kinds = ["databox", "sprite", "svggraphics", "graphics", "color"];
 const text_kinds = ["text", "jsbox", "htmlbox", "markdownbox"];
+const border_hideable_kinds = ["htmlbox", "markdownbox"]
 
 export {defaultBgColor, defaultPenWidth, defaultPenColorString, defaultFontFamily, defaultFontSize,
         defaultFontStyle, sprite_params, initial_globals}

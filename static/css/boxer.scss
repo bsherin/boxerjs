@@ -28,6 +28,14 @@ $search-highlight-color: yellow;
         border: 1px dashed black;
     }
 
+    &.hide-border {
+        border: none
+    }
+
+    &.light-border {
+        border-color: lightgrey
+    }
+
     &.sprite-box {
         border-radius: 20px
     }

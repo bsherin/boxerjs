@@ -12,7 +12,7 @@ import {
     arrowUp, focusLeft, focusRight, doBracket, downFromTag,
     setFocusInBox,
     changeSpriteValueBox, focusLineStart,
-    toggleBoxTransparency, unzoomBox, zoomBox, toggleCloset, setGraphicsSize,
+    toggleBoxTransparency, toggleBorder, unzoomBox, zoomBox, toggleCloset, setGraphicsSize,
     retargetPort, setNodeSize, unfixSize,
     splitLineAtTextPosition, insertBoxInText, insertBoxLastFocus, updateTextNode,
     saveProject, saveProjectAs
@@ -27,7 +27,7 @@ function mapDispatchToProps(dispatch) {
       insertBoxInText, insertBoxLastFocus, deleteToLineEnd,
       setFocus, positionAfterBox, zoomBox, unzoomBox, focusName, focusLeft, focusLineStart,
       focusRight, arrowDown, arrowUp, doBracket, downFromTag,
-      addGraphicsComponent, toggleBoxTransparency, changeSpriteValueBox,
+      addGraphicsComponent, toggleBoxTransparency, toggleBorder, changeSpriteValueBox,
       toggleCloset, setGraphicsSize, retargetPort, setNodeSize, unfixSize,
       clearSelected, deleteToLineEnd, addTextToClipboard, insertClipboard, copySelected, cutSelected,
       selectSpan, deletePrecedingBox, deleteBoxerSelection, updateTextNode,
