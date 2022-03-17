@@ -5,7 +5,7 @@ import _ from "lodash";
 import {boxer_statements, operators, isOperator, isBoxerStatement} from "./boxer_lang_definitions.js"
 import {container_kinds, data_kinds, text_kinds} from "../shared_consts.js";
 
-import {guid} from "../utility/utilities.js";
+import {guid, parseJSCall} from "../utility/utilities.js";
 
 import {cloneLineToStore, cloneNodeToStore} from "../redux/actions/composite_actions";
 import {changeNode, changeNodeMulti} from "../redux/actions/composite_actions.js";
@@ -188,6 +188,36 @@ function _convertFunctionNode(doitNode) {
     }
 }
 
+// This takes a doit node, and transpiles it to javascript
+// Then the result javascript is attached to the node in raw_func
+// _convertFunctionNode is called from getBoxValue, when it tries to execute the doitBox but doesn't find raw_func already there.
+function _convertJSFunctionNode(jsNode) {
+    try {
+
+        let js_id = jsNode.unique_id;
+        let raw_func = `${name_string} {
+                let my_node_id = "${doitNode.unique_id}";
+                let current_turtle_id = "${current_turtle_id}";
+                ${assign_input_string}
+                ${converted_body}
+            }
+        `;
+        window.vstore.dispatch(changeNode(doit_id, "raw_func", raw_func))
+        return
+    }
+    catch(error) {
+        let msg;
+        if (error.hasOwnProperty("message") && error.message) {
+            msg = error.message
+        }
+        else {
+            msg = String(error)
+        }
+        throw new TranspileError(doitNode.name, msg, doitNode.original_node_id);
+    }
+}
+
+
 // finds all of the named boxes starting from startBoxNode
 // It also finds the turtle
 // StartBoxNode itself is included
@@ -198,7 +228,7 @@ function findNamedBoxesInScope(startBoxNode, node_dict, name_list=null, current_
     if (!name_list) {
         name_list = []
     }
-    if (container_kinds.includes(startBoxNode.kind) || startBoxNode.kind == "port") {
+    if (container_kinds.includes(startBoxNode.kind) || startBoxNode.kind == "port" || startBoxNode.kind == "jsbox") {
         let [sub_names, sub_nodes, new_current_turtle_id] = getContainedNames(startBoxNode, node_dict, name_list, current_turtle_id);
         name_list = name_list.concat(sub_names);
         named_nodes = named_nodes.concat(sub_nodes);
@@ -259,7 +289,7 @@ function getContainedNames(theNode, node_dict, name_list, current_turtle_id) {
             if (!current_turtle_id && (node.kind == "sprite")) {
                 current_turtle_id = node.unique_id;
             }
-            if (!text_kinds.includes(node.kind)  && node.name) {
+            if ((!text_kinds.includes(node.kind) || node.kind == "jsbox")  && node.name) {
                 if (!name_list.includes(node.name) && !new_names.includes(node.name)) {
                     new_names.push(node.name);
                     new_nodes.push(node)
@@ -361,20 +391,11 @@ function preprocessNamedBoxes(namedNodes, virtualNodeDict) {
                 args: args
             }
         }
-        else {  // Assume with have a jsbox
-            let re = /(\w+?)\((.*)\)/g;
-            let m = re.exec(node.name);
-            let fname = m[1];
-            let re2 = /(\w+)/g;
-            let var_string = m[2];
-            let arg_list = m[2].match(re2);
-            let args = [];
-            for (let arg of arg_list) {
-                args.push([arg, "expression"])
-            }
-            js_boxes[name] = {
-                node:node,
-                args: args,
+        else {  // Assume with have a jsbox. not sure this is used
+            let res = parseJSCall(node.name)
+            js_boxes[res[0]] = {
+                node: node,
+                args: res[1],
             }
         }
     }
@@ -431,11 +452,11 @@ function convertStatementLine(token_list, context, is_last_line=false) {
     if (statement_type == "user_doit") {
         args = context.doit_boxes[first_token].args
     }
+    else if (statement_type == "js_call") {
+        args = []
+    }
     else if (statement_type == "copied_doit") {
         args = context.copied_doits[first_token].args
-    }
-    else if (statement_type == "user_js") {
-        args = context.js_boxes[first_token].args
     }
     else if (statement_type == "boxer_statement"){
         args = boxer_statements[first_token].args
@@ -494,7 +515,13 @@ function convertStatementLine(token_list, context, is_last_line=false) {
 
     // Produce the javascript string for the statement
     let result_string;
-    if (statement_type == "user_doit" || statement_type == "user_js" || statement_type == "copied_doit") {
+    if (statement_type == "js_call") {
+        let res = parseJSCall(first_token)
+        let jname = res[0]
+        let arg_string = res[2]
+        result_string = ` await getBoxValue("${context.js_boxes[jname].node.name}", "${context.doitId}")(${arg_string})\n`;
+    }
+    else if (statement_type == "user_doit" || statement_type == "copied_doit") {
         let arg_string = "";
         let first = true;
         for (let arg of converted_args) {
@@ -647,8 +674,8 @@ function consumeAndConvertNextArgument(consuming_line, context) {
                 } else if (ntype == "boxer_statement") {
                     args = boxer_statements[first_node].args
                 }
-                else if (ntype == "user_js") {
-                    args = context.js_boxes[first_node].args
+                else if (ntype == "js_call") {
+                    args = []
                 }
                 new_consuming_line = new_consuming_line.slice(1,);
                 let converted_args = [];
@@ -667,7 +694,13 @@ function consumeAndConvertNextArgument(consuming_line, context) {
                     converted_args.push(consume_result[0])
                 }
                 // Convert the statment to javascript
-                if (ntype == "user_doit" || ntype == "user_js" || ntype == "copied_doit") {
+                if (ntype == "js_call") {
+                    let res = parseJSCall(first_node)
+                    let jname = res[0]
+                    let arg_string = res[0]
+                    first_token = ` await getBoxValue("${context.js_boxes[jname].node.name}", "${context.doitId}")(${arg_string})\n`;
+                }
+                else if (ntype == "user_doit" || ntype == "copied_doit") {
                     let arg_string = "";
                     let first = true;
                     for (let arg of converted_args) {
@@ -793,7 +826,11 @@ function infixToPrefix(token_list) {
 }
 
 function getNameType(token, context, allow_other=false) {
-    if (Object.keys(context.doit_boxes).includes(token)) {
+    let res = parseJSCall(token)
+    if (res != null) {
+        return "js_call"
+    }
+    else if (Object.keys(context.doit_boxes).includes(token)) {
         return "user_doit"
     }
     else if (Object.keys(context.copied_doits).includes(token)) {
@@ -804,9 +841,6 @@ function getNameType(token, context, allow_other=false) {
     }
     else if (Object.keys(context.data_boxes).includes(token)) {
         return "user_data"
-    }
-    else if (Object.keys(context.js_boxes).includes(token)) {
-        return "user_js"
     }
     else if (["tell", "ask"].includes(token)) {
         return "boxer_tell"

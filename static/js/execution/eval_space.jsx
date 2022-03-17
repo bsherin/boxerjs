@@ -7,7 +7,7 @@ import {degreesToRadians, radiansToDegrees} from "../utility/utilities.js"
 import {setNodeDict, setGlobal, createEntry, addToBuffer, clearBuffer} from "../redux/actions/action_creators.js";
 import {newErrorNode, changeBase, makeGraphicsNode, setTargetBase, changeGraphicsBase} from "../redux/actions/vnd_mutators.js";
 import {collectGarbage, dispatchBufferedActions} from "../redux/actions/composite_actions.js";
-import {guid, dataBoxToNumber, dataBoxToString} from "../utility/utilities.js";
+import {guid, dataBoxToNumber, dataBoxToString, parseJSCall} from "../utility/utilities.js";
 import {Triangle} from "../pixi_shapes";
 import {newColorBox} from "../redux/actions/node_creator_actions.js";
 import {graphics_kinds} from "../shared_consts.js";
@@ -70,6 +70,10 @@ async function doExecution(the_code_line_id) {
     return _result
 }
 
+function convertJSCode(the_code) {
+    return the_code.replace(/\$(.*?)\$/g, "getBoxValue($1, my_node_id)")
+}
+
 function getBoxValue(boxName, startId) {
     let _node = findNamedNode(boxName, startId);
     let _node_id = _node.unique_id;
@@ -81,15 +85,25 @@ function getBoxValue(boxName, startId) {
         return portBoxToStub(_node)
 
     }
-    if (_node.kind != "doitbox") {
-        return dataBoxToStub(_node)
+    if (_node.kind != "doitbox" && _node.kind != "jsbox") {
+        return dataBoxToStub(_node);
     }
     if (!_node.hasOwnProperty("cfunc") || _node.cfunc == null) {
-        if (!_node.hasOwnProperty("raw_func") || _node.raw_func == null) {
-            _convertFunctionNode(_node)
+        if(_node.kind == "jsbox") {
+            let argstring = parseJSCall(boxName)[2]
+            let converted_code = convertJSCode(window.vstore.getState().node_dict[_node_id].the_code)
+            eval(`_node.cfunc = async function(${argstring}) { 
+                        let my_node_id = "${_node.unique_id}";
+                        ${converted_code} 
+                    }`);
         }
+        else {
+            if (!_node.hasOwnProperty("raw_func") || _node.raw_func == null) {
+                _convertFunctionNode(_node);
+            }
 
-        eval("_node.cfunc = " + window.vstore.getState().node_dict[_node_id].raw_func)
+            eval("_node.cfunc = " + window.vstore.getState().node_dict[_node_id].raw_func);
+        }
     }
     return _node.cfunc
 }

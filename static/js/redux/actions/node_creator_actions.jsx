@@ -80,6 +80,7 @@ function newHtmlBoxNode(the_code, uid) {
             parent: null,
             focusNameTag: false,
             closed: false,
+            hide_border: false,
             setTextFocus: null,
         };
         dispatch(createEntry(new_node))
@@ -124,6 +125,7 @@ function newJsBoxNode(the_code, uid) {
             parent: null,
             focusNameTag: false,
             closed: false,
+            hide_border: false,
             setTextFocus: null,
         };
         dispatch(createEntry(new_node))

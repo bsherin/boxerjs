@@ -7,7 +7,7 @@ import {DragHandle} from "./third_party/resizing_layouts.js";
 
 import {doBinding, propsAreEqual, portChainLast, portChainDropRight} from "./utility/utilities.js";
 import {BOTTOM_MARGIN, SIDE_MARGIN, USUAL_TOOLBAR_HEIGHT} from "./utility/sizing_tools.js";
-import {graphics_kinds} from "./shared_consts.js";
+import {graphics_kinds, border_hideable_kinds} from "./shared_consts.js";
 import {connect} from "react-redux";
 import {mapDispatchToProps} from "./redux/actions/dispatch_mapper";
 
@@ -208,6 +208,7 @@ function withName(WrappedComponent) {
                 clickable_label = false;
                 label_function = null
             }
+            let click_converted_func = null;
             let outer_style;
             let inner_style;
             let width;
@@ -292,6 +293,18 @@ function withName(WrappedComponent) {
             if (this.props.transparent) {
                 dbclass += " transparent"
             }
+            let hide_border = border_hideable_kinds.includes(this.props.kind) && this.props.hide_border &&
+                this.props.showConverted;
+            if (border_hideable_kinds.includes(this.props.kind)) {
+                if (this.props.hide_border) {
+                    if (this.props.showConverted) {
+                        dbclass += " hide-border";
+                    }
+                    else {
+                        dbclass += " light-border";
+                    }
+                }
+            }
 
             let draghandle_position_dict = {position: "absolute", bottom: 2, right: 1};
             let outer_class = "data-box-outer";
@@ -346,6 +359,7 @@ function withName(WrappedComponent) {
 
                                                 <WrappedComponent ref={this.props.inner_ref}
                                                                   {...this.props}
+                                                                  convertMe={this._convertMe}
                                                 />
                                                 {!this.props.am_in_port && <ZoomButton handleClick={this._zoomMe}/> }
                                                 <DragHandle position_dict={draghandle_position_dict}
@@ -356,7 +370,7 @@ function withName(WrappedComponent) {
                                                             iconSize={15}/>
 
                                             </div>
-                                            {!this.props.am_zoomed &&
+                                            {!this.props.am_zoomed && !hide_border &&
                                             <TypeLabel clickable={clickable_label}
                                                        clickFunc={label_function}
                                                        the_label={type_label}/>

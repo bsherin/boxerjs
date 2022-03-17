@@ -8,7 +8,7 @@ export {doBinding, doSignOut, isString, guid, isKind, _extractValue,
     getCaretPosition, propsAreEqual, rgbToHex, svgRgbToHex, arraysMatch, remove_duplicates, extractText, isNormalInteger,
     degreesToRadians, radiansToDegrees, selectedAcrossBoxes, _convertColorArg, _svgConvertColorArg, isVirtualStub,
     portChainLast, portChainDropRight, portChainToArray, arrayToPortChain, addToPortChain, roundToPlaces, convertAndRound,
-    makeStub, dataBoxToNumber, dataBoxToString
+    makeStub, dataBoxToNumber, dataBoxToString, parseJSCall
 }
 
 var vndict = ()=>{return window.vstore.getState().node_dict};
@@ -71,6 +71,25 @@ function unTrimSpaces(astring) {
     }
 }
 
+
+function parseJSCall(token) {
+    let re = /(\w+?)\((.*)\)/g;
+    let m = re.exec(token);
+    if (!m) {
+        return null
+    }
+    let fname = m[1];
+    let re2 = /(\w+)/g;
+    let var_string = m[2];
+    let arg_list = m[2].match(re2);
+    let args = [];
+    if (arg_list != null) {
+        for (let arg of arg_list) {
+            args.push([arg, "expression"])
+        }
+    }
+    return [fname, args, var_string]
+}
 
 function convertAndRound(astring, places) {
     let tstring = unTrimSpaces(astring);
