@@ -102,6 +102,7 @@ function withName(WrappedComponent) {
             if (this.nameRef) {
                 $(this.nameRef).focus(this._gotNameFocus)
             }
+            this.clickTimeout = null
         }
 
         _gotNameFocus() {
@@ -183,18 +184,48 @@ function withName(WrappedComponent) {
             )
 
         }
+        _handleClosedClicks() {
+            if (window.running > 0) {
+                if (this.hasOwnProperty("clickTimeout")  && this.clickTimeout !== null) {
+                    clearTimeout(this.clickTimeout);
+                    this.clickTimeout = null;
+                }
+                this._openMe()
+            }
+            if (this.hasOwnProperty("clickTimeout") && this.clickTimeout !== null) {
+                clearTimeout(this.clickTimeout);
+                this.clickTimeout = null;
+                this._zoomMe()
+          } else {
+            this.clickTimeout = setTimeout(()=>{
+                this._openMe();
+                clearTimeout(this.clickTimeout);
+                this.clickTimeout = null
+             }, 200)
+          }
+        }
         // comment
         render() {
             let dbclass;
             let type_label;
             if (this.props.type_label) {
                 type_label = this.props.type_label
-            } else if (this.props.kind == "doitbox") {
-                type_label = "Doit"
-            } else if (this.props.kind == "jsbox") {
-                type_label = "JSBox"
-            } else {
-                type_label = "Data"
+            } else switch (this.props.kind) {
+                case "doitbox":
+                    type_label = "Doit";
+                    break;
+                case "jsbox":
+                    type_label = "JSBox";
+                    break;
+                case "htmlbox":
+                    type_label = "Html";
+                    break;
+                case "markdownbox":
+                    type_label = "Mdown";
+                    break;
+                default:
+                    type_label = "Data"
+
             }
             let clickable_label;
             let label_function;

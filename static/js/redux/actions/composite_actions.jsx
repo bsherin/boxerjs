@@ -622,6 +622,7 @@ function initializeMissingGlobals() {
 function zoomBox(uid) {
     return (dispatch, getState) => {
         batch (() => {
+            dispatch(changeNode(uid, "closed", false));
             dispatch(changeNode(uid, "am_zoomed", true));
             dispatch(setGlobal("zoomed_node_id", uid));
         })
